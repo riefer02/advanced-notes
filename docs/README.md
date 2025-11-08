@@ -12,6 +12,7 @@ Complete documentation for the Advanced Notes ASR project.
 
 ### Technical Specifications
 - **[Semantic Organization Spec](./semantic-organization-spec.md)** - AI-powered note categorization architecture
+- **[REST API Reference](./api-reference.md)** - Complete API endpoint documentation
 
 ### Development Guides
 - **Cursor Rules** (`.cursor/rules/`)
@@ -87,6 +88,12 @@ docs/
 **Audience**: Engineers, Architects  
 **Topics**: System design, AI categorization, storage layer, UI components  
 **Est. Time**: 30 minutes
+
+### REST API Reference
+**Purpose**: Complete documentation of all backend API endpoints  
+**Audience**: Frontend Developers, API Consumers  
+**Topics**: Endpoints, request/response formats, error handling, testing  
+**Est. Time**: 20 minutes
 
 ### Project Overview (Cursor Rule)
 **Purpose**: High-level project context for AI assistants  

@@ -47,6 +47,14 @@ tests/
 - ✅ Folder path suggestions
 - ✅ Tag extraction
 
+### API Integration Tests
+- ⏳ **TODO**: Create comprehensive integration tests
+  - Test `/api/transcribe` with real audio
+  - Test full CRUD operations on notes
+  - Test search and filtering
+  - Test error cases and edge conditions
+  - Use `pytest` + `requests` or `httpx`
+
 ## Writing New Tests
 
 Follow the existing patterns:
