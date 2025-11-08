@@ -1,0 +1,29 @@
+[project]
+name = "asr-backend"
+version = "0.1.0"
+description = "Flask backend with NVIDIA Parakeet-TDT ASR"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "soundfile>=0.12.0",
+    "numpy>=1.24.0",
+    "nemo-toolkit[asr]>=1.20.0",
+    "pydub>=0.25.0",
+    "python-multipart>=0.0.6",
+    "ml-dtypes>=0.5.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.uv]
+dev-dependencies = []
+
