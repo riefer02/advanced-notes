@@ -31,6 +31,15 @@ lerna-debug.log*
 .env.production
 frontend/.env
 frontend/.env.local
+backend/.env
+
+# Database files
+backend/notes/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
 
 # Editor
 .vscode/
