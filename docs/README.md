@@ -10,6 +10,9 @@ Complete documentation for the Advanced Notes ASR project.
 - **[Environment Setup](./environment-setup.md)** - OpenAI API keys, environment variables, cost estimates
 - **[Main README](../README.md)** - Project overview, quick start, installation
 
+### Deployment
+- **[Railway Deployment Guide](./railway-deployment.md)** - Complete checklist for production deployment
+
 ### Technical Specifications
 - **[Semantic Organization Spec](./semantic-organization-spec.md)** - AI-powered note categorization architecture
 - **[REST API Reference](./api-reference.md)** - Complete API endpoint documentation
