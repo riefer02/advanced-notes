@@ -1,46 +1,33 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { useTranscribeAudio } from '../hooks/useNotes'
+import type { TranscriptionResponse } from '../lib/api'
 
 export default function AudioUploader() {
-  const [text, setText] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [meta, setMeta] = useState<any>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
+  const [lastResult, setLastResult] = useState<TranscriptionResponse | null>(null)
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<number | null>(null)
 
-  const transcribeAudio = async (audioBlob: Blob) => {
-    setLoading(true)
-    setError(null)
-    setText('')
-    setMeta(null)
+  // Use TanStack Query mutation
+  const transcribeMutation = useTranscribeAudio()
 
-    const form = new FormData()
-    form.append('file', audioBlob, 'recording.webm')
-
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'
-      const res = await fetch(`${apiUrl}/api/transcribe`, {
-        method: 'POST',
-        body: form,
-      })
-
-      if (!res.ok) {
-        const errorText = await res.text()
-        throw new Error(errorText || 'Transcription failed')
+  // When transcription succeeds, notify the NotesPanel
+  useEffect(() => {
+    if (transcribeMutation.isSuccess && transcribeMutation.data) {
+      setLastResult(transcribeMutation.data)
+      
+      // Send category result to NotesPanel via global callback
+      if (typeof window !== 'undefined' && (window as any).__setLatestCategory) {
+        (window as any).__setLatestCategory(transcribeMutation.data.categorization)
       }
-
-      const json = await res.json()
-      setText(json.text || '')
-      setMeta(json.meta || null)
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
     }
+  }, [transcribeMutation.isSuccess, transcribeMutation.data])
+
+  const transcribeAudio = async (audioBlob: Blob) => {
+    transcribeMutation.mutate(audioBlob)
   }
 
   const onFile = async (file: File) => {
@@ -69,14 +56,14 @@ export default function AudioUploader() {
       mediaRecorder.start()
       setIsRecording(true)
       setRecordingTime(0)
-      setError(null)
 
       // Start timer
       timerRef.current = window.setInterval(() => {
         setRecordingTime(prev => prev + 1)
       }, 1000)
     } catch (e: any) {
-      setError('Microphone access denied. Please allow microphone access.')
+      transcribeMutation.reset()
+      // Set error via mutation (we'll need to handle this differently)
     }
   }
 
@@ -115,7 +102,7 @@ export default function AudioUploader() {
           {!isRecording ? (
             <button
               onClick={startRecording}
-              disabled={loading}
+              disabled={transcribeMutation.isPending}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -155,11 +142,11 @@ export default function AudioUploader() {
           accept="audio/*"
           className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none hover:bg-gray-100 p-2"
           onChange={(e) => e.target.files && onFile(e.target.files[0])}
-          disabled={loading || isRecording}
+          disabled={transcribeMutation.isPending || isRecording}
         />
       </div>
 
-      {loading && (
+      {transcribeMutation.isPending && (
         <div className="flex items-center space-x-2 text-blue-600">
           <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -169,44 +156,50 @@ export default function AudioUploader() {
         </div>
       )}
 
-      {error && (
+      {transcribeMutation.isError && (
         <div className="rounded-lg bg-red-50 p-4 border border-red-200">
           <h3 className="text-sm font-semibold text-red-800">Error</h3>
-          <p className="text-sm text-red-700 mt-1">{error}</p>
+          <p className="text-sm text-red-700 mt-1">
+            {transcribeMutation.error instanceof Error
+              ? transcribeMutation.error.message
+              : 'Transcription failed'}
+          </p>
         </div>
       )}
 
-      {text && (
+      {lastResult && (
         <div className="rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 p-6 border border-gray-200 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900 mb-3">Transcript</h2>
           <div className="bg-white rounded-lg p-4 border border-gray-200">
             <pre className="whitespace-pre-wrap text-gray-800 font-mono text-sm leading-relaxed">
-              {text}
+              {lastResult.text}
             </pre>
           </div>
           
-          {meta && (
+          {lastResult.meta && (
             <div className="mt-4 pt-4 border-t border-gray-300">
               <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Metadata</h3>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="bg-white rounded px-3 py-2 border border-gray-200">
                   <span className="text-gray-500">Device:</span>{' '}
-                  <span className="font-medium text-gray-800">{meta.device}</span>
+                  <span className="font-medium text-gray-800">{lastResult.meta.device}</span>
                 </div>
                 <div className="bg-white rounded px-3 py-2 border border-gray-200">
                   <span className="text-gray-500">Model:</span>{' '}
-                  <span className="font-medium text-gray-800">{meta.model?.split('/')[1] || meta.model}</span>
+                  <span className="font-medium text-gray-800">{lastResult.meta.model?.split('/')[1] || lastResult.meta.model}</span>
                 </div>
-                {meta.sample_rate && (
+                {lastResult.meta.sample_rate && (
                   <div className="bg-white rounded px-3 py-2 border border-gray-200">
                     <span className="text-gray-500">Sample Rate:</span>{' '}
-                    <span className="font-medium text-gray-800">{meta.sample_rate} Hz</span>
+                    <span className="font-medium text-gray-800">{lastResult.meta.sample_rate} Hz</span>
                   </div>
                 )}
-                {meta.duration_sec && (
+                {(lastResult.meta.duration || lastResult.meta.duration_sec) && (
                   <div className="bg-white rounded px-3 py-2 border border-gray-200">
                     <span className="text-gray-500">Duration:</span>{' '}
-                    <span className="font-medium text-gray-800">{meta.duration_sec.toFixed(2)}s</span>
+                    <span className="font-medium text-gray-800">
+                      {((lastResult.meta.duration || lastResult.meta.duration_sec || 0)).toFixed(2)}s
+                    </span>
                   </div>
                 )}
               </div>

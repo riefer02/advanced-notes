@@ -59,7 +59,6 @@ Thumbs.db
 coverage/
 .pytest_cache/
 .coverage
-backend/test_api.sh
 
 # Temp
 tmp/
