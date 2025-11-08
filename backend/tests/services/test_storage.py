@@ -24,9 +24,9 @@ def test_storage():
     print("🧪 Testing Note Storage Service\n")
     print("=" * 60)
     
-    # Initialize storage (will create test database)
-    test_db = "backend/notes/.notes_test.db"
-    Path(test_db).unlink(missing_ok=True)  # Clean start
+    # Initialize storage (will create test database in temp location)
+    test_db = Path("test_notes.db").resolve()
+    test_db.unlink(missing_ok=True)  # Clean start
     
     storage = NoteStorage(db_path=test_db)
     print("✅ Storage initialized\n")

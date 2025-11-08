@@ -13,6 +13,7 @@ from typing import List, Optional, Dict
 from contextlib import contextmanager
 
 from .models import Note, NoteMetadata, NoteListItem, FolderNode, FolderStats, SearchResult
+from ..config import config
 
 
 class NoteStorage:
@@ -26,13 +27,15 @@ class NoteStorage:
     - Automatic schema initialization
     """
     
-    def __init__(self, db_path: str = "backend/notes/.notes.db"):
+    def __init__(self, db_path: Optional[Path] = None):
         """
         Initialize storage with database path.
         
         Args:
-            db_path: Path to SQLite database file
+            db_path: Path to SQLite database file (defaults to config.DB_PATH)
         """
+        if db_path is None:
+            db_path = config.DB_PATH
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         

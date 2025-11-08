@@ -27,9 +27,9 @@ class Config:
     # ASR Model settings
     ASR_MODEL_NAME: str = "nvidia/parakeet-tdt-0.6b-v3"
     
-    # Storage settings  
-    BASE_DIR: Path = Path(__file__).parent.parent.parent
-    NOTES_DIR: Path = BASE_DIR / "notes"
+    # Storage settings (database-only, no file system storage)
+    BASE_DIR: Path = Path(__file__).parent.parent  # backend/
+    DB_PATH: Path = BASE_DIR / ".notes.db"
     
     # Categorization settings
     CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.7"))
@@ -46,15 +46,6 @@ class Config:
         
         if errors:
             raise ValueError(f"Configuration errors: {', '.join(errors)}")
-    
-    @classmethod
-    def init_directories(cls):
-        """Create necessary directories if they don't exist"""
-        cls.NOTES_DIR.mkdir(parents=True, exist_ok=True)
-        
-        # Create default folders
-        for folder in cls.DEFAULT_FOLDERS:
-            (cls.NOTES_DIR / folder).mkdir(exist_ok=True)
 
 
 # Create config instance

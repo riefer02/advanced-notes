@@ -33,8 +33,11 @@ frontend/.env
 frontend/.env.local
 backend/.env
 
-# Database files
-backend/notes/
+# Database files (SQLite - database-only storage)
+backend/.notes.db
+backend/.notes.db-wal
+backend/.notes.db-shm
+test_notes.db*
 *.db
 *.db-wal
 *.db-shm
