@@ -18,7 +18,7 @@ Create a `.env` file in the `backend/` directory with the following variables:
 # Flask Configuration
 FLASK_ENV=development
 
-# OpenAI API Configuration  
+# OpenAI API Configuration
 # Get your key from: https://platform.openai.com/api-keys
 OPENAI_API_KEY=sk-proj-your-actual-api-key-here
 OPENAI_MODEL=gpt-4o-mini

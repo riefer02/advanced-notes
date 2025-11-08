@@ -1,12 +1,12 @@
 # Project Overview
 
 **Last Updated:** November 8, 2025  
-**Status:** Production Ready - Full-Stack POC Complete
+**Status:** Production Ready - Deployment-Optimized
 
 ## ASR Mono-Repo with AI-Powered Semantic Organization
 
 This is a production-ready Proof-of-Concept (POC) demonstrating:
-1. **Automatic Speech Recognition** using NVIDIA Parakeet-TDT-0.6B-v3
+1. **Automatic Speech Recognition** using OpenAI GPT-4o-mini-transcribe
 2. **AI-Powered Categorization** using OpenAI GPT-4o-mini
 3. **Intelligent Note Organization** with database storage and full-text search
 
@@ -27,13 +27,11 @@ This is a production-ready Proof-of-Concept (POC) demonstrating:
   - Mobile-responsive with tabs
 
 ### Backend
-- **Framework:** Flask (Python 3.11)
+- **Framework:** Flask (Python 3.11+)
 - **Package Manager:** `uv` (modern Python package manager)
-- **ASR Model:** NVIDIA Parakeet-TDT-0.6B-v3 (600M parameters)
+- **Transcription:** OpenAI GPT-4o-mini-transcribe (API-based, no local model)
 - **AI Model:** OpenAI GPT-4o-mini with structured outputs
 - **Database:** SQLite with FTS5 (full-text search)
-- **ML Framework:** PyTorch with MPS acceleration (Apple Silicon)
-- **Audio Processing:** `soundfile`, `pydub`, `ffmpeg`
 - **Features:**
   - 11 REST API endpoints
   - Automatic categorization on transcription
@@ -41,6 +39,8 @@ This is a production-ready Proof-of-Concept (POC) demonstrating:
   - Folder hierarchy generation
   - Tag management
   - Full-text search
+  - Lightweight: ~30 packages (vs 166 with local models)
+  - No GPU required: Pure API calls
 
 ## Architecture
 
@@ -64,7 +64,8 @@ This is a production-ready Proof-of-Concept (POC) demonstrating:
 │  └──────────────┘  └───────────────────┘   │
 │         ↓                                   │
 │  ┌──────────────────────────────────────┐  │
-│  │ ASR (Parakeet-TDT-0.6B-v3)          │  │
+│  │ Transcription (OpenAI API)          │  │
+│  │ gpt-4o-mini-transcribe               │  │
 │  └──────────────────────────────────────┘  │
 └─────────────────────────────────────────────┘
 ```
@@ -86,7 +87,7 @@ advanced-notes/
 │   ├── app/
 │   │   ├── __init__.py         # Flask app factory
 │   │   ├── routes.py           # 11 REST endpoints
-│   │   ├── asr.py              # Parakeet ASR model
+│   │   ├── asr.py              # OpenAI transcription client
 │   │   ├── config.py           # Configuration
 │   │   └── services/
 │   │       ├── ai_categorizer.py  # OpenAI integration
@@ -133,20 +134,16 @@ advanced-notes/
 - **Storage Model:** Database-only (no file system)
 - **Features:** CRUD, search, folder hierarchy, tags, statistics
 
-### ASR Model
-- **Model:** NVIDIA Parakeet-TDT-0.6B-v3
-- **Parameters:** 600 million
-- **Cache Location:** `~/.cache/huggingface/hub/`
-- **Acceleration:** Apple Silicon MPS (Metal Performance Shaders)
-- **Average Transcription Time:** 1-2s per audio sample
-
-### Audio Format Support
-- **Native (soundfile):** WAV, FLAC, OGG
-- **Fallback (pydub):** WebM, MP3, M4A via ffmpeg
+### Transcription
+- **Model:** OpenAI GPT-4o-mini-transcribe
+- **Type:** API-based (no local model download)
+- **Average Time:** 1-3s per audio sample (API dependent)
+- **Supported Formats:** MP3, MP4, MPEG, MPGA, M4A, WAV, WebM (up to 25MB)
+- **Cost:** Pay-per-use via OpenAI API
 
 ### Python Version Requirement
-- **Required:** Python 3.11 or 3.12 (NOT 3.13)
-- **Reason:** NeMo requires NumPy 1.x (incompatible with Python 3.13)
+- **Required:** Python 3.11+
+- **Reason:** Modern Python features, no NumPy 1.x constraints
 
 ## REST API Endpoints
 
@@ -187,7 +184,7 @@ advanced-notes/
 
 **Backend (.env):**
 ```bash
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=sk-...  # Required for transcription + categorization
 OPENAI_MODEL=gpt-4o-mini
 CONFIDENCE_THRESHOLD=0.7
 FLASK_ENV=development
@@ -203,7 +200,7 @@ See `docs/environment-setup.md` for detailed setup instructions.
 ## User Flow
 
 1. **Record/Upload Audio** → User records or uploads audio file
-2. **Transcription** → Parakeet converts speech to text
+2. **Transcription** → OpenAI API converts speech to text (~1-3s)
 3. **AI Categorization** → GPT-4o-mini analyzes and categorizes
 4. **Storage** → Note saved to SQLite with metadata
 5. **Display** → UI shows result, folder tree updates automatically
@@ -230,29 +227,39 @@ See `docs/environment-setup.md` for detailed setup instructions.
 - ✅ Folder hierarchy generation
 - ✅ Tag management
 - ✅ Comprehensive REST API
+- ✅ No GPU required (API-based)
+- ✅ Lightweight deployment (30 packages)
 
 ## Performance
 
-- **Transcription:** 1-2s per audio sample
+- **Transcription:** 1-3s per audio sample (API latency)
 - **Categorization:** ~500ms (OpenAI API)
-- **Total Time to Save:** 2-3s end-to-end
+- **Total Time to Save:** 2-4s end-to-end
 - **Auto-refresh:** 5s polling interval
 - **Search:** <100ms (FTS5 indexed)
+
+## Deployment Benefits
+
+- ✅ **No GPU required**: Pure API-based transcription
+- ✅ **No model downloads**: No HuggingFace cache management
+- ✅ **Lightweight**: Only ~30 Python packages
+- ✅ **Platform-agnostic**: Works on any OS with Python 3.11+
+- ✅ **Easy scaling**: API handles compute, just scale Flask
+- ✅ **Cost predictable**: OpenAI pay-per-use pricing
 
 ## Known Limitations
 
 - Development server only (Flask dev server)
-- Model loads on first request (~5-10s initial load time)
-- Model stays in memory after first load
 - Browser audio recording produces WebM format
 - Requires OpenAI API key (paid service)
+- 25MB file size limit (OpenAI API constraint)
+- API latency depends on internet connection
 
 ## External Dependencies
 
-- **ffmpeg:** Required for audio format conversion
-  - Install: `brew install ffmpeg` (macOS)
-- **OpenAI API:** Required for AI categorization
+- **OpenAI API:** Required for transcription + categorization
   - Get key: https://platform.openai.com/api-keys
+  - Pricing: https://openai.com/pricing
 
 ## Testing
 
@@ -287,7 +294,6 @@ See `docs/environment-setup.md` for detailed setup instructions.
 
 ---
 
-**Status:** ✅ Production Ready  
-**Version:** v1.0.0  
-**Last Commit:** e25c54a  
-**Date:** November 8, 2025
+**Status:** ✅ Deployment-Ready  
+**Version:** v0.2.0  
+**Last Updated:** November 8, 2025

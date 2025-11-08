@@ -20,12 +20,13 @@ class Config:
     FLASK_ENV: str = os.getenv("FLASK_ENV", "development")
     DEBUG: bool = FLASK_ENV == "development"
     
-    # OpenAI settings
+    # OpenAI settings (used for both transcription and GPT categorization)
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     
-    # ASR Model settings
-    ASR_MODEL_NAME: str = "nvidia/parakeet-tdt-0.6b-v3"
+    # Transcription settings
+    # Using gpt-4o-mini-transcribe (newer, higher quality than whisper-1)
+    WHISPER_MODEL: str = "gpt-4o-mini-transcribe"
     
     # Storage settings (database-only, no file system storage)
     BASE_DIR: Path = Path(__file__).parent.parent  # backend/

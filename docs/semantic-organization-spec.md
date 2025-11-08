@@ -9,11 +9,11 @@
 
 ### ✅ **Completed Phases**
 
-| Phase | Component | Status | Details |
-|-------|-----------|--------|---------|
-| **Phase 1** | Storage Layer | ✅ Complete | Database-only (SQLite + FTS5) |
-| **Phase 2** | AI Categorization | ✅ Complete | OpenAI GPT-4o-mini with structured output |
-| **Phase 3** | Frontend Integration | ✅ Complete | TanStack Query + 5 React components |
+| Phase       | Component            | Status      | Details                                   |
+| ----------- | -------------------- | ----------- | ----------------------------------------- |
+| **Phase 1** | Storage Layer        | ✅ Complete | Database-only (SQLite + FTS5)             |
+| **Phase 2** | AI Categorization    | ✅ Complete | OpenAI GPT-4o-mini with structured output |
+| **Phase 3** | Frontend Integration | ✅ Complete | TanStack Query + 5 React components       |
 
 ### 🎯 **Current Architecture**
 
@@ -66,6 +66,7 @@
 ## 🔄 **Complete User Flow**
 
 ### **1. Audio Input**
+
 ```
 User records audio or uploads file
     ↓
@@ -75,6 +76,7 @@ Backend receives audio blob
 ```
 
 ### **2. Transcription**
+
 ```
 Parakeet-TDT-0.6B-v3 transcribes audio
     ↓
@@ -82,6 +84,7 @@ Returns: text + metadata (device, duration, etc.)
 ```
 
 ### **3. AI Categorization**
+
 ```
 AI Categorizer receives transcript + existing folders
     ↓
@@ -96,6 +99,7 @@ Returns structured output:
 ```
 
 ### **4. Storage**
+
 ```
 NoteStorage saves to SQLite:
   - Full transcript as content
@@ -104,6 +108,7 @@ NoteStorage saves to SQLite:
 ```
 
 ### **5. Frontend Update**
+
 ```
 Response sent back to frontend:
   - Transcript text
@@ -179,6 +184,7 @@ asr-monorepo/
 ### **Backend Components**
 
 #### **1. REST API (`routes.py`)**
+
 - **POST /api/transcribe** - Integrated: transcribe → categorize → save
 - **GET /api/notes** - List notes with folder filtering
 - **GET /api/notes/<id>** - Get specific note
@@ -192,6 +198,7 @@ asr-monorepo/
 - **GET /api/health** - Health check
 
 #### **2. AI Categorization Service**
+
 - **Model:** OpenAI GPT-4o-mini
 - **Structured Output:** JSON schema with Pydantic
 - **Confidence Threshold:** 0.7 (configurable)
@@ -199,6 +206,7 @@ asr-monorepo/
 - **Output:** folder_path, filename, tags, confidence, reasoning
 
 #### **3. Storage Service (Database-Only)**
+
 - **Database:** SQLite with WAL mode
 - **Search:** FTS5 full-text search
 - **Features:**
@@ -211,18 +219,21 @@ asr-monorepo/
 ### **Frontend Components**
 
 #### **1. AudioUploader** (Left Pane - 40%)
+
 - Record audio with MediaRecorder API
 - Upload audio files
 - Display transcript + metadata
 - Uses `useTranscribeAudio` mutation
 
 #### **2. NotesPanel** (Right Pane - 60%)
+
 - Orchestrates all right-side components
 - Manages selected folder state
 - Manages search state
 - Displays CategoryResult after transcription
 
 #### **3. CategoryResult**
+
 - Shows AI categorization result
 - Confidence score with color coding
 - Collapsible reasoning section
@@ -230,6 +241,7 @@ asr-monorepo/
 - Dismissible notification
 
 #### **4. FolderTree**
+
 - Hierarchical folder navigation
 - Keyboard support (Arrow keys, Enter, Space)
 - Auto-expand on new note
@@ -237,6 +249,7 @@ asr-monorepo/
 - ARIA tree roles
 
 #### **5. NotesList**
+
 - Displays notes or search results
 - Expandable note cards
 - Delete functionality with confirmation
@@ -244,6 +257,7 @@ asr-monorepo/
 - Supports both folder view and search view
 
 #### **6. SearchBar**
+
 - Debounced search input
 - Esc to clear
 - Real-time results via FTS5
@@ -254,6 +268,7 @@ asr-monorepo/
 ## 🎨 **User Experience Features**
 
 ### **Accessibility**
+
 - ✅ Full keyboard navigation
 - ✅ ARIA labels and roles
 - ✅ Semantic HTML
@@ -261,16 +276,19 @@ asr-monorepo/
 - ✅ Screen reader friendly
 
 ### **Responsive Design**
+
 - **Desktop (>1024px):** Side-by-side split panes (40/60)
 - **Mobile (<1024px):** Tabs to switch between views
 - **Tablet (768-1024px):** Adaptive layout
 
 ### **Real-time Updates**
+
 - ✅ Auto-refresh folders every 5 seconds
 - ✅ Optimistic updates on delete
 - ✅ Instant invalidation after transcription
 
 ### **Visual Feedback**
+
 - ✅ Loading states (spinners)
 - ✅ Error states (red alerts)
 - ✅ Success states (green CategoryResult)
@@ -281,27 +299,29 @@ asr-monorepo/
 
 ## 📊 **Implementation Statistics**
 
-| Metric | Count |
-|--------|-------|
-| **Backend Python Files** | 6 core + 2 test |
-| **Frontend Components** | 6 React components |
-| **API Endpoints** | 11 REST endpoints |
-| **Lines of Code** | ~3,500 total |
-| **Frontend Code** | 1,330 lines |
-| **Backend Code** | 2,000+ lines |
-| **Dependencies** | TanStack Query, OpenAI, SQLite, Parakeet |
+| Metric                   | Count                                    |
+| ------------------------ | ---------------------------------------- |
+| **Backend Python Files** | 6 core + 2 test                          |
+| **Frontend Components**  | 6 React components                       |
+| **API Endpoints**        | 11 REST endpoints                        |
+| **Lines of Code**        | ~3,500 total                             |
+| **Frontend Code**        | 1,330 lines                              |
+| **Backend Code**         | 2,000+ lines                             |
+| **Dependencies**         | TanStack Query, OpenAI, SQLite, Parakeet |
 
 ---
 
 ## 🧪 **Testing Status**
 
 ### **Backend**
+
 - ✅ Unit tests for AI categorization
 - ✅ Unit tests for storage layer
 - ✅ Manual API testing completed
 - ⏳ Integration tests (TODO)
 
 ### **Frontend**
+
 - ✅ No linter errors
 - ✅ TypeScript strict mode
 - ✅ Manual UI testing
@@ -312,6 +332,7 @@ asr-monorepo/
 ## 🚀 **Next Steps**
 
 ### **Phase 4: Deployment**
+
 - [ ] Deploy backend (Render/Railway/Fly.io)
 - [ ] Deploy frontend (Vercel/Netlify)
 - [ ] Set up environment variables
@@ -319,6 +340,7 @@ asr-monorepo/
 - [ ] Add monitoring/logging
 
 ### **Phase 5: Enhanced Features**
+
 - [ ] Note editing in UI
 - [ ] Batch operations
 - [ ] Export notes (Markdown/PDF)
@@ -331,19 +353,20 @@ asr-monorepo/
 
 ## 🎯 **Success Metrics**
 
-| Metric | Target | Status |
-|--------|--------|--------|
-| **Categorization Accuracy** | >85% | ✅ Achieved (GPT-4o-mini) |
-| **Time to Save** | <5s | ✅ Achieved (~2-3s) |
-| **Auto-refresh** | <10s | ✅ Achieved (5s) |
-| **Keyboard Navigation** | 100% | ✅ Complete |
-| **Mobile Responsive** | Yes | ✅ Complete |
+| Metric                      | Target | Status                    |
+| --------------------------- | ------ | ------------------------- |
+| **Categorization Accuracy** | >85%   | ✅ Achieved (GPT-4o-mini) |
+| **Time to Save**            | <5s    | ✅ Achieved (~2-3s)       |
+| **Auto-refresh**            | <10s   | ✅ Achieved (5s)          |
+| **Keyboard Navigation**     | 100%   | ✅ Complete               |
+| **Mobile Responsive**       | Yes    | ✅ Complete               |
 
 ---
 
 ## 📝 **Configuration**
 
 ### **Environment Variables**
+
 ```bash
 # Backend (.env)
 OPENAI_API_KEY=sk-...
@@ -356,6 +379,7 @@ VITE_API_URL=http://localhost:5001
 ```
 
 ### **Key Settings**
+
 - **Auto-refresh interval:** 5 seconds
 - **Confidence threshold:** 0.7
 - **Search debounce:** 300ms
@@ -367,6 +391,7 @@ VITE_API_URL=http://localhost:5001
 ## 🔧 **Technology Stack**
 
 ### **Backend**
+
 - Python 3.11 (pinned for NeMo compatibility)
 - Flask + Flask-CORS
 - NVIDIA NeMo (Parakeet-TDT-0.6B-v3)
@@ -376,6 +401,7 @@ VITE_API_URL=http://localhost:5001
 - PyTorch (MPS for Apple Silicon)
 
 ### **Frontend**
+
 - React 18
 - TypeScript (strict mode)
 - Vite 5
@@ -384,6 +410,7 @@ VITE_API_URL=http://localhost:5001
 - TanStack Query DevTools
 
 ### **Development Tools**
+
 - uv (Python package manager)
 - npm (Node package manager)
 - Git + GitHub

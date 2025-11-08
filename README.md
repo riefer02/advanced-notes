@@ -1,11 +1,11 @@
-# ASR Mono-repo POC: Vite + Tailwind + Flask + NVIDIA Parakeet-TDT-0.6B-v3
+# ASR Mono-repo POC: Vite + Tailwind + Flask + OpenAI Transcription
 
 **Production-ready proof-of-concept** for audio transcription using:
 
 - **Frontend**: Vite + React + TypeScript + Tailwind CSS
-- **Backend**: Flask + NVIDIA Parakeet-TDT-0.6B-v3 ASR model
+- **Backend**: Flask + OpenAI GPT-4o-mini-transcribe (API-based)
 - **Python tooling**: `uv` (fast package manager from Astral)
-- **Apple Silicon optimized**: Automatic MPS (Metal Performance Shaders) acceleration
+- **Deployment-friendly**: No GPU required, pure API calls
 
 ---
 
@@ -22,11 +22,9 @@
 ### Prerequisites
 
 - **Node.js 20.19+ or 22.12+** ([Vite requirements](https://vite.dev/guide/))
-- **Python 3.10–3.12**
+- **Python 3.11+**
 - **uv** (install with: `curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- **OpenAI API key** (for AI categorization) - See [environment setup](./docs/environment-setup.md)
-- **(Optional)** `ffmpeg` and `sox`: `brew install ffmpeg sox`
-- **Xcode Command Line Tools**: `xcode-select --install`
+- **OpenAI API key** (for transcription + AI categorization) - See [environment setup](./docs/environment-setup.md)
 
 ### Backend Setup
 
@@ -36,11 +34,14 @@ cd backend
 # Install dependencies (creates .venv and installs from pyproject.toml)
 uv sync
 
+# Create .env file with your OpenAI API key
+echo "OPENAI_API_KEY=sk-your-key-here" > .env
+
 # Start Flask server on http://localhost:5001
 ./run.sh
 ```
 
-**First run:** The Parakeet model (~600MB) downloads automatically from HuggingFace. Subsequent runs use the cached model.
+**First run:** No model download needed! Uses OpenAI API for transcription.
 
 ### Frontend Setup
 
@@ -56,7 +57,7 @@ npm install
 npm run dev
 ```
 
-Visit **http://localhost:5173** and upload an audio file (WAV, FLAC, OGG, MP3) to see the transcription.
+Visit **http://localhost:5173** and record or upload audio (MP3, WAV, WebM, M4A, etc.) to see the transcription.
 
 ---
 
@@ -68,15 +69,16 @@ asr-monorepo/
 ├─ .gitignore
 ├─ Makefile               # Optional: run both servers with 'make dev'
 │
-├─ backend/               # Flask + NeMo (Parakeet TDT)
+├─ backend/               # Flask + OpenAI API
 │  ├─ pyproject.toml      # uv project definition
 │  ├─ uv.lock             # Dependency lock file (auto-generated)
 │  ├─ run.sh              # Dev server launcher
 │  ├─ wsgi.py             # WSGI entry point
 │  └─ app/
 │     ├─ __init__.py      # Flask app factory with CORS
-│     ├─ asr.py           # Model loading & transcription logic
-│     └─ routes.py        # /api/transcribe endpoint
+│     ├─ asr.py           # OpenAI transcription API client
+│     ├─ routes.py        # REST API endpoints (11 total)
+│     └─ services/        # AI categorization + storage
 │
 └─ frontend/              # Vite + React + TS + Tailwind
    ├─ package.json
@@ -100,18 +102,27 @@ asr-monorepo/
 
 ### Backend (`backend/`)
 
-1. **Model Loading** (`app/asr.py`):
-   - Uses **NVIDIA NeMo Toolkit** to load `nvidia/parakeet-tdt-0.6b-v3`
-   - Auto-detects **Apple Silicon MPS** for GPU acceleration (falls back to CPU)
-   - Model is cached in memory after first load
+1. **Transcription** (`app/asr.py`):
+   - Uses **OpenAI GPT-4o-mini-transcribe** API
+   - Supports: MP3, WAV, WebM, M4A, MP4, MPEG, MPGA (up to 25MB)
+   - No local model download required
+   - Fast, reliable, API-based transcription
 
-2. **API Endpoint** (`app/routes.py`):
-   - `POST /api/transcribe` accepts audio as:
-     - Multipart form-data (`file` field)
-     - Raw bytes in request body
-   - Returns JSON: `{"text": "...", "meta": {...}}`
+2. **AI Categorization** (`app/services/ai_categorizer.py`):
+   - Uses **OpenAI GPT-4o-mini** for semantic analysis
+   - Generates folder paths, filenames, tags automatically
+   - Structured JSON outputs for reliability
 
-3. **CORS**: Enabled via `flask-cors` so Vite dev server (`:5173`) can call Flask (`:5001`)
+3. **Storage** (`app/services/storage.py`):
+   - **SQLite** database with FTS5 full-text search
+   - Database-only storage (no file system)
+   - CRUD operations, folder hierarchy, tag management
+
+4. **REST API** (`app/routes.py`):
+   - 11 endpoints for transcription, notes, folders, tags, search
+   - Returns JSON responses with comprehensive metadata
+
+5. **CORS**: Enabled via `flask-cors` so Vite dev server (`:5173`) can call Flask (`:5001`)
 
 ### Frontend (`frontend/`)
 
@@ -135,10 +146,18 @@ asr-monorepo/
 {
   "text": "transcribed speech text",
   "meta": {
-    "device": "mps",
-    "sample_rate": 16000,
-    "model": "nvidia/parakeet-tdt-0.6b-v3",
-    "duration_sec": 3.45
+    "device": "openai-api",
+    "model": "gpt-4o-mini-transcribe",
+    "language": "en",
+    "duration": 3.45
+  },
+  "categorization": {
+    "note_id": "abc123",
+    "folder_path": "Ideas/Product",
+    "filename": "new_feature_idea.txt",
+    "tags": ["product", "feature"],
+    "confidence": 0.95,
+    "reasoning": "This appears to be a product feature idea..."
   }
 }
 ```
@@ -211,14 +230,15 @@ make dev
 
 ---
 
-## 🍎 Apple Silicon Notes
+## ☁️ Deployment Notes
 
-- **PyTorch MPS**: Automatically used if available (macOS 12.3+, Apple Silicon)
-- **Fallback**: CPU if MPS unavailable
-- **First-run download**: Parakeet model (~600MB) downloads once, then cached
-- **No OpenVINO needed**: OpenVINO is Intel-specific; not required on Apple Silicon
+- **No GPU required**: Pure API-based transcription
+- **No model downloads**: Everything runs via OpenAI API
+- **Lightweight**: Only ~30 Python packages (vs 166 with local models)
+- **Platform-agnostic**: Works on any OS with Python 3.11+
+- **Easy scaling**: API handles all compute, just scale your Flask app
 
-Check device in use via the `meta.device` field in API responses.
+Check API usage via the `meta.model` field in responses.
 
 ---
 
@@ -226,20 +246,19 @@ Check device in use via the `meta.device` field in API responses.
 
 ### Backend
 
-**"No module named 'nemo'"**
-- Run `uv sync` in `backend/` directory
+**"OPENAI_API_KEY is required"**
+- Create `backend/.env` file with your API key
+- Get key from: https://platform.openai.com/api-keys
+- See [environment setup](./docs/environment-setup.md)
 
-**Model download fails**
-- Ensure network access to HuggingFace
-- Check `~/.cache/huggingface/` for downloaded models
+**Transcription fails with 401 error**
+- Check your API key is valid
+- Ensure you have credits/billing set up on OpenAI
 
-**"MPS not available"**
-- Normal on Intel Macs or older macOS → falls back to CPU
-- Verify PyTorch version: `uv run python -c "import torch; print(torch.backends.mps.is_available())"`
-
-**Slow transcription**
-- First run includes model download + JIT compilation
-- Subsequent runs are faster (model cached in memory)
+**Transcription too slow**
+- OpenAI API typically responds in 1-3 seconds
+- Check your internet connection
+- Verify API status: https://status.openai.com/
 
 ### Frontend
 
@@ -251,9 +270,10 @@ Check device in use via the `meta.device` field in API responses.
 - Delete `node_modules/` and run `npm install` again
 - Verify Node version: `node -v` (should be 20.19+ or 22.12+)
 
-**Audio upload fails**
+**Audio recording/upload fails**
 - Check browser console for errors
-- Try converting audio to WAV: `ffmpeg -i input.mp3 output.wav`
+- Ensure microphone permissions are granted
+- OpenAI supports: MP3, MP4, MPEG, MPGA, M4A, WAV, WebM (max 25MB)
 
 ---
 
@@ -283,12 +303,13 @@ Check device in use via the `meta.device` field in API responses.
 - **Static hosting**: Deploy `dist/` to Vercel, Netlify, or Cloudflare Pages
 - **API proxy**: Configure Vite proxy in production or use Nginx
 
-### Model
+### Transcription
 
-- **Warm-up**: Pre-load model on server startup (add to `wsgi.py`)
-- **Model swap**: Replace `MODEL_NAME` in `asr.py` to use different Parakeet sizes
-- **Quantization**: Explore PyTorch quantization for faster inference
-- **Timestamps**: Add word-level timing if needed (check NeMo docs)
+- **Cost monitoring**: Track OpenAI API usage on dashboard
+- **Model upgrade**: Switch to `gpt-4o-transcribe` for higher quality (more expensive)
+- **Diarization**: Use `gpt-4o-transcribe-diarize` for speaker labels
+- **Streaming**: Enable `stream=True` for real-time transcription
+- **Prompting**: Add custom prompts to improve accuracy for specific domains
 
 ---
 
@@ -296,46 +317,52 @@ Check device in use via the `meta.device` field in API responses.
 
 | Component | Link |
 |-----------|------|
-| **Parakeet-TDT-0.6B-v3** | [HuggingFace Model Card](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) |
-| **NVIDIA NeMo** | [NeMo ASR Docs](https://docs.nvidia.com/deeplearning/nemo/user-guide/docs/en/stable/asr/intro.html) |
+| **OpenAI Transcription** | [Speech to Text Docs](https://platform.openai.com/docs/guides/speech-to-text) |
+| **GPT-4o-mini** | [Model Docs](https://platform.openai.com/docs/models/gpt-4o-mini) |
+| **TanStack Query** | [React Query Docs](https://tanstack.com/query/latest) |
+| **SQLite FTS5** | [Full-Text Search](https://www.sqlite.org/fts5.html) |
 | **Vite** | [Getting Started](https://vite.dev/guide/) |
 | **Tailwind CSS** | [Vite Setup](https://tailwindcss.com/docs/guides/vite) |
 | **Flask** | [Quickstart](https://flask.palletsprojects.com/en/stable/quickstart/) |
 | **uv** | [Installation](https://docs.astral.sh/uv/getting-started/installation/) |
-| **PyTorch MPS** | [Apple Developer](https://developer.apple.com/metal/pytorch/) |
 
 ---
 
 ## 🎯 Acceptance Criteria ✅
 
-- ✅ Vite frontend with Tailwind renders and accepts audio uploads
-- ✅ Backend accepts uploads and returns transcripts
-- ✅ Model stays loaded in memory (no re-download between requests)
-- ✅ Apple Silicon MPS acceleration when available
+- ✅ Vite frontend with Tailwind for recording/uploading audio
+- ✅ OpenAI API transcription (gpt-4o-mini-transcribe)
+- ✅ AI-powered categorization (GPT-4o-mini)
+- ✅ SQLite database storage with FTS5 search
+- ✅ 11 REST API endpoints for full CRUD
+- ✅ Split-pane layout with folder navigation
+- ✅ TanStack Query for state management
+- ✅ Keyboard navigation and accessibility
 - ✅ CORS configured for local dev
-- ✅ Clean separation of frontend/backend concerns
+- ✅ Deployment-ready (no GPU required)
 
 ---
 
 ## 🚧 Future Enhancements
 
-- [ ] Real-time audio recording in browser (MediaRecorder API)
-- [ ] WebSocket streaming for live transcription
-- [ ] Word-level timestamps and confidence scores
-- [ ] Multi-language support (swap ASR models)
-- [ ] Transcript editing & export (TXT, SRT, VTT)
-- [ ] User authentication & transcript history
-- [ ] Database persistence (SQLite/PostgreSQL)
+- [ ] Speaker diarization (gpt-4o-transcribe-diarize)
+- [ ] Streaming transcription with WebSocket
+- [ ] Note editing UI with inline updates
+- [ ] Bulk operations (move, delete, export)
+- [ ] Export as Markdown/PDF
+- [ ] User authentication & multi-user support
+- [ ] PostgreSQL for production
 - [ ] Docker Compose setup
 - [ ] CI/CD pipeline (GitHub Actions)
+- [ ] Real-time collaboration
 
 ---
 
 ## 📝 License
 
-This is a proof-of-concept template. Model license follows NVIDIA NeMo/Parakeet terms.
+This is a proof-of-concept template.
 
 ---
 
-**Built with ❤️ for Apple Silicon**
+**Built with ❤️ for easy deployment**
 

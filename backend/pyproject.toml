@@ -1,23 +1,16 @@
 [project]
 name = "asr-backend"
-version = "0.1.0"
-description = "Flask backend with NVIDIA Parakeet-TDT ASR"
+version = "0.2.0"
+description = "Flask backend with OpenAI Whisper transcription"
 readme = "README.md"
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.11"
 dependencies = [
     "flask>=3.0.0",
     "flask-cors>=4.0.0",
-    "torch>=2.0.0",
-    "torchaudio>=2.0.0",
-    "soundfile>=0.12.0",
-    "numpy>=1.24.0",
-    "nemo-toolkit[asr]>=1.20.0",
-    "pydub>=0.25.0",
-    "python-multipart>=0.0.6",
-    "ml-dtypes>=0.5.0",
     "openai>=2.7.1",
     "pydantic>=2.12.4",
     "python-dotenv>=1.2.1",
+    "python-multipart>=0.0.6",
 ]
 
 [build-system]
