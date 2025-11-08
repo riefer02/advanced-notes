@@ -9,6 +9,14 @@
 
 ---
 
+## 📚 Documentation
+
+**Complete documentation**: See [`docs/`](./docs/) folder
+
+- **[Environment Setup](./docs/environment-setup.md)** - OpenAI API keys, configuration
+- **[Technical Specification](./docs/semantic-organization-spec.md)** - AI categorization architecture  
+- **[Documentation Index](./docs/README.md)** - Full documentation catalog
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -16,6 +24,7 @@
 - **Node.js 20.19+ or 22.12+** ([Vite requirements](https://vite.dev/guide/))
 - **Python 3.10–3.12**
 - **uv** (install with: `curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- **OpenAI API key** (for AI categorization) - See [environment setup](./docs/environment-setup.md)
 - **(Optional)** `ffmpeg` and `sox`: `brew install ffmpeg sox`
 - **Xcode Command Line Tools**: `xcode-select --install`
 

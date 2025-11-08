@@ -15,6 +15,9 @@ dependencies = [
     "pydub>=0.25.0",
     "python-multipart>=0.0.6",
     "ml-dtypes>=0.5.0",
+    "openai>=2.7.1",
+    "pydantic>=2.12.4",
+    "python-dotenv>=1.2.1",
 ]
 
 [build-system]
