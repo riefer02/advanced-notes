@@ -7,6 +7,33 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
 // ============================================================================
+// Auth Helper
+// ============================================================================
+
+/**
+ * Get headers with authentication token
+ * Note: This function should be called from within a component that has access to Clerk
+ */
+let getAuthToken: (() => Promise<string | null>) | null = null
+
+export function setAuthTokenGetter(getter: () => Promise<string | null>) {
+  getAuthToken = getter
+}
+
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const headers: HeadersInit = {}
+  
+  if (getAuthToken) {
+    const token = await getAuthToken()
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+  }
+  
+  return headers
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -98,8 +125,11 @@ export async function transcribeAudio(audioBlob: Blob): Promise<TranscriptionRes
   const formData = new FormData()
   formData.append('file', audioBlob, 'recording.webm')
 
+  const headers = await getAuthHeaders()
+
   const response = await fetch(`${API_BASE_URL}/api/transcribe`, {
     method: 'POST',
+    headers,
     body: formData,
   })
 
@@ -115,7 +145,9 @@ export async function transcribeAudio(audioBlob: Blob): Promise<TranscriptionRes
  * Get folder hierarchy tree
  */
 export async function fetchFolders(): Promise<FolderNode> {
-  const response = await fetch(`${API_BASE_URL}/api/folders`)
+  const headers = await getAuthHeaders()
+  
+  const response = await fetch(`${API_BASE_URL}/api/folders`, { headers })
 
   if (!response.ok) {
     throw new Error('Failed to fetch folders')
@@ -138,7 +170,8 @@ export async function fetchNotes(folder?: string, limit = 50, offset = 0): Promi
     params.set('folder', folder)
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/notes?${params}`)
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/notes?${params}`, { headers })
 
   if (!response.ok) {
     throw new Error('Failed to fetch notes')
@@ -151,7 +184,8 @@ export async function fetchNotes(folder?: string, limit = 50, offset = 0): Promi
  * Get a specific note by ID
  */
 export async function fetchNote(noteId: string): Promise<Note> {
-  const response = await fetch(`${API_BASE_URL}/api/notes/${noteId}`)
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/notes/${noteId}`, { headers })
 
   if (!response.ok) {
     throw new Error('Note not found')
@@ -164,8 +198,10 @@ export async function fetchNote(noteId: string): Promise<Note> {
  * Delete a note
  */
 export async function deleteNote(noteId: string): Promise<void> {
+  const headers = await getAuthHeaders()
   const response = await fetch(`${API_BASE_URL}/api/notes/${noteId}`, {
     method: 'DELETE',
+    headers,
   })
 
   if (!response.ok) {
@@ -182,7 +218,8 @@ export async function searchNotes(query: string): Promise<SearchResult[]> {
   }
 
   const params = new URLSearchParams({ q: query })
-  const response = await fetch(`${API_BASE_URL}/api/search?${params}`)
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/search?${params}`, { headers })
 
   if (!response.ok) {
     throw new Error('Search failed')
@@ -196,7 +233,8 @@ export async function searchNotes(query: string): Promise<SearchResult[]> {
  * Get all tags
  */
 export async function fetchTags(): Promise<string[]> {
-  const response = await fetch(`${API_BASE_URL}/api/tags`)
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/tags`, { headers })
 
   if (!response.ok) {
     throw new Error('Failed to fetch tags')
