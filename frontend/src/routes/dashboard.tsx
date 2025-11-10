@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useAuth, UserButton } from '@clerk/clerk-react'
 import { useState, useEffect } from 'react'
 import AudioUploader from '../components/AudioUploader'
