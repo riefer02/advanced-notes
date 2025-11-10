@@ -24,11 +24,12 @@ function LandingPage() {
                     Sign In
                   </button>
                 </SignInButton>
-                <Link to="/sign-up">
-                  <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-                    Get Started
-                  </button>
-                </Link>
+                <button 
+                  onClick={() => window.location.href = '/sign-up'}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                >
+                  Get Started
+                </button>
               </SignedOut>
               <SignedIn>
                 <Link 
@@ -61,11 +62,12 @@ function LandingPage() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-8">
             <SignedOut>
-              <Link to="/sign-up">
-                <button className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
-                  Start Free Trial
-                </button>
-              </Link>
+              <button 
+                onClick={() => window.location.href = '/sign-up'}
+                className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+              >
+                Start Free Trial
+              </button>
               <SignInButton mode="modal">
                 <button className="px-8 py-4 text-lg font-semibold text-gray-700 bg-white border-2 border-gray-300 hover:border-gray-400 rounded-lg transition-all">
                   Sign In
