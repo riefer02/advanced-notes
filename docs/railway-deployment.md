@@ -1,454 +1,273 @@
-# Railway Deployment Checklist
+# Railway Deployment
 
-**Target Platform:** Railway.app  
-**Services:** Flask Backend + Vite Frontend (Monorepo)  
-**Database:** PostgreSQL (Railway-managed)  
-**Status:** 🚧 In Progress
+**Platform:** Railway.app  
+**Services:** Flask Backend + Vite Frontend + PostgreSQL  
+**Status:** ✅ Deployed
 
 ---
 
-## 🎯 Deployment Overview
-
-### Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────┐
 │  Railway Project: advanced-notes            │
 │                                             │
 │  ┌─────────────────┐  ┌──────────────────┐ │
-│  │ Service 1:      │  │ Service 2:       │ │
-│  │ Backend (Flask) │  │ Frontend (Vite)  │ │
-│  │ Port: $PORT     │  │ Static hosting   │ │
+│  │ Backend         │  │ Frontend         │ │
+│  │ (Flask/Python)  │  │ (Vite/React)     │ │
+│  │ Gunicorn        │  │ Static Site      │ │
 │  └────────┬────────┘  └────────┬─────────┘ │
 │           │                    │           │
 │           └──────┬─────────────┘           │
 │                  │                         │
 │         ┌────────▼────────┐                │
-│         │ PostgreSQL DB   │                │
-│         │ (Railway Plugin)│                │
+│         │ PostgreSQL      │                │
+│         │ (Managed DB)    │                │
 │         └─────────────────┘                │
 └─────────────────────────────────────────────┘
 ```
 
----
-
-## ✅ Pre-Deployment Checklist
-
-### Phase 1: Backend Production Setup
-
-- [ ] **1.1 Add Gunicorn**
-
-  - Add to `backend/pyproject.toml`
-  - Run `uv sync`
-
-- [ ] **1.2 Generate requirements.txt**
-
-  - Railway needs this file (doesn't use uv directly)
-  - Command: `uv pip compile pyproject.toml -o requirements.txt`
-
-- [ ] **1.3 Create Procfile**
-
-  - File: `backend/Procfile`
-  - Content: `web: gunicorn -w 4 -b 0.0.0.0:$PORT wsgi:app`
-  - Alternative: Use nixpacks.toml if Procfile doesn't work
-
-- [ ] **1.4 Update CORS configuration**
-
-  - File: `backend/app/__init__.py`
-  - Add Railway frontend URL to allowed origins
-  - Keep localhost for local dev
-
-- [ ] **1.5 Test Gunicorn locally**
-
-  - Command: `gunicorn -w 4 -b 0.0.0.0:5001 wsgi:app`
-  - Verify all endpoints work
-  - Test transcription + categorization
-
-- [ ] **1.6 Update config for production**
-  - File: `backend/app/config.py`
-  - Add DATABASE_URL parsing for PostgreSQL
-  - Keep SQLite fallback for local dev
-
-### Phase 2: Database Migration (SQLite → PostgreSQL)
-
-- [ ] **2.1 Install PostgreSQL adapter**
-
-  - Add `psycopg2-binary` to dependencies
-  - Update requirements.txt
-
-- [ ] **2.2 Update storage layer**
-
-  - File: `backend/app/services/storage.py`
-  - Add PostgreSQL connection logic
-  - Detect DATABASE_URL env var
-  - Keep SQLite for local development
-
-- [ ] **2.3 Create migration strategy**
-
-  - Option A: Fresh start (lose local data)
-  - Option B: Export/import existing notes
-  - Decision: Fresh start for POC
-
-- [ ] **2.4 Test PostgreSQL locally (optional)**
-  - Use Docker PostgreSQL container
-  - Test connection string format
-  - Verify FTS5 → PostgreSQL full-text search
-
-### Phase 3: Frontend Production Setup
-
-- [ ] **3.1 Verify build script**
-
-  - File: `frontend/package.json`
-  - Check `build` script exists ✅ (already has it)
-  - Test build locally: `npm run build`
-
-- [ ] **3.2 Create Railway config**
-
-  - File: `frontend/nixpacks.toml`
-  - Specify build + serve commands
-  - Use serve or Railway's static hosting
-
-- [ ] **3.3 Update API URL handling**
-
-  - File: `frontend/src/lib/api.ts`
-  - Ensure `VITE_API_URL` works for production
-  - Test with different URLs
-
-- [ ] **3.4 Test production build locally**
-  - Build: `npm run build`
-  - Preview: `npm run preview`
-  - Verify all features work
-
-### Phase 4: Railway Setup
-
-- [ ] **4.1 Create Railway account**
-
-  - Sign up at https://railway.app
-  - Connect GitHub account
-  - Verify email
-
-- [ ] **4.2 Install Railway CLI (optional)**
-
-  - Command: `curl -fsSL https://railway.app/install.sh | sh`
-  - Login: `railway login`
-  - Test: `railway whoami`
-
-- [ ] **4.3 Create new Railway project**
-
-  - Method: GitHub integration (recommended)
-  - Project name: `advanced-notes`
-  - Link to GitHub repo
-
-- [ ] **4.4 Add PostgreSQL database**
-  - Click "New" → "Database" → "PostgreSQL"
-  - Railway auto-provisions
-  - Note: Sets `DATABASE_URL` env var automatically
-
-### Phase 5: Backend Deployment
-
-- [ ] **5.1 Create backend service**
-
-  - Service name: `backend`
-  - Root directory: `/backend`
-  - Build provider: Nixpacks (auto-detected)
-
-- [ ] **5.2 Configure backend environment variables**
-
-  ```bash
-  OPENAI_API_KEY=sk-...        # Your OpenAI key
-  OPENAI_MODEL=gpt-4o-mini
-  FLASK_ENV=production
-  CONFIDENCE_THRESHOLD=0.7
-  DATABASE_URL=...              # Auto-set by Railway
-  ```
-
-- [ ] **5.3 Deploy backend**
-
-  - Push to GitHub (auto-deploys) OR
-  - Railway CLI: `railway up`
-  - Monitor build logs
-
-- [ ] **5.4 Verify backend deployment**
-
-  - Check deployment logs for errors
-  - Get Railway-provided URL
-  - Test: `curl https://your-backend.railway.app/api/health`
-  - Test: `/api/folders`, `/api/tags`
-
-- [ ] **5.5 Test transcription on Railway**
-  - Upload audio via Postman/curl
-  - Verify OpenAI API key works
-  - Check database saves notes
-  - Verify PostgreSQL connection
-
-### Phase 6: Frontend Deployment
-
-- [ ] **6.1 Create frontend service**
-
-  - Service name: `frontend`
-  - Root directory: `/frontend`
-  - Build provider: Nixpacks (auto-detected)
-
-- [ ] **6.2 Configure frontend environment variables**
-
-  ```bash
-  VITE_API_URL=https://your-backend.railway.app
-  ```
-
-- [ ] **6.3 Deploy frontend**
-
-  - Push to GitHub (auto-deploys) OR
-  - Railway CLI: `railway up`
-  - Monitor build logs
-
-- [ ] **6.4 Verify frontend deployment**
-  - Get Railway-provided URL
-  - Visit URL in browser
-  - Check console for CORS errors
-  - Test all features end-to-end
-
-### Phase 7: Integration Testing
-
-- [ ] **7.1 Test audio recording**
-
-  - Record audio in browser
-  - Verify transcription works
-  - Check AI categorization
-
-- [ ] **7.2 Test audio upload**
-
-  - Upload various formats (MP3, WAV, WebM)
-  - Verify 25MB limit enforced
-  - Check error handling
-
-- [ ] **7.3 Test note organization**
-
-  - Verify folder hierarchy displays
-  - Test folder navigation
-  - Check note counts accurate
-
-- [ ] **7.4 Test search functionality**
-
-  - Full-text search with FTS
-  - Verify results relevance
-  - Check search performance
-
-- [ ] **7.5 Test CRUD operations**
-
-  - Create notes (via transcription)
-  - Read notes (view details)
-  - Update notes (edit tags, etc.)
-  - Delete notes
-
-- [ ] **7.6 Mobile responsiveness**
-  - Test on mobile viewport
-  - Verify tabs work correctly
-  - Check touch interactions
-
-### Phase 8: Production Hardening
-
-- [ ] **8.1 Set up custom domain (optional)**
-
-  - Configure DNS
-  - Add domain in Railway
-  - Enable SSL/TLS (automatic)
-
-- [ ] **8.2 Configure logging**
-
-  - Review Railway logs
-  - Set up error alerts
-  - Monitor API usage
-
-- [ ] **8.3 Set up monitoring**
-
-  - Monitor OpenAI API costs
-  - Track Railway resource usage
-  - Set up uptime monitoring (UptimeRobot)
-
-- [ ] **8.4 Security review**
-
-  - Verify env vars are not logged
-  - Check CORS is restrictive
-  - Review API rate limiting needs
-  - Confirm no secrets in codebase
-
-- [ ] **8.5 Backup strategy**
-
-  - Set up PostgreSQL backups
-  - Export notes functionality (future)
-  - Document recovery process
-
-- [ ] **8.6 Update documentation**
-  - Add deployment URLs to README
-  - Document deployment process
-  - Update Cursor rules with prod info
+**How it works:**
+- Frontend calls Backend API
+- Backend uses OpenAI for transcription + categorization
+- All notes stored in PostgreSQL
+- Auto-deploys on git push to `main`
 
 ---
 
-## 📋 Environment Variables Reference
+## Services
 
-### Backend (`backend/.env` local, Railway dashboard for prod)
+### 1. Backend Service
+- **Root Directory:** `/backend`
+- **Start Command:** `gunicorn -w 4 -b 0.0.0.0:$PORT wsgi:app` (via `Procfile`)
+- **Build:** Nixpacks auto-detects Python + `requirements.txt`
+- **Language:** Python 3.13+
 
+### 2. Frontend Service
+- **Root Directory:** `/frontend`
+- **Build:** `npm run build` (outputs to `dist/`)
+- **Serve:** Caddy static server (Railway default)
+- **Language:** TypeScript + React
+
+### 3. PostgreSQL Database
+- **Type:** Railway Plugin (managed)
+- **Version:** Latest PostgreSQL
+- **Connection:** Auto-injected via `DATABASE_URL` reference
+
+---
+
+## Environment Variables
+
+### Backend
+
+| Variable | Value | Description |
+|----------|-------|-------------|
+| `OPENAI_API_KEY` | `sk-proj-...` | OpenAI API key (required) |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Model for categorization |
+| `FLASK_ENV` | `production` | Flask environment |
+| `CONFIDENCE_THRESHOLD` | `0.7` | AI confidence threshold |
+| `FRONTEND_URL` | `https://your-frontend-domain.com` | For CORS (your custom domain) |
+| `DATABASE_URL` | (auto-set) | PostgreSQL connection (reference from DB) |
+
+### Frontend
+
+| Variable | Value | Description |
+|----------|-------|-------------|
+| `VITE_API_URL` | `https://your-backend-domain.com` | Backend API URL (your custom domain, no trailing slash) |
+
+**Note:** `VITE_API_URL` is baked into the build at compile time - redeploy frontend after changing it.
+
+---
+
+## Key Files
+
+### Backend Production Files
+- **`backend/Procfile`** - Tells Railway to use Gunicorn
+- **`backend/requirements.txt`** - Python dependencies (generated from `pyproject.toml`)
+- **`backend/app/services/storage.py`** - Multi-database adapter (SQLite local, PostgreSQL prod)
+
+### Frontend Production Files
+- **`frontend/src/vite-env.d.ts`** - TypeScript types for `VITE_API_URL`
+- **`frontend/package.json`** - Build script: `tsc && vite build`
+
+---
+
+## Database
+
+### Local Development
+- **Type:** SQLite
+- **Location:** `backend/.notes.db`
+- **Search:** FTS5 full-text search
+- **Auto-selected** when `DATABASE_URL` not set
+
+### Production (Railway)
+- **Type:** PostgreSQL
+- **Connection:** Via `DATABASE_URL` environment variable
+- **Search:** `tsvector` + `ts_rank` full-text search
+- **Auto-selected** when `DATABASE_URL` is set
+
+The storage layer (`backend/app/services/storage.py`) automatically detects which database to use.
+
+---
+
+## Deployment Process
+
+### Automatic (Recommended)
+1. Commit changes to `main` branch
+2. Push to GitHub: `git push origin main`
+3. Railway auto-deploys both services
+4. Monitor in Railway dashboard
+
+### Manual (if needed)
 ```bash
-# Required
-OPENAI_API_KEY=sk-...                    # OpenAI API key
-DATABASE_URL=postgresql://...            # Auto-set by Railway
-
-# Optional (with defaults)
-OPENAI_MODEL=gpt-4o-mini                 # AI model for categorization
-FLASK_ENV=production                     # Flask environment
-CONFIDENCE_THRESHOLD=0.7                 # AI categorization threshold
-```
-
-### Frontend (`frontend/.env` local, Railway dashboard for prod)
-
-```bash
-# Required
-VITE_API_URL=https://backend.railway.app # Backend API URL
-```
-
----
-
-## 🐛 Common Issues & Solutions
-
-### Issue: Build fails with "requirements.txt not found"
-
-**Solution:** Generate from pyproject.toml: `uv pip compile pyproject.toml -o requirements.txt`
-
-### Issue: CORS errors in browser console
-
-**Solution:** Add Railway frontend URL to CORS origins in `backend/app/__init__.py`
-
-### Issue: Database connection fails
-
-**Solution:** Verify `DATABASE_URL` env var is set, check PostgreSQL plugin status
-
-### Issue: Frontend can't reach backend API
-
-**Solution:** Double-check `VITE_API_URL` points to Railway backend URL (with https://)
-
-### Issue: SQLite file not found in production
-
-**Solution:** Expected! Use PostgreSQL instead (DATABASE_URL auto-configured)
-
-### Issue: OpenAI API key invalid
-
-**Solution:** Verify key in Railway dashboard env vars, check for typos/extra spaces
-
-### Issue: Port binding error
-
-**Solution:** Ensure Procfile uses `$PORT` variable, not hardcoded port
-
----
-
-## 🚀 Deployment Commands Quick Reference
-
-### Local Testing
-
-```bash
-# Backend with Gunicorn
+# Backend
 cd backend
-gunicorn -w 4 -b 0.0.0.0:5001 wsgi:app
+railway link  # Select backend service
+railway up
 
-# Frontend production build
+# Frontend
+cd frontend
+railway link  # Select frontend service
+railway up
+```
+
+---
+
+## Testing Locally
+
+### Backend with Gunicorn
+```bash
+cd backend
+uv run gunicorn -w 4 -b 0.0.0.0:5001 wsgi:app
+```
+
+### Frontend Production Build
+```bash
 cd frontend
 npm run build
 npm run preview
 ```
 
-### Railway CLI
+---
+
+## Updating Dependencies
+
+### Backend
+```bash
+cd backend
+
+# Add new package
+uv add package-name
+
+# Regenerate requirements.txt for Railway
+uv pip compile pyproject.toml -o requirements.txt
+
+# Commit and push
+git add pyproject.toml requirements.txt
+git commit -m "deps: add package-name"
+git push
+```
+
+### Frontend
+```bash
+cd frontend
+
+# Add new package
+npm install package-name
+
+# Commit and push (package.json and package-lock.json)
+git add package.json package-lock.json
+git commit -m "deps: add package-name"
+git push
+```
+
+---
+
+## Common Issues
+
+### Frontend build fails with TypeScript error
+- **Cause:** Missing type definitions for environment variables
+- **Solution:** Check `frontend/src/vite-env.d.ts` exists and includes `VITE_API_URL`
+
+### Backend crashes with "OpenAI API key required"
+- **Cause:** `OPENAI_API_KEY` not set or has whitespace/newlines
+- **Solution:** Re-set in Railway dashboard as single line, no quotes, redeploy
+
+### CORS errors in browser console
+- **Cause:** `FRONTEND_URL` not set on backend or doesn't match frontend domain
+- **Solution:** Set `FRONTEND_URL` to exact frontend domain (with https://, no trailing slash)
+
+### Database connection fails
+- **Cause:** `DATABASE_URL` reference not added to backend service
+- **Solution:** In backend Variables → Add Reference → Select Postgres → DATABASE_URL
+
+### Frontend can't reach backend API
+- **Cause:** `VITE_API_URL` incorrect or has trailing slash
+- **Solution:** Set to backend domain without trailing slash, redeploy frontend
+
+---
+
+## Monitoring
+
+### Railway Dashboard
+- **Deployments:** View build/deploy logs for each service
+- **Metrics:** CPU, memory, network usage
+- **Logs:** Real-time application logs (click service → Logs tab)
+
+### OpenAI Usage
+- Dashboard: https://platform.openai.com/usage
+- Monitor API costs and rate limits
+
+### Custom Domains
+- Railway handles SSL/TLS automatically
+- DNS propagation takes 5-60 minutes
+
+---
+
+## Cost Estimate
+
+### Railway
+- Backend: ~$5-10/month
+- Frontend: ~$3-5/month
+- PostgreSQL: ~$5/month
+- **Total:** ~$13-20/month
+
+### OpenAI API
+- Transcription: ~$0.10 per hour of audio
+- Categorization: ~$0.10 per 1M tokens
+- **Estimated:** $5-10/month moderate use
+
+**Total monthly:** ~$20-30
+
+---
+
+## Useful Commands
 
 ```bash
-# Install
-curl -fsSL https://railway.app/install.sh | sh
-
-# Login
-railway login
-
-# Initialize project
-railway init
-
-# Deploy
-railway up
-
 # View logs
 railway logs
 
-# Set env var
-railway variables set OPENAI_API_KEY=sk-...
+# Get service URL
+railway domain
 
-# Open dashboard
-railway open
-```
+# Check current environment variables
+railway variables
 
-### Git-based Deployment
+# Set new variable
+railway variables --set "KEY=value"
 
-```bash
-# Commit changes
-git add .
-git commit -m "deploy: production configuration"
-
-# Push to GitHub (triggers auto-deploy)
-git push origin main
+# Open Railway dashboard
+open https://railway.app/project/ef02499f-01ab-4da9-91b8-2d0bd26c399a
 ```
 
 ---
 
-## 📊 Cost Estimation
-
-### Railway Free Tier
-
-- **$5/month credit** (no credit card required)
-- **500 hours execution time**
-- **100GB outbound bandwidth**
-- **Good for:** POC testing, low traffic
-
-### Expected Costs (with traffic)
-
-- **Backend service:** ~$5-10/month
-- **Frontend service:** ~$3-5/month (static)
-- **PostgreSQL:** ~$5/month (1GB storage)
-- **Total:** ~$13-20/month for production
-
-### OpenAI API Costs
-
-- **gpt-4o-mini-transcribe:** ~$0.10 per hour of audio
-- **gpt-4o-mini (categorization):** ~$0.10 per 1M tokens
-- **Estimated:** $5-10/month for moderate use
-
-**Total monthly cost:** ~$20-30/month
-
----
-
-## 🎯 Success Criteria
-
-Deployment is complete when:
-
-- ✅ Backend responds at Railway URL
-- ✅ Frontend loads at Railway URL
-- ✅ Audio recording/upload works end-to-end
-- ✅ OpenAI transcription successful
-- ✅ AI categorization saves to PostgreSQL
-- ✅ Folder hierarchy displays correctly
-- ✅ Search returns results
-- ✅ No CORS errors in console
-- ✅ Mobile layout works correctly
-- ✅ SSL/HTTPS enabled (automatic)
-
----
-
-## 🔗 Useful Links
+## Links
 
 - **Railway Dashboard:** https://railway.app/dashboard
 - **Railway Docs:** https://docs.railway.app/
-- **PostgreSQL Connection:** Railway dashboard → Database → Connection
-- **Build Logs:** Railway dashboard → Service → Deployments
-- **OpenAI Dashboard:** https://platform.openai.com/usage
+- **OpenAI Platform:** https://platform.openai.com/
 
 ---
 
-**Next Step:** Begin Phase 1 - Backend Production Setup
-
-**Estimated Time to Complete:** 2-3 hours (first time), 30 minutes (subsequent deploys)
-
-**Last Updated:** November 8, 2025
+**Last Updated:** November 10, 2025
