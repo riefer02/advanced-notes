@@ -11,7 +11,7 @@ Complete documentation for the Advanced Notes ASR project.
 - **[Main README](../README.md)** - Project overview, quick start, installation
 
 ### Deployment
-- **[Railway Deployment Guide](./railway-deployment.md)** - Complete checklist for production deployment
+- **[Railway Deployment Guide](./railway-deployment.md)** - Production deployment on Railway (architecture, environment variables, monitoring)
 
 ### Technical Specifications
 - **[Semantic Organization Spec](./semantic-organization-spec.md)** - AI-powered note categorization architecture
@@ -159,6 +159,6 @@ Found an error or want to improve documentation?
 
 ---
 
-**Last Updated**: November 8, 2025  
+**Last Updated**: November 10, 2025  
 **Maintained By**: Development Team
 
