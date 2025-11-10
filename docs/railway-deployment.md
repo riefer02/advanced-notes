@@ -28,6 +28,7 @@
 ```
 
 **How it works:**
+
 - Frontend calls Backend API
 - Backend uses OpenAI for transcription + categorization
 - All notes stored in PostgreSQL
@@ -38,18 +39,21 @@
 ## Services
 
 ### 1. Backend Service
+
 - **Root Directory:** `/backend`
 - **Start Command:** `gunicorn -w 4 -b 0.0.0.0:$PORT wsgi:app` (via `Procfile`)
 - **Build:** Nixpacks auto-detects Python + `requirements.txt`
 - **Language:** Python 3.13+
 
 ### 2. Frontend Service
+
 - **Root Directory:** `/frontend`
 - **Build:** `npm run build` (outputs to `dist/`)
 - **Serve:** Caddy static server (Railway default)
 - **Language:** TypeScript + React
 
 ### 3. PostgreSQL Database
+
 - **Type:** Railway Plugin (managed)
 - **Version:** Latest PostgreSQL
 - **Connection:** Auto-injected via `DATABASE_URL` reference
@@ -60,19 +64,19 @@
 
 ### Backend
 
-| Variable | Value | Description |
-|----------|-------|-------------|
-| `OPENAI_API_KEY` | `sk-proj-...` | OpenAI API key (required) |
-| `OPENAI_MODEL` | `gpt-4o-mini` | Model for categorization |
-| `FLASK_ENV` | `production` | Flask environment |
-| `CONFIDENCE_THRESHOLD` | `0.7` | AI confidence threshold |
-| `FRONTEND_URL` | `https://your-frontend-domain.com` | For CORS (your custom domain) |
-| `DATABASE_URL` | (auto-set) | PostgreSQL connection (reference from DB) |
+| Variable               | Value                              | Description                               |
+| ---------------------- | ---------------------------------- | ----------------------------------------- |
+| `OPENAI_API_KEY`       | `sk-proj-...`                      | OpenAI API key (required)                 |
+| `OPENAI_MODEL`         | `gpt-4o-mini`                      | Model for categorization                  |
+| `FLASK_ENV`            | `production`                       | Flask environment                         |
+| `CONFIDENCE_THRESHOLD` | `0.7`                              | AI confidence threshold                   |
+| `FRONTEND_URL`         | `https://your-frontend-domain.com` | For CORS (your custom domain)             |
+| `DATABASE_URL`         | (auto-set)                         | PostgreSQL connection (reference from DB) |
 
 ### Frontend
 
-| Variable | Value | Description |
-|----------|-------|-------------|
+| Variable       | Value                             | Description                                             |
+| -------------- | --------------------------------- | ------------------------------------------------------- |
 | `VITE_API_URL` | `https://your-backend-domain.com` | Backend API URL (your custom domain, no trailing slash) |
 
 **Note:** `VITE_API_URL` is baked into the build at compile time - redeploy frontend after changing it.
@@ -82,11 +86,13 @@
 ## Key Files
 
 ### Backend Production Files
+
 - **`backend/Procfile`** - Tells Railway to use Gunicorn
 - **`backend/requirements.txt`** - Python dependencies (generated from `pyproject.toml`)
 - **`backend/app/services/storage.py`** - Multi-database adapter (SQLite local, PostgreSQL prod)
 
 ### Frontend Production Files
+
 - **`frontend/src/vite-env.d.ts`** - TypeScript types for `VITE_API_URL`
 - **`frontend/package.json`** - Build script: `tsc && vite build`
 
@@ -95,12 +101,14 @@
 ## Database
 
 ### Local Development
+
 - **Type:** SQLite
 - **Location:** `backend/.notes.db`
 - **Search:** FTS5 full-text search
 - **Auto-selected** when `DATABASE_URL` not set
 
 ### Production (Railway)
+
 - **Type:** PostgreSQL
 - **Connection:** Via `DATABASE_URL` environment variable
 - **Search:** `tsvector` + `ts_rank` full-text search
@@ -113,12 +121,14 @@ The storage layer (`backend/app/services/storage.py`) automatically detects whic
 ## Deployment Process
 
 ### Automatic (Recommended)
+
 1. Commit changes to `main` branch
 2. Push to GitHub: `git push origin main`
 3. Railway auto-deploys both services
 4. Monitor in Railway dashboard
 
 ### Manual (if needed)
+
 ```bash
 # Backend
 cd backend
@@ -136,12 +146,14 @@ railway up
 ## Testing Locally
 
 ### Backend with Gunicorn
+
 ```bash
 cd backend
 uv run gunicorn -w 4 -b 0.0.0.0:5001 wsgi:app
 ```
 
 ### Frontend Production Build
+
 ```bash
 cd frontend
 npm run build
@@ -153,6 +165,7 @@ npm run preview
 ## Updating Dependencies
 
 ### Backend
+
 ```bash
 cd backend
 
@@ -169,6 +182,7 @@ git push
 ```
 
 ### Frontend
+
 ```bash
 cd frontend
 
@@ -186,22 +200,27 @@ git push
 ## Common Issues
 
 ### Frontend build fails with TypeScript error
+
 - **Cause:** Missing type definitions for environment variables
 - **Solution:** Check `frontend/src/vite-env.d.ts` exists and includes `VITE_API_URL`
 
 ### Backend crashes with "OpenAI API key required"
+
 - **Cause:** `OPENAI_API_KEY` not set or has whitespace/newlines
 - **Solution:** Re-set in Railway dashboard as single line, no quotes, redeploy
 
 ### CORS errors in browser console
+
 - **Cause:** `FRONTEND_URL` not set on backend or doesn't match frontend domain
 - **Solution:** Set `FRONTEND_URL` to exact frontend domain (with https://, no trailing slash)
 
 ### Database connection fails
+
 - **Cause:** `DATABASE_URL` reference not added to backend service
 - **Solution:** In backend Variables → Add Reference → Select Postgres → DATABASE_URL
 
 ### Frontend can't reach backend API
+
 - **Cause:** `VITE_API_URL` incorrect or has trailing slash
 - **Solution:** Set to backend domain without trailing slash, redeploy frontend
 
@@ -210,15 +229,18 @@ git push
 ## Monitoring
 
 ### Railway Dashboard
+
 - **Deployments:** View build/deploy logs for each service
 - **Metrics:** CPU, memory, network usage
 - **Logs:** Real-time application logs (click service → Logs tab)
 
 ### OpenAI Usage
+
 - Dashboard: https://platform.openai.com/usage
 - Monitor API costs and rate limits
 
 ### Custom Domains
+
 - Railway handles SSL/TLS automatically
 - DNS propagation takes 5-60 minutes
 
@@ -227,12 +249,14 @@ git push
 ## Cost Estimate
 
 ### Railway
+
 - Backend: ~$5-10/month
 - Frontend: ~$3-5/month
 - PostgreSQL: ~$5/month
 - **Total:** ~$13-20/month
 
 ### OpenAI API
+
 - Transcription: ~$0.10 per hour of audio
 - Categorization: ~$0.10 per 1M tokens
 - **Estimated:** $5-10/month moderate use
