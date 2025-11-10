@@ -1,52 +1,234 @@
 """
-Storage service for notes (database-only).
+Storage service for notes with multi-database support.
 
-Uses SQLite with FTS5 for full-text search.
+Supports:
+- SQLite with FTS5 for local development
+- PostgreSQL with full-text search for production
 All content stored in database, no file system dependencies.
 """
 
-import sqlite3
+import os
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from contextlib import contextmanager
+from urllib.parse import urlparse
 
 from .models import Note, NoteMetadata, NoteListItem, FolderNode, FolderStats, SearchResult
 from ..config import config
 
 
+class DatabaseAdapter:
+    """Base class for database adapters"""
+    
+    def get_connection(self):
+        raise NotImplementedError
+    
+    def init_schema(self, conn):
+        raise NotImplementedError
+    
+    def close(self, conn):
+        raise NotImplementedError
+
+
+class SQLiteAdapter(DatabaseAdapter):
+    """SQLite database adapter with FTS5"""
+    
+    def __init__(self, db_path: Path):
+        import sqlite3
+        self.db_path = db_path
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.sqlite3 = sqlite3
+    
+    def get_connection(self):
+        conn = self.sqlite3.connect(str(self.db_path))
+        conn.row_factory = self.sqlite3.Row
+        return conn
+    
+    def init_schema(self, conn):
+        """Initialize SQLite schema with FTS5"""
+        # Enable WAL mode for better concurrency
+        conn.execute("PRAGMA journal_mode=WAL")
+        
+        # Main notes table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS notes (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                folder_path TEXT NOT NULL,
+                tags TEXT,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL,
+                word_count INTEGER DEFAULT 0,
+                confidence REAL,
+                transcription_duration REAL,
+                model_version TEXT
+            )
+        """)
+        
+        # Indexes
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_folder ON notes(folder_path)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(created_at DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at DESC)")
+        
+        # FTS5 virtual table
+        conn.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
+                note_id UNINDEXED,
+                title,
+                content,
+                tags
+            )
+        """)
+        
+        # FTS triggers
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
+                INSERT INTO notes_fts(note_id, title, content, tags)
+                VALUES (new.id, new.title, new.content, new.tags);
+            END
+        """)
+        
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
+                UPDATE notes_fts SET 
+                    note_id = new.id,
+                    title = new.title, 
+                    content = new.content, 
+                    tags = new.tags
+                WHERE note_id = old.id;
+            END
+        """)
+        
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+                DELETE FROM notes_fts WHERE note_id = old.id;
+            END
+        """)
+        
+        conn.commit()
+    
+    def close(self, conn):
+        conn.close()
+
+
+class PostgreSQLAdapter(DatabaseAdapter):
+    """PostgreSQL database adapter with full-text search"""
+    
+    def __init__(self, database_url: str):
+        import psycopg2
+        import psycopg2.extras
+        self.database_url = database_url
+        self.psycopg2 = psycopg2
+        self.extras = psycopg2.extras
+    
+    def get_connection(self):
+        conn = self.psycopg2.connect(self.database_url)
+        return conn
+    
+    def init_schema(self, conn):
+        """Initialize PostgreSQL schema with full-text search"""
+        cursor = conn.cursor()
+        
+        # Main notes table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notes (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                folder_path TEXT NOT NULL,
+                tags JSONB,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL,
+                word_count INTEGER DEFAULT 0,
+                confidence REAL,
+                transcription_duration REAL,
+                model_version TEXT,
+                search_vector tsvector
+            )
+        """)
+        
+        # Indexes
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_folder ON notes(folder_path)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(created_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_tags ON notes USING gin(tags)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_search ON notes USING gin(search_vector)")
+        
+        # Function to update search vector
+        cursor.execute("""
+            CREATE OR REPLACE FUNCTION notes_search_update() RETURNS trigger AS $$
+            BEGIN
+                NEW.search_vector := 
+                    setweight(to_tsvector('english', coalesce(NEW.title, '')), 'A') ||
+                    setweight(to_tsvector('english', coalesce(NEW.content, '')), 'B') ||
+                    setweight(to_tsvector('english', coalesce(NEW.tags::text, '')), 'C');
+                RETURN NEW;
+            END
+            $$ LANGUAGE plpgsql;
+        """)
+        
+        # Trigger for search vector
+        cursor.execute("""
+            DROP TRIGGER IF EXISTS notes_search_vector_update ON notes;
+        """)
+        
+        cursor.execute("""
+            CREATE TRIGGER notes_search_vector_update
+            BEFORE INSERT OR UPDATE ON notes
+            FOR EACH ROW EXECUTE FUNCTION notes_search_update();
+        """)
+        
+        conn.commit()
+        cursor.close()
+    
+    def close(self, conn):
+        conn.close()
+
+
 class NoteStorage:
     """
-    Database-only storage for notes.
+    Multi-database storage for notes.
     
     Features:
-    - SQLite with WAL mode for concurrent access
-    - FTS5 full-text search
+    - Auto-detects database type from DATABASE_URL or uses SQLite
+    - SQLite with FTS5 for local development
+    - PostgreSQL with full-text search for production
     - Transaction safety
     - Automatic schema initialization
     """
     
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Optional[Path] = None, database_url: Optional[str] = None):
         """
-        Initialize storage with database path.
+        Initialize storage with database.
         
         Args:
-            db_path: Path to SQLite database file (defaults to config.DB_PATH)
+            db_path: Path to SQLite database (used if DATABASE_URL not set)
+            database_url: PostgreSQL connection URL (overrides db_path)
         """
-        if db_path is None:
-            db_path = config.DB_PATH
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        # Check for DATABASE_URL environment variable
+        database_url = database_url or os.getenv("DATABASE_URL")
         
-        # Initialize database
+        if database_url and database_url.startswith("postgres"):
+            # Use PostgreSQL
+            self.adapter = PostgreSQLAdapter(database_url)
+            self.db_type = "postgresql"
+        else:
+            # Use SQLite
+            if db_path is None:
+                db_path = config.DB_PATH
+            self.adapter = SQLiteAdapter(Path(db_path))
+            self.db_type = "sqlite"
+        
+        # Initialize database schema
         self._init_database()
-        
+    
     @contextmanager
     def _get_connection(self):
         """Get database connection with automatic commit/rollback"""
-        conn = sqlite3.connect(str(self.db_path))
-        conn.row_factory = sqlite3.Row  # Enable dict-like access
+        conn = self.adapter.get_connection()
         try:
             yield conn
             conn.commit()
@@ -54,81 +236,36 @@ class NoteStorage:
             conn.rollback()
             raise
         finally:
-            conn.close()
+            self.adapter.close(conn)
     
     def _init_database(self):
-        """Initialize database schema if not exists"""
+        """Initialize database schema"""
         with self._get_connection() as conn:
-            # Enable WAL mode for better concurrency
-            conn.execute("PRAGMA journal_mode=WAL")
-            
-            # Main notes table
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS notes (
-                    id TEXT PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    folder_path TEXT NOT NULL,
-                    tags TEXT,
-                    created_at TIMESTAMP NOT NULL,
-                    updated_at TIMESTAMP NOT NULL,
-                    word_count INTEGER DEFAULT 0,
-                    confidence REAL,
-                    transcription_duration REAL,
-                    model_version TEXT
-                )
-            """)
-            
-            # Indexes for common queries
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_notes_folder 
-                ON notes(folder_path)
-            """)
-            
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_notes_created 
-                ON notes(created_at DESC)
-            """)
-            
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_notes_updated 
-                ON notes(updated_at DESC)
-            """)
-            
-            # FTS5 virtual table for full-text search
-            conn.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
-                    note_id UNINDEXED,
-                    title,
-                    content,
-                    tags
-                )
-            """)
-            
-            # Triggers to keep FTS index in sync
-            conn.execute("""
-                CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
-                    INSERT INTO notes_fts(note_id, title, content, tags)
-                    VALUES (new.id, new.title, new.content, new.tags);
-                END
-            """)
-            
-            conn.execute("""
-                CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
-                    UPDATE notes_fts SET 
-                        note_id = new.id,
-                        title = new.title, 
-                        content = new.content, 
-                        tags = new.tags
-                    WHERE note_id = old.id;
-                END
-            """)
-            
-            conn.execute("""
-                CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
-                    DELETE FROM notes_fts WHERE note_id = old.id;
-                END
-            """)
+            self.adapter.init_schema(conn)
+    
+    def _execute_query(self, conn, query: str, params: tuple = ()) -> Any:
+        """Execute query with appropriate cursor for database type"""
+        if self.db_type == "postgresql":
+            cursor = conn.cursor(cursor_factory=self.adapter.extras.RealDictCursor)
+            cursor.execute(query, params)
+            return cursor
+        else:
+            return conn.execute(query, params)
+    
+    def _serialize_tags(self, tags: List[str]) -> Any:
+        """Serialize tags based on database type"""
+        if self.db_type == "postgresql":
+            return json.dumps(tags)
+        else:
+            return json.dumps(tags)
+    
+    def _deserialize_tags(self, tags: Any) -> List[str]:
+        """Deserialize tags based on database type"""
+        if not tags:
+            return []
+        if isinstance(tags, str):
+            return json.loads(tags)
+        return tags  # PostgreSQL JSONB already returns list
     
     def save_note(self, content: str, metadata: NoteMetadata) -> str:
         """
@@ -153,18 +290,29 @@ class NoteStorage:
         )
         
         with self._get_connection() as conn:
-            conn.execute("""
-                INSERT INTO notes (
-                    id, title, content, folder_path, tags,
-                    created_at, updated_at, word_count, confidence,
-                    transcription_duration, model_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
+            if self.db_type == "postgresql":
+                query = """
+                    INSERT INTO notes (
+                        id, title, content, folder_path, tags,
+                        created_at, updated_at, word_count, confidence,
+                        transcription_duration, model_version
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+            else:
+                query = """
+                    INSERT INTO notes (
+                        id, title, content, folder_path, tags,
+                        created_at, updated_at, word_count, confidence,
+                        transcription_duration, model_version
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """
+            
+            self._execute_query(conn, query, (
                 note.id,
                 note.title,
                 note.content,
                 note.folder_path,
-                json.dumps(note.tags),
+                self._serialize_tags(note.tags),
                 note.created_at.isoformat(),
                 note.updated_at.isoformat(),
                 note.word_count,
@@ -186,10 +334,13 @@ class NoteStorage:
             Note object or None if not found
         """
         with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM notes WHERE id = ?",
-                (note_id,)
-            ).fetchone()
+            if self.db_type == "postgresql":
+                query = "SELECT * FROM notes WHERE id = %s"
+            else:
+                query = "SELECT * FROM notes WHERE id = ?"
+            
+            cursor = self._execute_query(conn, query, (note_id,))
+            row = cursor.fetchone()
             
             if not row:
                 return None
@@ -213,12 +364,10 @@ class NoteStorage:
         Returns:
             True if updated, False if not found
         """
-        # Get existing note
         existing = self.get_note(note_id)
         if not existing:
             return False
         
-        # Prepare updates
         updates = {"updated_at": datetime.now().isoformat()}
         
         if content is not None:
@@ -231,19 +380,20 @@ class NoteStorage:
             if metadata.folder_path:
                 updates["folder_path"] = metadata.folder_path
             if metadata.tags:
-                updates["tags"] = json.dumps(metadata.tags)
+                updates["tags"] = self._serialize_tags(metadata.tags)
             if metadata.confidence is not None:
                 updates["confidence"] = metadata.confidence
         
-        # Build UPDATE query
-        set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+        set_clause = ", ".join(f"{k} = %s" if self.db_type == "postgresql" else f"{k} = ?" for k in updates.keys())
         values = list(updates.values()) + [note_id]
         
         with self._get_connection() as conn:
-            conn.execute(
-                f"UPDATE notes SET {set_clause} WHERE id = ?",
-                values
-            )
+            if self.db_type == "postgresql":
+                query = f"UPDATE notes SET {set_clause} WHERE id = %s"
+            else:
+                query = f"UPDATE notes SET {set_clause} WHERE id = ?"
+            
+            self._execute_query(conn, query, tuple(values))
         
         return True
     
@@ -258,7 +408,12 @@ class NoteStorage:
             True if deleted, False if not found
         """
         with self._get_connection() as conn:
-            cursor = conn.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+            if self.db_type == "postgresql":
+                query = "DELETE FROM notes WHERE id = %s"
+            else:
+                query = "DELETE FROM notes WHERE id = ?"
+            
+            cursor = self._execute_query(conn, query, (note_id,))
             return cursor.rowcount > 0
     
     def list_notes(
@@ -288,14 +443,21 @@ class NoteStorage:
         params = []
         
         if folder:
-            query += " WHERE folder_path = ? OR folder_path LIKE ?"
+            if self.db_type == "postgresql":
+                query += " WHERE folder_path = %s OR folder_path LIKE %s"
+            else:
+                query += " WHERE folder_path = ? OR folder_path LIKE ?"
             params.extend([folder, f"{folder}/%"])
         
-        query += f" ORDER BY {order_by} DESC LIMIT ? OFFSET ?"
+        if self.db_type == "postgresql":
+            query += f" ORDER BY {order_by} DESC LIMIT %s OFFSET %s"
+        else:
+            query += f" ORDER BY {order_by} DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         
         with self._get_connection() as conn:
-            rows = conn.execute(query, params).fetchall()
+            cursor = self._execute_query(conn, query, tuple(params))
+            rows = cursor.fetchall()
             return [self._row_to_list_item(row) for row in rows]
     
     def search_notes(self, query: str, limit: int = 50) -> List[SearchResult]:
@@ -310,26 +472,45 @@ class NoteStorage:
             List of SearchResult objects with ranking
         """
         with self._get_connection() as conn:
-            # FTS5 search with ranking
-            rows = conn.execute("""
-                SELECT 
-                    n.id, n.title, n.folder_path, n.tags, n.created_at,
-                    n.updated_at, n.word_count, n.confidence,
-                    rank,
-                    snippet(notes_fts, 2, '<mark>', '</mark>', '...', 50) as snippet
-                FROM notes_fts
-                JOIN notes n ON notes_fts.note_id = n.id
-                WHERE notes_fts MATCH ?
-                ORDER BY rank
-                LIMIT ?
-            """, (query, limit)).fetchall()
+            if self.db_type == "postgresql":
+                # PostgreSQL full-text search
+                sql_query = """
+                    SELECT 
+                        id, title, folder_path, tags, created_at,
+                        updated_at, word_count, confidence,
+                        ts_rank(search_vector, plainto_tsquery('english', %s)) as rank,
+                        ts_headline('english', content, plainto_tsquery('english', %s),
+                            'MaxWords=50, MinWords=25, ShortWord=3') as snippet
+                    FROM notes
+                    WHERE search_vector @@ plainto_tsquery('english', %s)
+                    ORDER BY rank DESC
+                    LIMIT %s
+                """
+                cursor = self._execute_query(conn, sql_query, (query, query, query, limit))
+            else:
+                # SQLite FTS5 search
+                sql_query = """
+                    SELECT 
+                        n.id, n.title, n.folder_path, n.tags, n.created_at,
+                        n.updated_at, n.word_count, n.confidence,
+                        rank,
+                        snippet(notes_fts, 2, '<mark>', '</mark>', '...', 50) as snippet
+                    FROM notes_fts
+                    JOIN notes n ON notes_fts.note_id = n.id
+                    WHERE notes_fts MATCH ?
+                    ORDER BY rank
+                    LIMIT ?
+                """
+                cursor = self._execute_query(conn, sql_query, (query, limit))
             
+            rows = cursor.fetchall()
             results = []
             for row in rows:
                 note = self._row_to_list_item(row)
+                rank_value = abs(row['rank']) if self.db_type == "sqlite" else row['rank']
                 results.append(SearchResult(
                     note=note,
-                    rank=abs(row['rank']),  # FTS5 rank is negative
+                    rank=rank_value,
                     snippet=row['snippet']
                 ))
             
@@ -343,15 +524,14 @@ class NoteStorage:
             Root FolderNode with nested subfolders
         """
         with self._get_connection() as conn:
-            # Get all unique folder paths
-            rows = conn.execute("""
+            cursor = self._execute_query(conn, """
                 SELECT folder_path, COUNT(*) as count
                 FROM notes
                 GROUP BY folder_path
                 ORDER BY folder_path
-            """).fetchall()
+            """)
+            rows = cursor.fetchall()
             
-            # Build tree structure
             root = FolderNode(name="", path="", note_count=0)
             folder_map = {"": root}
             
@@ -359,10 +539,7 @@ class NoteStorage:
                 path = row['folder_path']
                 count = row['count']
                 
-                # Split path into parts
                 parts = path.split('/')
-                
-                # Create folders for each part
                 current_path = ""
                 parent = root
                 
@@ -380,7 +557,6 @@ class NoteStorage:
                     
                     parent = folder_map[current_path]
                 
-                # Set note count for leaf folder
                 parent.note_count = count
             
             return root
@@ -393,12 +569,13 @@ class NoteStorage:
             Sorted list of tag names
         """
         with self._get_connection() as conn:
-            rows = conn.execute("SELECT tags FROM notes WHERE tags IS NOT NULL").fetchall()
+            cursor = self._execute_query(conn, "SELECT tags FROM notes WHERE tags IS NOT NULL")
+            rows = cursor.fetchall()
             
             tags = set()
             for row in rows:
                 if row['tags']:
-                    tags.update(json.loads(row['tags']))
+                    tags.update(self._deserialize_tags(row['tags']))
             
             return sorted(tags)
     
@@ -414,15 +591,29 @@ class NoteStorage:
             List of NoteListItem objects
         """
         with self._get_connection() as conn:
-            rows = conn.execute("""
-                SELECT id, title, folder_path, tags, created_at, updated_at,
-                       word_count, confidence
-                FROM notes
-                WHERE tags LIKE ?
-                ORDER BY updated_at DESC
-                LIMIT ?
-            """, (f'%"{tag}"%', limit)).fetchall()
+            if self.db_type == "postgresql":
+                query = """
+                    SELECT id, title, folder_path, tags, created_at, updated_at,
+                           word_count, confidence
+                    FROM notes
+                    WHERE tags @> %s::jsonb
+                    ORDER BY updated_at DESC
+                    LIMIT %s
+                """
+                params = (json.dumps([tag]), limit)
+            else:
+                query = """
+                    SELECT id, title, folder_path, tags, created_at, updated_at,
+                           word_count, confidence
+                    FROM notes
+                    WHERE tags LIKE ?
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                """
+                params = (f'%"{tag}"%', limit)
             
+            cursor = self._execute_query(conn, query, params)
+            rows = cursor.fetchall()
             return [self._row_to_list_item(row) for row in rows]
     
     def get_note_count(self, folder: Optional[str] = None) -> int:
@@ -437,13 +628,23 @@ class NoteStorage:
         """
         with self._get_connection() as conn:
             if folder:
-                result = conn.execute("""
-                    SELECT COUNT(*) as count FROM notes
-                    WHERE folder_path = ? OR folder_path LIKE ?
-                """, (folder, f"{folder}/%")).fetchone()
+                if self.db_type == "postgresql":
+                    query = """
+                        SELECT COUNT(*) as count FROM notes
+                        WHERE folder_path = %s OR folder_path LIKE %s
+                    """
+                else:
+                    query = """
+                        SELECT COUNT(*) as count FROM notes
+                        WHERE folder_path = ? OR folder_path LIKE ?
+                    """
+                params = (folder, f"{folder}/%")
             else:
-                result = conn.execute("SELECT COUNT(*) as count FROM notes").fetchone()
+                query = "SELECT COUNT(*) as count FROM notes"
+                params = ()
             
+            cursor = self._execute_query(conn, query, params)
+            result = cursor.fetchone()
             return result['count']
     
     def get_folder_stats(self, folder: str) -> Optional[FolderStats]:
@@ -457,32 +658,52 @@ class NoteStorage:
             FolderStats object or None
         """
         with self._get_connection() as conn:
-            row = conn.execute("""
-                SELECT 
-                    COUNT(*) as count,
-                    SUM(transcription_duration) as total_duration,
-                    AVG(confidence) as avg_confidence
-                FROM notes
-                WHERE folder_path = ? OR folder_path LIKE ?
-            """, (folder, f"{folder}/%")).fetchone()
+            if self.db_type == "postgresql":
+                query = """
+                    SELECT 
+                        COUNT(*) as count,
+                        SUM(transcription_duration) as total_duration,
+                        AVG(confidence) as avg_confidence
+                    FROM notes
+                    WHERE folder_path = %s OR folder_path LIKE %s
+                """
+            else:
+                query = """
+                    SELECT 
+                        COUNT(*) as count,
+                        SUM(transcription_duration) as total_duration,
+                        AVG(confidence) as avg_confidence
+                    FROM notes
+                    WHERE folder_path = ? OR folder_path LIKE ?
+                """
+            
+            cursor = self._execute_query(conn, query, (folder, f"{folder}/%"))
+            row = cursor.fetchone()
             
             if row['count'] == 0:
                 return None
             
             # Get most common tags
-            tags = []
-            tag_rows = conn.execute("""
-                SELECT tags FROM notes
-                WHERE (folder_path = ? OR folder_path LIKE ?) AND tags IS NOT NULL
-            """, (folder, f"{folder}/%")).fetchall()
+            if self.db_type == "postgresql":
+                tag_query = """
+                    SELECT tags FROM notes
+                    WHERE (folder_path = %s OR folder_path LIKE %s) AND tags IS NOT NULL
+                """
+            else:
+                tag_query = """
+                    SELECT tags FROM notes
+                    WHERE (folder_path = ? OR folder_path LIKE ?) AND tags IS NOT NULL
+                """
+            
+            cursor = self._execute_query(conn, tag_query, (folder, f"{folder}/%"))
+            tag_rows = cursor.fetchall()
             
             tag_counts = {}
             for tag_row in tag_rows:
                 if tag_row['tags']:
-                    for tag in json.loads(tag_row['tags']):
+                    for tag in self._deserialize_tags(tag_row['tags']):
                         tag_counts[tag] = tag_counts.get(tag, 0) + 1
             
-            # Sort by count and get top 5
             most_common = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
             tags = [tag for tag, _ in most_common]
             
@@ -494,32 +715,31 @@ class NoteStorage:
                 most_common_tags=tags
             )
     
-    def _row_to_note(self, row: sqlite3.Row) -> Note:
+    def _row_to_note(self, row: Dict) -> Note:
         """Convert database row to Note object"""
         return Note(
             id=row['id'],
             title=row['title'],
             content=row['content'],
             folder_path=row['folder_path'],
-            tags=json.loads(row['tags']) if row['tags'] else [],
-            created_at=datetime.fromisoformat(row['created_at']),
-            updated_at=datetime.fromisoformat(row['updated_at']),
+            tags=self._deserialize_tags(row['tags']),
+            created_at=datetime.fromisoformat(row['created_at']) if isinstance(row['created_at'], str) else row['created_at'],
+            updated_at=datetime.fromisoformat(row['updated_at']) if isinstance(row['updated_at'], str) else row['updated_at'],
             word_count=row['word_count'],
             confidence=row['confidence'],
             transcription_duration=row['transcription_duration'],
             model_version=row['model_version']
         )
     
-    def _row_to_list_item(self, row: sqlite3.Row) -> NoteListItem:
+    def _row_to_list_item(self, row: Dict) -> NoteListItem:
         """Convert database row to NoteListItem object"""
         return NoteListItem(
             id=row['id'],
             title=row['title'],
             folder_path=row['folder_path'],
-            tags=json.loads(row['tags']) if row['tags'] else [],
-            created_at=datetime.fromisoformat(row['created_at']),
-            updated_at=datetime.fromisoformat(row['updated_at']),
+            tags=self._deserialize_tags(row['tags']),
+            created_at=datetime.fromisoformat(row['created_at']) if isinstance(row['created_at'], str) else row['created_at'],
+            updated_at=datetime.fromisoformat(row['updated_at']) if isinstance(row['updated_at'], str) else row['updated_at'],
             word_count=row['word_count'],
             confidence=row['confidence']
         )
-
