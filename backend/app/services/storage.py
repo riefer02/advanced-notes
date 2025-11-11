@@ -216,18 +216,17 @@ class NoteStorage:
         database_url = database_url or os.getenv("DATABASE_URL")
         
         if database_url and database_url.startswith("postgres"):
-            # Use PostgreSQL
+            # Use PostgreSQL (schema managed by Alembic migrations)
             self.adapter = PostgreSQLAdapter(database_url)
             self.db_type = "postgresql"
         else:
-            # Use SQLite
+            # Use SQLite (local dev - initialize schema automatically)
             if db_path is None:
                 db_path = config.DB_PATH
             self.adapter = SQLiteAdapter(Path(db_path))
             self.db_type = "sqlite"
-        
-        # Initialize database schema
-        self._init_database()
+            # Initialize schema for local development
+            self._init_database()
     
     @contextmanager
     def _get_connection(self):
