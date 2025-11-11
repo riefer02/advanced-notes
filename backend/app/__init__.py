@@ -23,6 +23,7 @@ def create_app():
         CORS(app, origins=allowed_origins)
     
     from .routes import bp as api_bp
+    
     app.register_blueprint(api_bp, url_prefix="/api")
     
     return app

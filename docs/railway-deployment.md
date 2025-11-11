@@ -87,9 +87,11 @@
 
 ### Backend Production Files
 
-- **`backend/Procfile`** - Tells Railway to use Gunicorn
+- **`backend/Procfile`** - Runs migrations then starts Gunicorn
+- **`backend/migrate.py`** - Migration runner script for deployments
 - **`backend/requirements.txt`** - Python dependencies (generated from `pyproject.toml`)
 - **`backend/app/services/storage.py`** - Multi-database adapter (SQLite local, PostgreSQL prod)
+- **`backend/alembic/`** - Database migration files
 
 ### Frontend Production Files
 
@@ -106,6 +108,7 @@
 - **Location:** `backend/.notes.db`
 - **Search:** FTS5 full-text search
 - **Auto-selected** when `DATABASE_URL` not set
+- **Migrations:** Run with `uv run alembic upgrade head`
 
 ### Production (Railway)
 
@@ -113,8 +116,27 @@
 - **Connection:** Via `DATABASE_URL` environment variable
 - **Search:** `tsvector` + `ts_rank` full-text search
 - **Auto-selected** when `DATABASE_URL` is set
+- **Migrations:** Auto-run on deployment via `Procfile` release command
 
 The storage layer (`backend/app/services/storage.py`) automatically detects which database to use.
+
+### Database Migrations
+
+The app uses **Alembic** for database migrations (Django-style autogenerate):
+
+```bash
+# Create new migration (autogenerate from models)
+cd backend
+uv run alembic revision --autogenerate -m "description"
+
+# Apply migrations locally
+uv run alembic upgrade head
+
+# View migration history
+uv run alembic history
+```
+
+**Production:** Migrations run automatically on Railway deployment via the `release` command in `Procfile`.
 
 ---
 
@@ -218,6 +240,11 @@ git push
 
 - **Cause:** `DATABASE_URL` reference not added to backend service
 - **Solution:** In backend Variables → Add Reference → Select Postgres → DATABASE_URL
+
+### Migration fails on deployment
+
+- **Cause:** Missing dependencies, syntax error, or database connection issue
+- **Solution:** Check Railway logs with `railway logs`, test migration locally first with `uv run alembic upgrade head`
 
 ### Frontend can't reach backend API
 

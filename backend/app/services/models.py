@@ -23,6 +23,7 @@ class NoteMetadata(BaseModel):
 class Note(BaseModel):
     """Complete note with all fields"""
     id: str = Field(default_factory=lambda: str(uuid4()))
+    user_id: str = Field(..., description="Clerk user ID")
     title: str
     content: str
     folder_path: str
@@ -43,6 +44,7 @@ class Note(BaseModel):
 class NoteListItem(BaseModel):
     """Lightweight note item for list views (without content)"""
     id: str
+    user_id: str
     title: str
     folder_path: str
     tags: List[str]

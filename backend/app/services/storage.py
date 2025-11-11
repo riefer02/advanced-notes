@@ -51,10 +51,11 @@ class SQLiteAdapter(DatabaseAdapter):
         # Enable WAL mode for better concurrency
         conn.execute("PRAGMA journal_mode=WAL")
         
-        # Main notes table
+        # Main notes table with user isolation
         conn.execute("""
             CREATE TABLE IF NOT EXISTS notes (
                 id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
                 title TEXT NOT NULL,
                 content TEXT NOT NULL,
                 folder_path TEXT NOT NULL,
@@ -68,10 +69,11 @@ class SQLiteAdapter(DatabaseAdapter):
             )
         """)
         
-        # Indexes
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_folder ON notes(folder_path)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(created_at DESC)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at DESC)")
+        # Indexes - optimized for user-scoped queries
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_folder ON notes(user_id, folder_path)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_created ON notes(user_id, created_at DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_updated ON notes(user_id, updated_at DESC)")
         
         # FTS5 virtual table
         conn.execute("""
@@ -132,10 +134,11 @@ class PostgreSQLAdapter(DatabaseAdapter):
         """Initialize PostgreSQL schema with full-text search"""
         cursor = conn.cursor()
         
-        # Main notes table
+        # Main notes table with user isolation
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS notes (
                 id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
                 title TEXT NOT NULL,
                 content TEXT NOT NULL,
                 folder_path TEXT NOT NULL,
@@ -150,10 +153,11 @@ class PostgreSQLAdapter(DatabaseAdapter):
             )
         """)
         
-        # Indexes
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_folder ON notes(folder_path)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(created_at DESC)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at DESC)")
+        # Indexes - optimized for user-scoped queries
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_folder ON notes(user_id, folder_path)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_created ON notes(user_id, created_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_updated ON notes(user_id, updated_at DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_tags ON notes USING gin(tags)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_search ON notes USING gin(search_vector)")
         
@@ -267,11 +271,12 @@ class NoteStorage:
             return json.loads(tags)
         return tags  # PostgreSQL JSONB already returns list
     
-    def save_note(self, content: str, metadata: NoteMetadata) -> str:
+    def save_note(self, user_id: str, content: str, metadata: NoteMetadata) -> str:
         """
         Save a new note to the database.
         
         Args:
+            user_id: Clerk user ID (from authentication)
             content: Full markdown content
             metadata: Note metadata
             
@@ -279,6 +284,7 @@ class NoteStorage:
             Note ID (UUID)
         """
         note = Note(
+            user_id=user_id,
             title=metadata.title,
             content=content,
             folder_path=metadata.folder_path,
@@ -293,22 +299,23 @@ class NoteStorage:
             if self.db_type == "postgresql":
                 query = """
                     INSERT INTO notes (
-                        id, title, content, folder_path, tags,
+                        id, user_id, title, content, folder_path, tags,
                         created_at, updated_at, word_count, confidence,
                         transcription_duration, model_version
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
             else:
                 query = """
                     INSERT INTO notes (
-                        id, title, content, folder_path, tags,
+                        id, user_id, title, content, folder_path, tags,
                         created_at, updated_at, word_count, confidence,
                         transcription_duration, model_version
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
             
             self._execute_query(conn, query, (
                 note.id,
+                note.user_id,
                 note.title,
                 note.content,
                 note.folder_path,
@@ -323,23 +330,24 @@ class NoteStorage:
         
         return note.id
     
-    def get_note(self, note_id: str) -> Optional[Note]:
+    def get_note(self, user_id: str, note_id: str) -> Optional[Note]:
         """
-        Retrieve a note by ID.
+        Retrieve a note by ID (user-scoped).
         
         Args:
+            user_id: Clerk user ID
             note_id: Note UUID
             
         Returns:
-            Note object or None if not found
+            Note object or None if not found/not owned by user
         """
         with self._get_connection() as conn:
             if self.db_type == "postgresql":
-                query = "SELECT * FROM notes WHERE id = %s"
+                query = "SELECT * FROM notes WHERE id = %s AND user_id = %s"
             else:
-                query = "SELECT * FROM notes WHERE id = ?"
+                query = "SELECT * FROM notes WHERE id = ? AND user_id = ?"
             
-            cursor = self._execute_query(conn, query, (note_id,))
+            cursor = self._execute_query(conn, query, (note_id, user_id))
             row = cursor.fetchone()
             
             if not row:
@@ -349,22 +357,24 @@ class NoteStorage:
     
     def update_note(
         self,
+        user_id: str,
         note_id: str,
         content: Optional[str] = None,
         metadata: Optional[NoteMetadata] = None
     ) -> bool:
         """
-        Update an existing note.
+        Update an existing note (user-scoped).
         
         Args:
+            user_id: Clerk user ID
             note_id: Note UUID
             content: New content (optional)
             metadata: New metadata (optional)
             
         Returns:
-            True if updated, False if not found
+            True if updated, False if not found/not owned by user
         """
-        existing = self.get_note(note_id)
+        existing = self.get_note(user_id, note_id)
         if not existing:
             return False
         
@@ -389,44 +399,48 @@ class NoteStorage:
         
         with self._get_connection() as conn:
             if self.db_type == "postgresql":
-                query = f"UPDATE notes SET {set_clause} WHERE id = %s"
+                query = f"UPDATE notes SET {set_clause} WHERE id = %s AND user_id = %s"
             else:
-                query = f"UPDATE notes SET {set_clause} WHERE id = ?"
+                query = f"UPDATE notes SET {set_clause} WHERE id = ? AND user_id = ?"
             
+            values.append(user_id)
             self._execute_query(conn, query, tuple(values))
         
         return True
     
-    def delete_note(self, note_id: str) -> bool:
+    def delete_note(self, user_id: str, note_id: str) -> bool:
         """
-        Delete a note.
+        Delete a note (user-scoped).
         
         Args:
+            user_id: Clerk user ID
             note_id: Note UUID
             
         Returns:
-            True if deleted, False if not found
+            True if deleted, False if not found/not owned by user
         """
         with self._get_connection() as conn:
             if self.db_type == "postgresql":
-                query = "DELETE FROM notes WHERE id = %s"
+                query = "DELETE FROM notes WHERE id = %s AND user_id = %s"
             else:
-                query = "DELETE FROM notes WHERE id = ?"
+                query = "DELETE FROM notes WHERE id = ? AND user_id = ?"
             
-            cursor = self._execute_query(conn, query, (note_id,))
+            cursor = self._execute_query(conn, query, (note_id, user_id))
             return cursor.rowcount > 0
     
     def list_notes(
         self,
+        user_id: str,
         folder: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
         order_by: str = "updated_at"
     ) -> List[NoteListItem]:
         """
-        List notes with optional filtering.
+        List notes with optional filtering (user-scoped).
         
         Args:
+            user_id: Clerk user ID
             folder: Filter by folder path (optional)
             limit: Maximum number of results
             offset: Pagination offset
@@ -436,17 +450,18 @@ class NoteStorage:
             List of NoteListItem objects
         """
         query = """
-            SELECT id, title, folder_path, tags, created_at, updated_at, 
+            SELECT id, user_id, title, folder_path, tags, created_at, updated_at, 
                    word_count, confidence
             FROM notes
-        """
-        params = []
+            WHERE user_id = {}
+        """.format('%s' if self.db_type == "postgresql" else '?')
+        params = [user_id]
         
         if folder:
             if self.db_type == "postgresql":
-                query += " WHERE folder_path = %s OR folder_path LIKE %s"
+                query += " AND (folder_path = %s OR folder_path LIKE %s)"
             else:
-                query += " WHERE folder_path = ? OR folder_path LIKE ?"
+                query += " AND (folder_path = ? OR folder_path LIKE ?)"
             params.extend([folder, f"{folder}/%"])
         
         if self.db_type == "postgresql":
@@ -460,11 +475,12 @@ class NoteStorage:
             rows = cursor.fetchall()
             return [self._row_to_list_item(row) for row in rows]
     
-    def search_notes(self, query: str, limit: int = 50) -> List[SearchResult]:
+    def search_notes(self, user_id: str, query: str, limit: int = 50) -> List[SearchResult]:
         """
-        Full-text search across notes.
+        Full-text search across notes (user-scoped).
         
         Args:
+            user_id: Clerk user ID
             query: Search query
             limit: Maximum results
             
@@ -476,32 +492,32 @@ class NoteStorage:
                 # PostgreSQL full-text search
                 sql_query = """
                     SELECT 
-                        id, title, folder_path, tags, created_at,
+                        id, user_id, title, folder_path, tags, created_at,
                         updated_at, word_count, confidence,
                         ts_rank(search_vector, plainto_tsquery('english', %s)) as rank,
                         ts_headline('english', content, plainto_tsquery('english', %s),
                             'MaxWords=50, MinWords=25, ShortWord=3') as snippet
                     FROM notes
-                    WHERE search_vector @@ plainto_tsquery('english', %s)
+                    WHERE user_id = %s AND search_vector @@ plainto_tsquery('english', %s)
                     ORDER BY rank DESC
                     LIMIT %s
                 """
-                cursor = self._execute_query(conn, sql_query, (query, query, query, limit))
+                cursor = self._execute_query(conn, sql_query, (query, query, user_id, query, limit))
             else:
                 # SQLite FTS5 search
                 sql_query = """
                     SELECT 
-                        n.id, n.title, n.folder_path, n.tags, n.created_at,
+                        n.id, n.user_id, n.title, n.folder_path, n.tags, n.created_at,
                         n.updated_at, n.word_count, n.confidence,
                         rank,
                         snippet(notes_fts, 2, '<mark>', '</mark>', '...', 50) as snippet
                     FROM notes_fts
                     JOIN notes n ON notes_fts.note_id = n.id
-                    WHERE notes_fts MATCH ?
+                    WHERE n.user_id = ? AND notes_fts MATCH ?
                     ORDER BY rank
                     LIMIT ?
                 """
-                cursor = self._execute_query(conn, sql_query, (query, limit))
+                cursor = self._execute_query(conn, sql_query, (user_id, query, limit))
             
             rows = cursor.fetchall()
             results = []
@@ -516,20 +532,34 @@ class NoteStorage:
             
             return results
     
-    def get_folder_tree(self) -> FolderNode:
+    def get_folder_tree(self, user_id: str) -> FolderNode:
         """
-        Get folder hierarchy with note counts.
+        Get folder hierarchy with note counts (user-scoped).
         
+        Args:
+            user_id: Clerk user ID
+            
         Returns:
             Root FolderNode with nested subfolders
         """
         with self._get_connection() as conn:
-            cursor = self._execute_query(conn, """
-                SELECT folder_path, COUNT(*) as count
-                FROM notes
-                GROUP BY folder_path
-                ORDER BY folder_path
-            """)
+            if self.db_type == "postgresql":
+                query = """
+                    SELECT folder_path, COUNT(*) as count
+                    FROM notes
+                    WHERE user_id = %s
+                    GROUP BY folder_path
+                    ORDER BY folder_path
+                """
+            else:
+                query = """
+                    SELECT folder_path, COUNT(*) as count
+                    FROM notes
+                    WHERE user_id = ?
+                    GROUP BY folder_path
+                    ORDER BY folder_path
+                """
+            cursor = self._execute_query(conn, query, (user_id,))
             rows = cursor.fetchall()
             
             root = FolderNode(name="", path="", note_count=0)
@@ -561,15 +591,22 @@ class NoteStorage:
             
             return root
     
-    def get_all_tags(self) -> List[str]:
+    def get_all_tags(self, user_id: str) -> List[str]:
         """
-        Get all unique tags across all notes.
+        Get all unique tags across user's notes.
         
+        Args:
+            user_id: Clerk user ID
+            
         Returns:
             Sorted list of tag names
         """
         with self._get_connection() as conn:
-            cursor = self._execute_query(conn, "SELECT tags FROM notes WHERE tags IS NOT NULL")
+            if self.db_type == "postgresql":
+                query = "SELECT tags FROM notes WHERE user_id = %s AND tags IS NOT NULL"
+            else:
+                query = "SELECT tags FROM notes WHERE user_id = ? AND tags IS NOT NULL"
+            cursor = self._execute_query(conn, query, (user_id,))
             rows = cursor.fetchall()
             
             tags = set()
@@ -579,11 +616,12 @@ class NoteStorage:
             
             return sorted(tags)
     
-    def get_notes_by_tag(self, tag: str, limit: int = 50) -> List[NoteListItem]:
+    def get_notes_by_tag(self, user_id: str, tag: str, limit: int = 50) -> List[NoteListItem]:
         """
-        Get notes that have a specific tag.
+        Get notes that have a specific tag (user-scoped).
         
         Args:
+            user_id: Clerk user ID
             tag: Tag name
             limit: Maximum results
             
@@ -593,34 +631,35 @@ class NoteStorage:
         with self._get_connection() as conn:
             if self.db_type == "postgresql":
                 query = """
-                    SELECT id, title, folder_path, tags, created_at, updated_at,
+                    SELECT id, user_id, title, folder_path, tags, created_at, updated_at,
                            word_count, confidence
                     FROM notes
-                    WHERE tags @> %s::jsonb
+                    WHERE user_id = %s AND tags @> %s::jsonb
                     ORDER BY updated_at DESC
                     LIMIT %s
                 """
-                params = (json.dumps([tag]), limit)
+                params = (user_id, json.dumps([tag]), limit)
             else:
                 query = """
-                    SELECT id, title, folder_path, tags, created_at, updated_at,
+                    SELECT id, user_id, title, folder_path, tags, created_at, updated_at,
                            word_count, confidence
                     FROM notes
-                    WHERE tags LIKE ?
+                    WHERE user_id = ? AND tags LIKE ?
                     ORDER BY updated_at DESC
                     LIMIT ?
                 """
-                params = (f'%"{tag}"%', limit)
+                params = (user_id, f'%"{tag}"%', limit)
             
             cursor = self._execute_query(conn, query, params)
             rows = cursor.fetchall()
             return [self._row_to_list_item(row) for row in rows]
     
-    def get_note_count(self, folder: Optional[str] = None) -> int:
+    def get_note_count(self, user_id: str, folder: Optional[str] = None) -> int:
         """
-        Get total note count, optionally filtered by folder.
+        Get total note count (user-scoped), optionally filtered by folder.
         
         Args:
+            user_id: Clerk user ID
             folder: Folder path (optional)
             
         Returns:
@@ -631,27 +670,31 @@ class NoteStorage:
                 if self.db_type == "postgresql":
                     query = """
                         SELECT COUNT(*) as count FROM notes
-                        WHERE folder_path = %s OR folder_path LIKE %s
+                        WHERE user_id = %s AND (folder_path = %s OR folder_path LIKE %s)
                     """
                 else:
                     query = """
                         SELECT COUNT(*) as count FROM notes
-                        WHERE folder_path = ? OR folder_path LIKE ?
+                        WHERE user_id = ? AND (folder_path = ? OR folder_path LIKE ?)
                     """
-                params = (folder, f"{folder}/%")
+                params = (user_id, folder, f"{folder}/%")
             else:
-                query = "SELECT COUNT(*) as count FROM notes"
-                params = ()
+                if self.db_type == "postgresql":
+                    query = "SELECT COUNT(*) as count FROM notes WHERE user_id = %s"
+                else:
+                    query = "SELECT COUNT(*) as count FROM notes WHERE user_id = ?"
+                params = (user_id,)
             
             cursor = self._execute_query(conn, query, params)
             result = cursor.fetchone()
             return result['count']
     
-    def get_folder_stats(self, folder: str) -> Optional[FolderStats]:
+    def get_folder_stats(self, user_id: str, folder: str) -> Optional[FolderStats]:
         """
-        Get statistics for a folder.
+        Get statistics for a folder (user-scoped).
         
         Args:
+            user_id: Clerk user ID
             folder: Folder path
             
         Returns:
@@ -665,7 +708,7 @@ class NoteStorage:
                         SUM(transcription_duration) as total_duration,
                         AVG(confidence) as avg_confidence
                     FROM notes
-                    WHERE folder_path = %s OR folder_path LIKE %s
+                    WHERE user_id = %s AND (folder_path = %s OR folder_path LIKE %s)
                 """
             else:
                 query = """
@@ -674,10 +717,10 @@ class NoteStorage:
                         SUM(transcription_duration) as total_duration,
                         AVG(confidence) as avg_confidence
                     FROM notes
-                    WHERE folder_path = ? OR folder_path LIKE ?
+                    WHERE user_id = ? AND (folder_path = ? OR folder_path LIKE ?)
                 """
             
-            cursor = self._execute_query(conn, query, (folder, f"{folder}/%"))
+            cursor = self._execute_query(conn, query, (user_id, folder, f"{folder}/%"))
             row = cursor.fetchone()
             
             if row['count'] == 0:
@@ -687,15 +730,15 @@ class NoteStorage:
             if self.db_type == "postgresql":
                 tag_query = """
                     SELECT tags FROM notes
-                    WHERE (folder_path = %s OR folder_path LIKE %s) AND tags IS NOT NULL
+                    WHERE user_id = %s AND (folder_path = %s OR folder_path LIKE %s) AND tags IS NOT NULL
                 """
             else:
                 tag_query = """
                     SELECT tags FROM notes
-                    WHERE (folder_path = ? OR folder_path LIKE ?) AND tags IS NOT NULL
+                    WHERE user_id = ? AND (folder_path = ? OR folder_path LIKE ?) AND tags IS NOT NULL
                 """
             
-            cursor = self._execute_query(conn, tag_query, (folder, f"{folder}/%"))
+            cursor = self._execute_query(conn, tag_query, (user_id, folder, f"{folder}/%"))
             tag_rows = cursor.fetchall()
             
             tag_counts = {}
@@ -719,6 +762,7 @@ class NoteStorage:
         """Convert database row to Note object"""
         return Note(
             id=row['id'],
+            user_id=row['user_id'],
             title=row['title'],
             content=row['content'],
             folder_path=row['folder_path'],
@@ -735,6 +779,7 @@ class NoteStorage:
         """Convert database row to NoteListItem object"""
         return NoteListItem(
             id=row['id'],
+            user_id=row['user_id'],
             title=row['title'],
             folder_path=row['folder_path'],
             tags=self._deserialize_tags(row['tags']),
