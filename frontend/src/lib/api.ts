@@ -1,5 +1,5 @@
 /**
- * API Client for Advanced Notes Backend
+ * API Client for Chisos Backend
  * 
  * All API calls go through this module for consistency and type safety.
  */

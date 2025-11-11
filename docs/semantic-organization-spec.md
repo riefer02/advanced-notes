@@ -54,9 +54,9 @@
 │  └─────────────────┘   └─────────────────────────┘     │
 │           ↓                      ↓                       │
 │  ┌─────────────────────────────────────────────────┐    │
-│  │ NVIDIA Parakeet-TDT-0.6B-v3 (ASR)              │    │
-│  │ • Apple Silicon MPS acceleration                │    │
-│  │ • Audio format conversion (pydub + ffmpeg)      │    │
+│  │ OpenAI GPT-4o-mini-transcribe (ASR)            │    │
+│  │ • API-based transcription                       │    │
+│  │ • Supports multiple audio formats               │    │
 │  └─────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -78,9 +78,9 @@ Backend receives audio blob
 ### **2. Transcription**
 
 ```
-Parakeet-TDT-0.6B-v3 transcribes audio
+OpenAI GPT-4o-mini-transcribe transcribes audio
     ↓
-Returns: text + metadata (device, duration, etc.)
+Returns: text + metadata (model, duration, etc.)
 ```
 
 ### **3. AI Categorization**
@@ -129,12 +129,12 @@ New note appears in folder
 ## 📁 **Directory Structure**
 
 ```
-asr-monorepo/
+chisos/
 ├── backend/
 │   ├── app/
 │   │   ├── __init__.py           # Flask app factory
 │   │   ├── routes.py             # 11 REST endpoints ✅
-│   │   ├── asr.py                # Parakeet ASR model
+│   │   ├── asr.py                # OpenAI transcription
 │   │   ├── config.py             # Configuration + env vars
 │   │   └── services/
 │   │       ├── ai_categorizer.py # OpenAI GPT-4o-mini ✅
@@ -307,7 +307,7 @@ asr-monorepo/
 | **Lines of Code**        | ~3,500 total                             |
 | **Frontend Code**        | 1,330 lines                              |
 | **Backend Code**         | 2,000+ lines                             |
-| **Dependencies**         | TanStack Query, OpenAI, SQLite, Parakeet |
+| **Dependencies**         | TanStack Query, OpenAI, SQLite           |
 
 ---
 
@@ -392,13 +392,11 @@ VITE_API_URL=http://localhost:5001
 
 ### **Backend**
 
-- Python 3.11 (pinned for NeMo compatibility)
+- Python 3.11+
 - Flask + Flask-CORS
-- NVIDIA NeMo (Parakeet-TDT-0.6B-v3)
-- OpenAI API (GPT-4o-mini)
+- OpenAI API (GPT-4o-mini-transcribe & GPT-4o-mini)
 - SQLite + FTS5
 - Pydantic v2
-- PyTorch (MPS for Apple Silicon)
 
 ### **Frontend**
 

@@ -1,6 +1,6 @@
-# ASR Mono-repo POC: Vite + Tailwind + Flask + OpenAI Transcription
+# Chisos
 
-**Production-ready proof-of-concept** for audio transcription using:
+**Production-ready advanced notes application** with audio transcription using:
 
 - **Frontend**: Vite + React + TypeScript + Tailwind CSS
 - **Backend**: Flask + OpenAI GPT-4o-mini-transcribe (API-based)
@@ -64,7 +64,7 @@ Visit **http://localhost:5173** and record or upload audio (MP3, WAV, WebM, M4A,
 ## 📁 Project Structure
 
 ```
-asr-monorepo/
+chisos/
 ├─ README.md              # This file
 ├─ .gitignore
 ├─ Makefile               # Optional: run both servers with 'make dev'

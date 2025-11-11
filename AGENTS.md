@@ -1,4 +1,4 @@
-# Advanced Notes
+# Chisos
 
 ## Stack
 - Backend: Flask + Python 3.11+ (managed with `uv`)

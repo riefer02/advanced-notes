@@ -10,7 +10,7 @@
 
 ```
 ┌─────────────────────────────────────────────┐
-│  Railway Project: advanced-notes            │
+│  Railway Project: chisos                    │
 │                                             │
 │  ┌─────────────────┐  ┌──────────────────┐ │
 │  │ Backend         │  │ Frontend         │ │

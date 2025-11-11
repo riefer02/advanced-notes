@@ -1,6 +1,6 @@
 # REST API Reference
 
-Complete API documentation for the ASR Mono-repo backend.
+Complete API documentation for the Chisos backend.
 
 **Base URL:** `http://localhost:5001/api`
 

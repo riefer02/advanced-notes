@@ -1,7 +1,7 @@
 """
 Audio transcription using OpenAI GPT-4o-mini-transcribe.
 
-Replaces NVIDIA Parakeet with OpenAI's latest transcription model for easy deployment.
+Uses OpenAI's latest transcription model for easy deployment.
 Model: gpt-4o-mini-transcribe (newer, higher quality than whisper-1)
 """
 

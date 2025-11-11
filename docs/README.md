@@ -1,6 +1,6 @@
 # Documentation Index
 
-Complete documentation for the Advanced Notes ASR project.
+Complete documentation for the Chisos advanced notes project.
 
 ---
 

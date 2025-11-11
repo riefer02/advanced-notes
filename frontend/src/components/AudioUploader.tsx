@@ -87,9 +87,11 @@ export default function AudioUploader() {
   return (
     <div className="mx-auto max-w-2xl p-6 space-y-4">
       <div className="border-b pb-4">
-        <h1 className="text-3xl font-bold text-gray-900">ASR POC</h1>
+        <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+          🐺 Chisos
+        </h1>
         <p className="text-sm text-gray-600 mt-2">
-          NVIDIA Parakeet-TDT-0.6B-v3 • Record or upload audio to transcribe
+          Record or upload audio to transcribe and organize your notes
         </p>
       </div>
 

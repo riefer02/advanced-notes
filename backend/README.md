@@ -1,6 +1,6 @@
-# ASR Backend
+# Chisos Backend
 
-Flask API server with OpenAI GPT-4o-mini-transcribe for speech-to-text.
+Flask API server with OpenAI GPT-4o-mini-transcribe for speech-to-text and advanced notes management.
 
 ## Features
 
@@ -20,8 +20,8 @@ uv sync
 # Create .env file with required variables
 cat > .env << EOF
 OPENAI_API_KEY=sk-your-key-here
-CLERK_DOMAIN=your-app.clerk.accounts.dev
-CLERK_SECRET_KEY=sk_test_your_secret_key
+CLERK_DOMAIN=your-app.clerk.accounts.dev  # Clerk Dashboard > API Keys > "Issuer" (without https://)
+CLERK_SECRET_KEY=sk_test_your_secret_key  # Clerk Dashboard > API Keys > "Secret keys"
 EOF
 
 # Run database migrations

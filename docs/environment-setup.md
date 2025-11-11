@@ -55,7 +55,7 @@ CONFIDENCE_THRESHOLD=0.7
 1. Log in to [https://platform.openai.com/](https://platform.openai.com/)
 2. Navigate to [API Keys](https://platform.openai.com/api-keys)
 3. Click **"Create new secret key"**
-4. Give it a name (e.g., "ASR Advanced Notes Dev")
+4. Give it a name (e.g., "Chisos Dev")
 5. **Copy the key immediately** - you won't be able to see it again!
 6. Store it securely in your `backend/.env` file
 

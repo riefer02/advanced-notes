@@ -102,7 +102,7 @@ DEFAULT_FOLDERS: list      # ["inbox", "archive"]
 ## 📂 File Structure
 
 ```
-advanced-notes/
+chisos/
 ├── docs/
 │   ├── README.md                    # Documentation index (NEW)
 │   ├── environment-setup.md         # Environment setup guide (NEW)
