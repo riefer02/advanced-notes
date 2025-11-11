@@ -122,8 +122,23 @@ export interface TagsResponse {
  * Transcribe audio and get AI categorization
  */
 export async function transcribeAudio(audioBlob: Blob): Promise<TranscriptionResponse> {
+  // Map MIME types to file extensions
+  const mimeToExt: Record<string, string> = {
+    'audio/webm': 'webm',
+    'audio/mp4': 'mp4',
+    'audio/mpeg': 'mp3',
+    'audio/wav': 'wav',
+    'audio/ogg': 'ogg',
+    'audio/m4a': 'm4a',
+  }
+  
+  // Get file extension from blob type, default to webm
+  const baseType = audioBlob.type.split(';')[0].trim()
+  const extension = mimeToExt[baseType] || 'webm'
+  const filename = `recording.${extension}`
+  
   const formData = new FormData()
-  formData.append('file', audioBlob, 'recording.webm')
+  formData.append('file', audioBlob, filename)
 
   const headers = await getAuthHeaders()
 

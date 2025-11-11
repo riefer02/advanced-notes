@@ -23,7 +23,7 @@ def _get_client():
     return _client
 
 
-def transcribe_bytes(audio_bytes: bytes):
+def transcribe_bytes(audio_bytes: bytes, content_type: str = None):
     """
     Transcribe audio from raw bytes using OpenAI GPT-4o-mini-transcribe.
     
@@ -31,15 +31,36 @@ def transcribe_bytes(audio_bytes: bytes):
     
     Args:
         audio_bytes: Audio file bytes
+        content_type: MIME type of audio (e.g., 'audio/webm', 'audio/mp4')
     
     Returns:
         tuple: (transcribed_text, metadata_dict)
     """
     client = _get_client()
     
+    # Map MIME types to file extensions
+    mime_to_ext = {
+        'audio/webm': '.webm',
+        'audio/mp4': '.mp4',
+        'audio/m4a': '.m4a',
+        'audio/mpeg': '.mp3',
+        'audio/mp3': '.mp3',
+        'audio/wav': '.wav',
+        'audio/wave': '.wav',
+        'audio/ogg': '.ogg',
+        'audio/x-m4a': '.m4a',
+    }
+    
+    # Get file extension from content type, default to .webm
+    extension = '.webm'
+    if content_type:
+        # Handle content types with codecs (e.g., "audio/webm;codecs=opus")
+        base_type = content_type.split(';')[0].strip().lower()
+        extension = mime_to_ext.get(base_type, '.webm')
+    
     # OpenAI API requires a file object with a filename
     # Create temporary file with appropriate extension
-    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as temp_file:
+    with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as temp_file:
         temp_file.write(audio_bytes)
         temp_path = temp_file.name
     

@@ -34,10 +34,46 @@ export default function AudioUploader() {
     transcribeAudio(file)
   }
 
+  const getSupportedMimeType = (): string => {
+    // List of MIME types to try, in order of preference
+    const mimeTypes = [
+      'audio/mp4',
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/wav'
+    ]
+
+    for (const mimeType of mimeTypes) {
+      if (MediaRecorder.isTypeSupported(mimeType)) {
+        console.log(`Using MIME type: ${mimeType}`)
+        return mimeType
+      }
+    }
+
+    // Fallback to default if none are supported (shouldn't happen)
+    console.warn('No supported MIME type found, using default')
+    return ''
+  }
+
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream)
+      // Request microphone access with specific constraints for mobile
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      })
+
+      // Get the best supported MIME type
+      const mimeType = getSupportedMimeType()
+      
+      // Create MediaRecorder with options
+      const options: MediaRecorderOptions = mimeType ? { mimeType } : {}
+      const mediaRecorder = new MediaRecorder(stream, options)
+      
       mediaRecorderRef.current = mediaRecorder
       chunksRef.current = []
 
@@ -48,12 +84,16 @@ export default function AudioUploader() {
       }
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' })
+        const finalMimeType = mediaRecorder.mimeType || mimeType || 'audio/webm'
+        const audioBlob = new Blob(chunksRef.current, { type: finalMimeType })
+        console.log(`Recording stopped. Blob size: ${audioBlob.size}, type: ${audioBlob.type}`)
         transcribeAudio(audioBlob)
         stream.getTracks().forEach(track => track.stop())
       }
 
-      mediaRecorder.start()
+      // Start recording with timeslice for better mobile support
+      // Request data every 1 second to avoid memory issues on mobile
+      mediaRecorder.start(1000)
       setIsRecording(true)
       setRecordingTime(0)
 
@@ -62,8 +102,25 @@ export default function AudioUploader() {
         setRecordingTime(prev => prev + 1)
       }, 1000)
     } catch (e: any) {
+      console.error('Recording error:', e)
+      // Create a more descriptive error message
+      let errorMessage = 'Failed to start recording'
+      
+      if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+        errorMessage = 'Microphone permission denied. Please allow microphone access in your browser settings.'
+      } else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
+        errorMessage = 'No microphone found. Please connect a microphone and try again.'
+      } else if (e.name === 'NotReadableError' || e.name === 'TrackStartError') {
+        errorMessage = 'Microphone is already in use by another application.'
+      } else if (e.name === 'NotSupportedError') {
+        errorMessage = 'Audio recording is not supported on this browser. Try using a different browser.'
+      } else if (e.message) {
+        errorMessage = `Recording error: ${e.message}`
+      }
+      
+      // Set the error through the mutation
       transcribeMutation.reset()
-      // Set error via mutation (we'll need to handle this differently)
+      alert(errorMessage)
     }
   }
 

@@ -57,18 +57,22 @@ def transcribe():
     user_id = g.user_id  # Get authenticated user ID
     
     # Check for file upload
+    content_type = None
     if "file" in request.files:
-        data = request.files["file"].read()
+        file = request.files["file"]
+        data = file.read()
+        content_type = file.content_type
     else:
         # Raw bytes in body
         data = request.get_data()
+        content_type = request.content_type
 
     if not data:
         return jsonify({"error": "No audio data provided"}), 400
 
     try:
         # Step 1: Transcribe audio
-        text, meta = transcribe_bytes(data)
+        text, meta = transcribe_bytes(data, content_type)
 
         # Step 2: Get AI categorization (user-scoped folders)
         folder_tree = storage.get_folder_tree(user_id)
