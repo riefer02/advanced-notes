@@ -155,7 +155,7 @@ function NoteItem({ note, isSearch, isExpanded, onToggle, onDelete }: NoteItemPr
               {new Date(note.created_at).toLocaleDateString()}
             </span>
           </div>
-          {note.tags.length > 0 && (
+          {note.tags && note.tags.length > 0 && (
             <div className="mt-2 flex gap-1 flex-wrap">
               {note.tags.slice(0, 3).map((tag) => (
                 <span
