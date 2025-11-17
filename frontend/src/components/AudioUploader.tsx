@@ -2,7 +2,11 @@ import { useState, useRef, useEffect } from 'react'
 import { useTranscribeAudio } from '../hooks/useNotes'
 import type { TranscriptionResponse } from '../lib/api'
 
-export default function AudioUploader() {
+interface AudioUploaderProps {
+  recordButtonRef?: React.RefObject<HTMLButtonElement>
+}
+
+export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [lastResult, setLastResult] = useState<TranscriptionResponse | null>(null)
@@ -18,11 +22,6 @@ export default function AudioUploader() {
   useEffect(() => {
     if (transcribeMutation.isSuccess && transcribeMutation.data) {
       setLastResult(transcribeMutation.data)
-      
-      // Send category result to NotesPanel via global callback
-      if (typeof window !== 'undefined' && (window as any).__setLatestCategory) {
-        (window as any).__setLatestCategory(transcribeMutation.data.categorization)
-      }
     }
   }, [transcribeMutation.isSuccess, transcribeMutation.data])
 
@@ -30,18 +29,16 @@ export default function AudioUploader() {
     transcribeMutation.mutate(audioBlob)
   }
 
-  const onFile = async (file: File) => {
-    transcribeAudio(file)
-  }
-
   const getSupportedMimeType = (): string => {
     // List of MIME types to try, in order of preference
+    // Prefer formats that OpenAI Whisper supports well
     const mimeTypes = [
-      'audio/mp4',
       'audio/webm;codecs=opus',
       'audio/webm',
+      'audio/mp4',
+      'audio/mpeg',
       'audio/ogg;codecs=opus',
-      'audio/wav'
+      'audio/wav',
     ]
 
     for (const mimeType of mimeTypes) {
@@ -51,9 +48,9 @@ export default function AudioUploader() {
       }
     }
 
-    // Fallback to default if none are supported (shouldn't happen)
-    console.warn('No supported MIME type found, using default')
-    return ''
+    // Fallback to webm (most widely supported)
+    console.warn('No supported MIME type found, using audio/webm')
+    return 'audio/webm'
   }
 
   const startRecording = async () => {
@@ -87,6 +84,20 @@ export default function AudioUploader() {
         const finalMimeType = mediaRecorder.mimeType || mimeType || 'audio/webm'
         const audioBlob = new Blob(chunksRef.current, { type: finalMimeType })
         console.log(`Recording stopped. Blob size: ${audioBlob.size}, type: ${audioBlob.type}`)
+        
+        // Validate blob before sending
+        if (audioBlob.size === 0) {
+          alert('Recording failed: No audio data captured. Please try again.')
+          stream.getTracks().forEach(track => track.stop())
+          return
+        }
+        
+        if (audioBlob.size < 1000) {
+          alert('Recording too short or corrupted. Please record for at least 1 second.')
+          stream.getTracks().forEach(track => track.stop())
+          return
+        }
+        
         transcribeAudio(audioBlob)
         stream.getTracks().forEach(track => track.stop())
       }
@@ -143,66 +154,41 @@ export default function AudioUploader() {
 
   return (
     <div className="mx-auto max-w-2xl p-6 space-y-4">
-      <div className="border-b pb-4">
-        <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-          🐺 Chisos
-        </h1>
-        <p className="text-sm text-gray-600 mt-2">
-          Record or upload audio to transcribe and organize your notes
-        </p>
-      </div>
-
       {/* Record Audio */}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-gray-700">
           Record Audio
         </label>
-        <div className="flex items-center gap-3">
-          {!isRecording ? (
-            <button
-              onClick={startRecording}
-              disabled={transcribeMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
-              </svg>
-              Start Recording
-            </button>
-          ) : (
-            <button
-              onClick={stopRecording}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium transition-colors"
-            >
-              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-              Stop Recording ({formatTime(recordingTime)})
-            </button>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            {!isRecording ? (
+              <button
+                ref={recordButtonRef}
+                onClick={startRecording}
+                disabled={transcribeMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+                </svg>
+                Start Recording
+              </button>
+            ) : (
+              <button
+                onClick={stopRecording}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium transition-colors"
+              >
+                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                Stop Recording ({formatTime(recordingTime)})
+              </button>
+            )}
+          </div>
+          {!isRecording && (
+            <p className="text-xs text-gray-500">
+              💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded">R</kbd> to start recording
+            </p>
           )}
         </div>
-      </div>
-
-      {/* Divider */}
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-300"></div>
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-2 bg-white text-gray-500">or</span>
-        </div>
-      </div>
-
-      {/* Upload File */}
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">
-          Upload Audio File
-        </label>
-        <input
-          type="file"
-          accept="audio/*"
-          className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none hover:bg-gray-100 p-2"
-          onChange={(e) => e.target.files && onFile(e.target.files[0])}
-          disabled={transcribeMutation.isPending || isRecording}
-        />
       </div>
 
       {transcribeMutation.isPending && (
@@ -227,43 +213,21 @@ export default function AudioUploader() {
       )}
 
       {lastResult && (
-        <div className="rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 p-6 border border-gray-200 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Transcript</h2>
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <pre className="whitespace-pre-wrap text-gray-800 font-mono text-sm leading-relaxed">
-              {lastResult.text}
-            </pre>
+        <div className="rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 p-6 border-2 border-green-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <svg className="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <h2 className="text-lg font-semibold text-green-900">Transcript Ready!</h2>
           </div>
-          
-          {lastResult.meta && (
-            <div className="mt-4 pt-4 border-t border-gray-300">
-              <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Metadata</h3>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-white rounded px-3 py-2 border border-gray-200">
-                  <span className="text-gray-500">Device:</span>{' '}
-                  <span className="font-medium text-gray-800">{lastResult.meta.device}</span>
-                </div>
-                <div className="bg-white rounded px-3 py-2 border border-gray-200">
-                  <span className="text-gray-500">Model:</span>{' '}
-                  <span className="font-medium text-gray-800">{lastResult.meta.model?.split('/')[1] || lastResult.meta.model}</span>
-                </div>
-                {lastResult.meta.sample_rate && (
-                  <div className="bg-white rounded px-3 py-2 border border-gray-200">
-                    <span className="text-gray-500">Sample Rate:</span>{' '}
-                    <span className="font-medium text-gray-800">{lastResult.meta.sample_rate} Hz</span>
-                  </div>
-                )}
-                {(lastResult.meta.duration || lastResult.meta.duration_sec) && (
-                  <div className="bg-white rounded px-3 py-2 border border-gray-200">
-                    <span className="text-gray-500">Duration:</span>{' '}
-                    <span className="font-medium text-gray-800">
-                      {((lastResult.meta.duration || lastResult.meta.duration_sec || 0)).toFixed(2)}s
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          <div className="bg-white rounded-lg p-4 border border-green-200 max-h-96 overflow-y-auto">
+            <p className="whitespace-pre-wrap text-gray-800 text-base leading-relaxed">
+              {lastResult.text}
+            </p>
+          </div>
+          <p className="text-xs text-green-700 mt-3">
+            ✓ Saved and organized automatically
+          </p>
         </div>
       )}
     </div>

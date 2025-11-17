@@ -78,7 +78,7 @@ class FolderStats(BaseModel):
 
 class SearchResult(BaseModel):
     """Search result with ranking"""
-    note: NoteListItem
+    note: Note
     rank: float = Field(description="Search relevance score")
     snippet: str = Field(description="Matching text snippet")
 

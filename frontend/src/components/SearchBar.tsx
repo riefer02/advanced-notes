@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 
 interface SearchBarProps {
   value: string
@@ -6,8 +6,11 @@ interface SearchBarProps {
   onClear: () => void
 }
 
-export default function SearchBar({ value, onChange, onClear }: SearchBarProps) {
+const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(({ value, onChange, onClear }, ref) => {
   const inputRef = useRef<HTMLInputElement>(null)
+  
+  // Expose the input ref to parent
+  useImperativeHandle(ref, () => inputRef.current!)
 
   // Clear search on Escape key
   useEffect(() => {
@@ -50,7 +53,7 @@ export default function SearchBar({ value, onChange, onClear }: SearchBarProps) 
           type="search"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Search notes by content, title, or tags..."
+          placeholder="Search notes... (press / to focus)"
           className={`block w-full rounded-lg border bg-white py-2.5 pl-10 pr-10 text-sm placeholder-gray-500 transition-colors focus:outline-none focus:ring-2 ${
             value
               ? 'border-blue-300 focus:border-blue-500 focus:ring-blue-200'
@@ -92,5 +95,9 @@ export default function SearchBar({ value, onChange, onClear }: SearchBarProps) 
       )}
     </div>
   )
-}
+})
+
+SearchBar.displayName = 'SearchBar'
+
+export default SearchBar
 

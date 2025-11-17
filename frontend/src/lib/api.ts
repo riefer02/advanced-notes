@@ -100,7 +100,7 @@ export interface NoteListItem {
 }
 
 export interface SearchResult {
-  note: NoteListItem
+  note: Note
   rank: number
   snippet: string
 }

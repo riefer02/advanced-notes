@@ -36,6 +36,16 @@ def transcribe_bytes(audio_bytes: bytes, content_type: str = None):
     Returns:
         tuple: (transcribed_text, metadata_dict)
     """
+    # Validate input
+    if not audio_bytes or len(audio_bytes) == 0:
+        raise ValueError("Audio data is empty")
+    
+    if len(audio_bytes) < 1000:
+        raise ValueError("Audio data too small (less than 1KB), likely corrupted or too short")
+    
+    if len(audio_bytes) > 25 * 1024 * 1024:  # 25MB limit
+        raise ValueError("Audio file too large (max 25MB)")
+    
     client = _get_client()
     
     # Map MIME types to file extensions
@@ -57,6 +67,8 @@ def transcribe_bytes(audio_bytes: bytes, content_type: str = None):
         # Handle content types with codecs (e.g., "audio/webm;codecs=opus")
         base_type = content_type.split(';')[0].strip().lower()
         extension = mime_to_ext.get(base_type, '.webm')
+    
+    print(f"Transcribing audio: size={len(audio_bytes)} bytes, type={content_type}, extension={extension}")
     
     # OpenAI API requires a file object with a filename
     # Create temporary file with appropriate extension

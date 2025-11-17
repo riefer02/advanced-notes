@@ -11,11 +11,20 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
   if (loading) {
     return (
       <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-100">
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 mb-4">
           <span className="text-xl">🏷️</span>
           <h3 className="text-lg font-semibold text-gray-900">Tags</h3>
         </div>
-        <div className="text-sm text-gray-500">Loading tags...</div>
+        <div className="flex flex-wrap gap-2 animate-pulse">
+          {[...Array(6)].map((_, i) => (
+            <div 
+              key={i} 
+              className="h-8 bg-white/60 rounded-full"
+              style={{ width: `${60 + Math.random() * 40}px` }}
+            ></div>
+          ))}
+        </div>
+        <div className="text-xs text-gray-500 mt-4">Loading tags...</div>
       </div>
     )
   }
