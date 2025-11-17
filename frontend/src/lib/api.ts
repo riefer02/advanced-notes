@@ -87,15 +87,22 @@ export interface FolderTree {
   folders: FolderNode
 }
 
-export interface SearchResult {
+export interface NoteListItem {
   id: string
+  user_id: string
   title: string
-  content: string
   folder_path: string
-  snippet: string
-  rank: number
   tags: string[]
   created_at: string
+  updated_at: string
+  word_count: number
+  confidence: number | null
+}
+
+export interface SearchResult {
+  note: NoteListItem
+  rank: number
+  snippet: string
 }
 
 export interface NotesResponse {
@@ -257,5 +264,20 @@ export async function fetchTags(): Promise<string[]> {
 
   const data: TagsResponse = await response.json()
   return data.tags
+}
+
+/**
+ * Get notes filtered by tag
+ */
+export async function fetchNotesByTag(tag: string, limit = 50): Promise<Note[]> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/tags/${encodeURIComponent(tag)}/notes?limit=${limit}`, { headers })
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch notes by tag')
+  }
+
+  const data = await response.json()
+  return data.notes
 }
 

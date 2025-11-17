@@ -78,10 +78,42 @@ export default function CategoryResult({
 
       {/* Details */}
       <div className="mt-3 space-y-2">
-        {/* Folder Path */}
-        <div className="flex items-center gap-2 text-sm">
+        {/* Tags - EMPHASIZED (Primary organization) */}
+        {tags.length > 0 && (
+          <div className="bg-white rounded-lg p-3 border border-green-200">
+            <div className="flex items-center gap-2 mb-2">
+              <svg
+                className="h-4 w-4 text-green-600 flex-shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                />
+              </svg>
+              <span className="text-xs font-semibold text-green-900">Tags (Primary Organization)</span>
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-300"
+                >
+                  🏷️ {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Folder Path - De-emphasized */}
+        <div className="flex items-center gap-2 text-xs text-green-700">
           <svg
-            className="h-4 w-4 text-green-600 flex-shrink-0"
+            className="h-3 w-3 text-green-600 flex-shrink-0"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -93,13 +125,13 @@ export default function CategoryResult({
               d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
             />
           </svg>
-          <span className="text-green-900 font-medium">{folderPath}/</span>
+          <span>Folder: {folderPath}/</span>
         </div>
 
         {/* Filename */}
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-2 text-xs text-green-700">
           <svg
-            className="h-4 w-4 text-green-600 flex-shrink-0"
+            className="h-3 w-3 text-green-600 flex-shrink-0"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -111,37 +143,8 @@ export default function CategoryResult({
               d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
             />
           </svg>
-          <span className="text-green-800">{filename}</span>
+          <span>File: {filename}</span>
         </div>
-
-        {/* Tags */}
-        {tags.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <svg
-              className="h-4 w-4 text-green-600 flex-shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-              />
-            </svg>
-            <div className="flex gap-1.5 flex-wrap">
-              {tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 border border-green-300"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Confidence Score */}
         <div className="flex items-center gap-2">

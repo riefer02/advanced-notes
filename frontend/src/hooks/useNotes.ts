@@ -66,6 +66,18 @@ export function useTags() {
   })
 }
 
+/**
+ * Fetch notes filtered by tag
+ */
+export function useNotesByTag(tag: string | null, limit = 50) {
+  return useQuery({
+    queryKey: ['notes', 'tag', tag, limit],
+    queryFn: () => (tag ? api.fetchNotesByTag(tag, limit) : Promise.resolve([])),
+    enabled: !!tag, // Only fetch if tag is provided
+    staleTime: 10000, // Consider stale after 10 seconds
+  })
+}
+
 // ============================================================================
 // Mutation Hooks
 // ============================================================================

@@ -20,18 +20,18 @@ class CategoryAction(str, Enum):
 
 
 class CategorySuggestion(BaseModel):
-    """Structured output for note categorization"""
+    """Structured output for note categorization with tag-first approach"""
     action: CategoryAction = Field(
         description="Whether to append to existing folder or create a new one"
     )
     folder_path: str = Field(
-        description="Folder path in lowercase kebab-case (e.g., 'blog-ideas/react')"
+        description="Simple, flat folder path (1-2 levels max, e.g., 'ideas', 'work/meetings')"
     )
     filename: str = Field(
-        description="Descriptive filename with date suffix (e.g., 'optimize-performance-2025-11-08.md')"
+        description="Descriptive filename with date suffix (e.g., 'optimize-performance-2025-11-17.md')"
     )
     tags: List[str] = Field(
-        description="Relevant tags for the note (lowercase, kebab-case)"
+        description="3-7 rich, meaningful tags capturing all aspects of content (lowercase, kebab-case). PRIMARY organization method."
     )
     confidence: float = Field(
         ge=0.0,
@@ -39,7 +39,7 @@ class CategorySuggestion(BaseModel):
         description="Confidence score between 0 and 1"
     )
     reasoning: str = Field(
-        description="Brief explanation of the categorization decision"
+        description="Brief explanation focusing on tag selection and folder choice"
     )
 
 
@@ -147,34 +147,51 @@ class AICategorizationService:
         """
         folders_str = "\n".join(f"- {folder}" for folder in existing_folders) if existing_folders else "- (none)"
         
-        prompt = f"""Analyze this transcription and determine the best folder organization.
+        prompt = f"""Analyze this transcription and organize it using a TAG-FIRST approach.
 
 TRANSCRIPTION:
 \"\"\"
 {transcription}
 \"\"\"
 
-EXISTING FOLDERS:
+EXISTING FOLDERS (use as reference, but feel free to create new ones):
 {folders_str}
 
-TASK:
-1. Determine if this belongs in an existing folder or needs a new one
-2. Suggest appropriate folder path (lowercase, kebab-case, e.g., "blog-ideas/react")
-3. Create a descriptive filename (lowercase, kebab-case, with date suffix)
-4. Extract 2-5 relevant tags
-5. Provide confidence score (0.0-1.0) based on how clear the categorization is
-6. Brief reasoning for your decision
+PHILOSOPHY - TAG-FIRST ORGANIZATION:
+Tags are the PRIMARY organization method. Folders are just broad, simple containers.
+Think: Gmail labels vs folders. Notes can be found through tags, not deep hierarchies.
 
-RULES:
-- Use lowercase, kebab-case for all paths and filenames
-- Group related content together (e.g., all React posts in "blog-ideas/react")
-- Create subcategories when content is specialized (e.g., "work/project-alpha/meetings")
-- Use date suffix format: YYYY-MM-DD
-- Higher confidence for clear, explicit categorization signals
-- Lower confidence for ambiguous or general content
-- If transcription mentions "blog" → likely blog-ideas folder
-- If transcription mentions "shopping", "grocery", "buy" → likely grocery/home folder
-- If transcription mentions "work", "meeting", "project" → likely work folder
+TASK:
+1. Generate 3-7 RICH, MEANINGFUL TAGS that capture all aspects of the content
+2. Choose a simple, flat folder (1-2 levels max, broad categories)
+3. Create a descriptive filename (lowercase, kebab-case, with date suffix)
+4. Provide confidence score (0.0-1.0)
+5. Brief reasoning
+
+TAG GUIDELINES (MOST IMPORTANT):
+- Extract specific topics, concepts, technologies, people, projects
+- Include both broad categories AND specific details
+- Examples: ["react", "performance", "hooks", "optimization", "frontend", "web-dev"]
+- Think: "What would I search for to find this note?"
+- Tags should be: lowercase, kebab-case, specific, searchable
+- Prefer MORE tags over fewer (3-7 tags per note)
+
+FOLDER GUIDELINES (KEEP SIMPLE):
+- Use broad, flat categories: "work", "personal", "ideas", "learning", etc.
+- Avoid deep nesting - maximum 2 levels (e.g., "work/meetings")
+- Don't over-organize - when in doubt, create a NEW simple folder
+- Don't force content into existing folders if it doesn't fit well
+- Examples of good folders: "work", "personal", "ideas", "learning", "projects", "notes"
+
+FILENAME RULES:
+- Descriptive, lowercase, kebab-case
+- Use date suffix: YYYY-MM-DD format
+- Example: "react-performance-tips-2025-11-17.md"
+
+CONFIDENCE:
+- Higher (0.8-1.0): Clear topic, obvious tags
+- Medium (0.5-0.7): Some ambiguity in categorization
+- Lower (0.0-0.4): Very general or unclear content
 
 Return your analysis as structured JSON matching the CategorySuggestion schema."""
         
