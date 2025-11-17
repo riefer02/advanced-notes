@@ -87,18 +87,6 @@ export interface FolderTree {
   folders: FolderNode
 }
 
-export interface NoteListItem {
-  id: string
-  user_id: string
-  title: string
-  folder_path: string
-  tags: string[]
-  created_at: string
-  updated_at: string
-  word_count: number
-  confidence: number | null
-}
-
 export interface SearchResult {
   note: Note
   rank: number

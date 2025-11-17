@@ -15,7 +15,7 @@ from typing import List, Optional, Dict, Any
 from contextlib import contextmanager
 from urllib.parse import urlparse
 
-from .models import Note, NoteMetadata, NoteListItem, FolderNode, FolderStats, SearchResult
+from .models import Note, NoteMetadata, FolderNode, FolderStats, SearchResult
 from ..config import config
 
 
@@ -654,33 +654,6 @@ class NoteStorage:
             rows = cursor.fetchall()
             return [self._row_to_note(row) for row in rows]
     
-    def rebuild_fts_index(self) -> int:
-        """
-        Rebuild the FTS index from existing notes.
-        Useful when notes were created before FTS triggers were set up.
-        
-        Returns:
-            Number of notes indexed
-        """
-        with self._get_connection() as conn:
-            if self.db_type == "postgresql":
-                # PostgreSQL: Update all rows to trigger the search vector update
-                query = "UPDATE notes SET updated_at = updated_at"
-                cursor = self._execute_query(conn, query, ())
-                return cursor.rowcount
-            else:
-                # SQLite: Rebuild FTS table from scratch
-                # Clear existing FTS data
-                self._execute_query(conn, "DELETE FROM notes_fts", ())
-                
-                # Re-populate from notes table
-                query = """
-                    INSERT INTO notes_fts(note_id, title, content, tags)
-                    SELECT id, title, content, tags FROM notes
-                """
-                cursor = self._execute_query(conn, query, ())
-                return cursor.rowcount
-    
     def get_note_count(self, user_id: str, folder: Optional[str] = None) -> int:
         """
         Get total note count (user-scoped), optionally filtered by folder.
@@ -800,18 +773,4 @@ class NoteStorage:
             confidence=row['confidence'],
             transcription_duration=row['transcription_duration'],
             model_version=row['model_version']
-        )
-    
-    def _row_to_list_item(self, row: Dict) -> NoteListItem:
-        """Convert database row to NoteListItem object"""
-        return NoteListItem(
-            id=row['id'],
-            user_id=row['user_id'],
-            title=row['title'],
-            folder_path=row['folder_path'],
-            tags=self._deserialize_tags(row['tags']),
-            created_at=datetime.fromisoformat(row['created_at']) if isinstance(row['created_at'], str) else row['created_at'],
-            updated_at=datetime.fromisoformat(row['updated_at']) if isinstance(row['updated_at'], str) else row['updated_at'],
-            word_count=row['word_count'],
-            confidence=row['confidence']
         )

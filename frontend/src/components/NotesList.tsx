@@ -1,6 +1,6 @@
 import { useNotes, useSearchNotes, useDeleteNote, useNotesByTag } from '../hooks/useNotes'
 import { useState } from 'react'
-import type { Note, SearchResult } from '../lib/api'
+import type { Note } from '../lib/api'
 
 interface NotesListProps {
   folder?: string
