@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useAuth, UserButton } from '@clerk/clerk-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import AudioUploader from '../components/AudioUploader'
 import NotesPanel from '../components/NotesPanel'
 import { setAuthTokenGetter } from '../lib/api'
@@ -11,12 +11,27 @@ export const Route = createFileRoute('/dashboard')({
 
 function DashboardPage() {
   const { isLoaded, isSignedIn, getToken } = useAuth()
+  const recordButtonRef = useRef<HTMLButtonElement>(null)
 
   // Set up auth token getter for API calls
   useEffect(() => {
     setAuthTokenGetter(getToken)
   }, [getToken])
   const [activeTab, setActiveTab] = useState<'transcribe' | 'notes'>('transcribe')
+  
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // "R" to focus/click record button (unless in an input)
+      if ((e.key === 'r' || e.key === 'R') && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault()
+        recordButtonRef.current?.click()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   // Show loading state while Clerk is loading
   if (!isLoaded) {
@@ -85,7 +100,7 @@ function DashboardPage() {
             activeTab === 'transcribe' ? 'block' : 'hidden lg:block'
           }`}
         >
-          <AudioUploader />
+          <AudioUploader recordButtonRef={recordButtonRef} />
         </div>
 
         {/* Right Pane: Notes Panel (60%) */}

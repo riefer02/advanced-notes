@@ -88,14 +88,9 @@ export interface FolderTree {
 }
 
 export interface SearchResult {
-  id: string
-  title: string
-  content: string
-  folder_path: string
-  snippet: string
+  note: Note
   rank: number
-  tags: string[]
-  created_at: string
+  snippet: string
 }
 
 export interface NotesResponse {
@@ -257,5 +252,20 @@ export async function fetchTags(): Promise<string[]> {
 
   const data: TagsResponse = await response.json()
   return data.tags
+}
+
+/**
+ * Get notes filtered by tag
+ */
+export async function fetchNotesByTag(tag: string, limit = 50): Promise<Note[]> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/tags/${encodeURIComponent(tag)}/notes?limit=${limit}`, { headers })
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch notes by tag')
+  }
+
+  const data = await response.json()
+  return data.notes
 }
 

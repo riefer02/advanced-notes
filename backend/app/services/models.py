@@ -41,24 +41,6 @@ class Note(BaseModel):
         }
 
 
-class NoteListItem(BaseModel):
-    """Lightweight note item for list views (without content)"""
-    id: str
-    user_id: str
-    title: str
-    folder_path: str
-    tags: List[str]
-    created_at: datetime
-    updated_at: datetime
-    word_count: int
-    confidence: Optional[float] = None
-    
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
-
-
 class FolderNode(BaseModel):
     """Folder in the hierarchy tree"""
     name: str
@@ -78,7 +60,7 @@ class FolderStats(BaseModel):
 
 class SearchResult(BaseModel):
     """Search result with ranking"""
-    note: NoteListItem
+    note: Note
     rank: float = Field(description="Search relevance score")
     snippet: str = Field(description="Matching text snippet")
 

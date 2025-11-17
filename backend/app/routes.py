@@ -72,7 +72,19 @@ def transcribe():
 
     try:
         # Step 1: Transcribe audio
-        text, meta = transcribe_bytes(data, content_type)
+        try:
+            text, meta = transcribe_bytes(data, content_type)
+        except ValueError as e:
+            # Validation errors (empty audio, too small, etc.)
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            # OpenAI API errors
+            error_msg = str(e)
+            if "corrupted" in error_msg.lower() or "unsupported" in error_msg.lower():
+                return jsonify({
+                    "error": "Audio format not supported or corrupted. Please try recording again."
+                }), 400
+            raise
 
         # Step 2: Get AI categorization (user-scoped folders)
         folder_tree = storage.get_folder_tree(user_id)

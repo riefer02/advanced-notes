@@ -11,7 +11,7 @@ help:
 dev:
 	@echo "Starting backend and frontend..."
 	@(cd backend && ./run.sh) & \
-	(cd frontend && npm run dev)
+	(cd frontend && pnpm run dev)
 
 backend:
 	@echo "Starting Flask backend on http://localhost:5001"
@@ -19,13 +19,13 @@ backend:
 
 frontend:
 	@echo "Starting Vite frontend on http://localhost:5173"
-	@cd frontend && npm run dev
+	@cd frontend && pnpm run dev
 
 install:
 	@echo "Installing backend dependencies..."
 	@cd backend && uv sync
 	@echo "Installing frontend dependencies..."
-	@cd frontend && npm install
+	@cd frontend && pnpm install
 	@echo "✓ All dependencies installed"
 
 clean:

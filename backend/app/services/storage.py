@@ -15,7 +15,7 @@ from typing import List, Optional, Dict, Any
 from contextlib import contextmanager
 from urllib.parse import urlparse
 
-from .models import Note, NoteMetadata, NoteListItem, FolderNode, FolderStats, SearchResult
+from .models import Note, NoteMetadata, FolderNode, FolderStats, SearchResult
 from ..config import config
 
 
@@ -75,13 +75,14 @@ class SQLiteAdapter(DatabaseAdapter):
         conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_created ON notes(user_id, created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_updated ON notes(user_id, updated_at DESC)")
         
-        # FTS5 virtual table
+        # FTS5 virtual table with Porter stemmer for fuzzy matching
         conn.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
                 note_id UNINDEXED,
                 title,
                 content,
-                tags
+                tags,
+                tokenize = 'porter ascii'
             )
         """)
         
@@ -434,7 +435,7 @@ class NoteStorage:
         limit: int = 50,
         offset: int = 0,
         order_by: str = "updated_at"
-    ) -> List[NoteListItem]:
+    ) -> List[Note]:
         """
         List notes with optional filtering (user-scoped).
         
@@ -446,11 +447,11 @@ class NoteStorage:
             order_by: Sort field (created_at, updated_at, title)
             
         Returns:
-            List of NoteListItem objects
+            List of Note objects with full content
         """
         query = """
-            SELECT id, user_id, title, folder_path, tags, created_at, updated_at, 
-                   word_count, confidence
+            SELECT id, user_id, title, content, folder_path, tags, created_at, updated_at, 
+                   word_count, confidence, transcription_duration, model_version
             FROM notes
             WHERE user_id = {}
         """.format('%s' if self.db_type == "postgresql" else '?')
@@ -472,7 +473,7 @@ class NoteStorage:
         with self._get_connection() as conn:
             cursor = self._execute_query(conn, query, tuple(params))
             rows = cursor.fetchall()
-            return [self._row_to_list_item(row) for row in rows]
+            return [self._row_to_note(row) for row in rows]
     
     def search_notes(self, user_id: str, query: str, limit: int = 50) -> List[SearchResult]:
         """
@@ -484,15 +485,15 @@ class NoteStorage:
             limit: Maximum results
             
         Returns:
-            List of SearchResult objects with ranking
+            List of SearchResult objects with ranking and full note content
         """
         with self._get_connection() as conn:
             if self.db_type == "postgresql":
                 # PostgreSQL full-text search
                 sql_query = """
                     SELECT 
-                        id, user_id, title, folder_path, tags, created_at,
-                        updated_at, word_count, confidence,
+                        id, user_id, title, content, folder_path, tags, created_at,
+                        updated_at, word_count, confidence, transcription_duration, model_version,
                         ts_rank(search_vector, plainto_tsquery('english', %s)) as rank,
                         ts_headline('english', content, plainto_tsquery('english', %s),
                             'MaxWords=50, MinWords=25, ShortWord=3') as snippet
@@ -506,8 +507,8 @@ class NoteStorage:
                 # SQLite FTS5 search
                 sql_query = """
                     SELECT 
-                        n.id, n.user_id, n.title, n.folder_path, n.tags, n.created_at,
-                        n.updated_at, n.word_count, n.confidence,
+                        n.id, n.user_id, n.title, n.content, n.folder_path, n.tags, n.created_at,
+                        n.updated_at, n.word_count, n.confidence, n.transcription_duration, n.model_version,
                         rank,
                         snippet(notes_fts, 2, '<mark>', '</mark>', '...', 50) as snippet
                     FROM notes_fts
@@ -521,7 +522,7 @@ class NoteStorage:
             rows = cursor.fetchall()
             results = []
             for row in rows:
-                note = self._row_to_list_item(row)
+                note = self._row_to_note(row)
                 rank_value = abs(row['rank']) if self.db_type == "sqlite" else row['rank']
                 results.append(SearchResult(
                     note=note,
@@ -615,7 +616,7 @@ class NoteStorage:
             
             return sorted(tags)
     
-    def get_notes_by_tag(self, user_id: str, tag: str, limit: int = 50) -> List[NoteListItem]:
+    def get_notes_by_tag(self, user_id: str, tag: str, limit: int = 50) -> List[Note]:
         """
         Get notes that have a specific tag (user-scoped).
         
@@ -625,13 +626,13 @@ class NoteStorage:
             limit: Maximum results
             
         Returns:
-            List of NoteListItem objects
+            List of Note objects with full content
         """
         with self._get_connection() as conn:
             if self.db_type == "postgresql":
                 query = """
-                    SELECT id, user_id, title, folder_path, tags, created_at, updated_at,
-                           word_count, confidence
+                    SELECT id, user_id, title, content, folder_path, tags, created_at, updated_at,
+                           word_count, confidence, transcription_duration, model_version
                     FROM notes
                     WHERE user_id = %s AND tags @> %s::jsonb
                     ORDER BY updated_at DESC
@@ -640,8 +641,8 @@ class NoteStorage:
                 params = (user_id, json.dumps([tag]), limit)
             else:
                 query = """
-                    SELECT id, user_id, title, folder_path, tags, created_at, updated_at,
-                           word_count, confidence
+                    SELECT id, user_id, title, content, folder_path, tags, created_at, updated_at,
+                           word_count, confidence, transcription_duration, model_version
                     FROM notes
                     WHERE user_id = ? AND tags LIKE ?
                     ORDER BY updated_at DESC
@@ -651,7 +652,7 @@ class NoteStorage:
             
             cursor = self._execute_query(conn, query, params)
             rows = cursor.fetchall()
-            return [self._row_to_list_item(row) for row in rows]
+            return [self._row_to_note(row) for row in rows]
     
     def get_note_count(self, user_id: str, folder: Optional[str] = None) -> int:
         """
@@ -772,18 +773,4 @@ class NoteStorage:
             confidence=row['confidence'],
             transcription_duration=row['transcription_duration'],
             model_version=row['model_version']
-        )
-    
-    def _row_to_list_item(self, row: Dict) -> NoteListItem:
-        """Convert database row to NoteListItem object"""
-        return NoteListItem(
-            id=row['id'],
-            user_id=row['user_id'],
-            title=row['title'],
-            folder_path=row['folder_path'],
-            tags=self._deserialize_tags(row['tags']),
-            created_at=datetime.fromisoformat(row['created_at']) if isinstance(row['created_at'], str) else row['created_at'],
-            updated_at=datetime.fromisoformat(row['updated_at']) if isinstance(row['updated_at'], str) else row['updated_at'],
-            word_count=row['word_count'],
-            confidence=row['confidence']
         )
