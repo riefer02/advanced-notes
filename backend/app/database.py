@@ -1,26 +1,33 @@
 """
-SQLAlchemy models for database schema definition and migrations.
+Central SQLAlchemy models and session utilities.
 
-These models are primarily used for Alembic migrations, not for ORM queries.
-The existing storage.py adapter pattern is maintained for actual database operations.
+These definitions power both Alembic migrations and runtime ORM queries.
 """
+
+import os
+from contextlib import contextmanager
+from typing import Generator, Optional
 
 from sqlalchemy import (
     Column,
+    Float,
+    Index,
+    Integer,
     String,
     Text,
-    Integer,
-    Float,
     TIMESTAMP,
-    Index,
     create_engine,
+    event,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.engine import Engine
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.sql import func
-import os
 
 Base = declarative_base()
+
+_engine: Optional[Engine] = None
+_SessionFactory: Optional[sessionmaker] = None
 
 
 class Note(Base):
@@ -53,6 +60,7 @@ class Note(Base):
     
     # Indexes
     __table_args__ = (
+        Index('idx_notes_user_id', 'user_id'),
         Index('idx_notes_user_folder', 'user_id', 'folder_path'),
         Index('idx_notes_user_created', 'user_id', 'created_at'),
         Index('idx_notes_user_updated', 'user_id', 'updated_at'),
@@ -79,6 +87,71 @@ def get_database_url() -> str:
 
 
 def get_engine():
-    """Create SQLAlchemy engine based on environment"""
-    return create_engine(get_database_url())
+    """Get (and lazily create) the shared SQLAlchemy engine."""
+    global _engine
+    if _engine is None:
+        _engine = create_engine_for_url()
+    return _engine
+
+
+def get_session_factory() -> sessionmaker:
+    """Return the configured session factory."""
+    global _SessionFactory
+    if _SessionFactory is None:
+        _SessionFactory = sessionmaker(
+            bind=get_engine(),
+            autocommit=False,
+            autoflush=False,
+            expire_on_commit=False,
+            future=True,
+        )
+    return _SessionFactory
+
+
+@contextmanager
+def get_session() -> Generator[Session, None, None]:
+    """
+    Provide a transactional scope around a series of operations.
+    
+    Example:
+        with get_session() as session:
+            session.query(...)
+    """
+    session = get_session_factory()()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def create_engine_for_url(database_url: Optional[str] = None) -> Engine:
+    """Build a SQLAlchemy engine for the given URL (or default environment)."""
+    url = database_url or get_database_url()
+    engine = create_engine(
+        url,
+        future=True,
+        echo=False,
+        pool_pre_ping=True,
+    )
+
+    if engine.dialect.name == "sqlite":
+        event.listen(engine, "connect", _set_sqlite_pragmas)
+
+    return engine
+
+
+def _set_sqlite_pragmas(dbapi_connection, connection_record):
+    """
+    Apply SQLite pragmas for better consistency (WAL, foreign keys).
+    
+    This mirrors the previous manual adapter initialization logic.
+    """
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.close()
 

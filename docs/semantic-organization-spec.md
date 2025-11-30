@@ -138,7 +138,7 @@ chisos/
 │   │   ├── config.py             # Configuration + env vars
 │   │   └── services/
 │   │       ├── ai_categorizer.py # OpenAI GPT-4o-mini ✅
-│   │       ├── storage.py        # SQLite + FTS5 storage ✅
+│   │       ├── storage.py        # SQLAlchemy ORM + FTS (SQLite & Postgres) ✅
 │   │       └── models.py         # Pydantic data models ✅
 │   ├── tests/
 │   │   ├── services/

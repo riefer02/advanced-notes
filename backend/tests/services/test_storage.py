@@ -17,6 +17,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from app.services.storage import NoteStorage
 from app.services.models import NoteMetadata
 
+TEST_USER_ID = "test-user"
+
 
 def test_storage():
     """Test the storage service with comprehensive scenarios"""
@@ -39,6 +41,7 @@ def test_storage():
     
     # Blog post
     note1_id = storage.save_note(
+        user_id=TEST_USER_ID,
         content="""# React Performance Optimization
 
 Blog post about optimizing React apps using useMemo and useCallback.
@@ -63,6 +66,7 @@ This will help developers write faster React applications.""",
     
     # Grocery list
     note2_id = storage.save_note(
+        user_id=TEST_USER_ID,
         content="""# Grocery List
 
 Shopping list for this week:
@@ -85,6 +89,7 @@ Shopping list for this week:
     
     # Work meeting
     note3_id = storage.save_note(
+        user_id=TEST_USER_ID,
         content="""# Project Alpha Kickoff Meeting
 
 Meeting notes from the kickoff:
@@ -114,6 +119,7 @@ Meeting notes from the kickoff:
     
     # Another React post
     note4_id = storage.save_note(
+        user_id=TEST_USER_ID,
         content="""# React Hooks Best Practices
 
 Essential patterns for React hooks:
@@ -134,7 +140,7 @@ Essential patterns for React hooks:
     print("Test 2: Retrieving Notes")
     print("-" * 60)
     
-    note = storage.get_note(note1_id)
+    note = storage.get_note(TEST_USER_ID, note1_id)
     if note:
         print(f"✅ Retrieved note: {note.title}")
         print(f"   Folder: {note.folder_path}")
@@ -150,6 +156,7 @@ Essential patterns for React hooks:
     print("-" * 60)
     
     success = storage.update_note(
+        TEST_USER_ID,
         note1_id,
         content=note.content + "\n\n## Updated Section\nAdded new content!",
         metadata=NoteMetadata(
@@ -160,7 +167,7 @@ Essential patterns for React hooks:
     )
     
     if success:
-        updated = storage.get_note(note1_id)
+        updated = storage.get_note(TEST_USER_ID, note1_id)
         print(f"✅ Updated note: {updated.title}")
         print(f"   New word count: {updated.word_count}")
         print(f"   New tags: {', '.join(updated.tags)}")
@@ -172,14 +179,14 @@ Essential patterns for React hooks:
     print("Test 4: Listing Notes")
     print("-" * 60)
     
-    all_notes = storage.list_notes()
+    all_notes = storage.list_notes(user_id=TEST_USER_ID)
     print(f"✅ Total notes: {len(all_notes)}")
     for n in all_notes:
         print(f"   - {n.title} ({n.folder_path})")
     print()
     
     # List notes in specific folder
-    react_notes = storage.list_notes(folder="blog-ideas/react")
+    react_notes = storage.list_notes(user_id=TEST_USER_ID, folder="blog-ideas/react")
     print(f"✅ Notes in blog-ideas/react: {len(react_notes)}")
     for n in react_notes:
         print(f"   - {n.title}")
@@ -189,7 +196,7 @@ Essential patterns for React hooks:
     print("Test 5: Full-Text Search")
     print("-" * 60)
     
-    results = storage.search_notes("React optimization")
+    results = storage.search_notes(TEST_USER_ID, "React optimization")
     print(f"✅ Search results for 'React optimization': {len(results)}")
     for r in results:
         print(f"   - {r.note.title} (rank: {r.rank:.2f})")
@@ -200,7 +207,7 @@ Essential patterns for React hooks:
     print("Test 6: Folder Hierarchy")
     print("-" * 60)
     
-    tree = storage.get_folder_tree()
+    tree = storage.get_folder_tree(TEST_USER_ID)
     
     def print_tree(node, indent=0):
         if node.name:  # Skip root
@@ -216,11 +223,11 @@ Essential patterns for React hooks:
     print("Test 7: Tag Operations")
     print("-" * 60)
     
-    all_tags = storage.get_all_tags()
+    all_tags = storage.get_all_tags(TEST_USER_ID)
     print(f"✅ All tags: {', '.join(all_tags)}")
     print()
     
-    react_tagged = storage.get_notes_by_tag("react")
+    react_tagged = storage.get_notes_by_tag(TEST_USER_ID, "react")
     print(f"✅ Notes tagged 'react': {len(react_tagged)}")
     for n in react_tagged:
         print(f"   - {n.title}")
@@ -230,13 +237,13 @@ Essential patterns for React hooks:
     print("Test 8: Statistics")
     print("-" * 60)
     
-    total_count = storage.get_note_count()
+    total_count = storage.get_note_count(TEST_USER_ID)
     print(f"✅ Total note count: {total_count}")
     
-    react_count = storage.get_note_count(folder="blog-ideas/react")
+    react_count = storage.get_note_count(TEST_USER_ID, folder="blog-ideas/react")
     print(f"✅ Notes in blog-ideas/react: {react_count}")
     
-    stats = storage.get_folder_stats("blog-ideas/react")
+    stats = storage.get_folder_stats(TEST_USER_ID, "blog-ideas/react")
     if stats:
         print(f"✅ Folder stats for blog-ideas/react:")
         print(f"   Note count: {stats.note_count}")
@@ -249,12 +256,12 @@ Essential patterns for React hooks:
     print("Test 9: Deleting Notes")
     print("-" * 60)
     
-    success = storage.delete_note(note2_id)
+    success = storage.delete_note(TEST_USER_ID, note2_id)
     if success:
         print(f"✅ Deleted note: {note2_id[:8]}...")
         
         # Verify deletion
-        deleted = storage.get_note(note2_id)
+        deleted = storage.get_note(TEST_USER_ID, note2_id)
         if deleted is None:
             print("✅ Verified: Note no longer exists")
         else:
@@ -268,22 +275,22 @@ Essential patterns for React hooks:
     print("-" * 60)
     
     # Non-existent note
-    missing = storage.get_note("non-existent-id")
+    missing = storage.get_note(TEST_USER_ID, "non-existent-id")
     if missing is None:
         print("✅ Correctly returns None for non-existent note")
     
     # Empty search
-    empty_results = storage.search_notes("xyzabc123")
+    empty_results = storage.search_notes(TEST_USER_ID, "xyzabc123")
     if len(empty_results) == 0:
         print("✅ Empty search returns no results")
     
     # Update non-existent note
-    update_fail = storage.update_note("non-existent-id", content="test")
+    update_fail = storage.update_note(TEST_USER_ID, "non-existent-id", content="test")
     if not update_fail:
         print("✅ Update returns False for non-existent note")
     
     # Delete non-existent note
-    delete_fail = storage.delete_note("non-existent-id")
+    delete_fail = storage.delete_note(TEST_USER_ID, "non-existent-id")
     if not delete_fail:
         print("✅ Delete returns False for non-existent note")
     print()

@@ -90,7 +90,7 @@
 - **`backend/Procfile`** - Runs migrations then starts Gunicorn
 - **`backend/migrate.py`** - Migration runner script for deployments
 - **`backend/requirements.txt`** - Python dependencies (generated from `pyproject.toml`)
-- **`backend/app/services/storage.py`** - Multi-database adapter (SQLite local, PostgreSQL prod)
+- **`backend/app/services/storage.py`** - SQLAlchemy ORM repository (SQLite + PostgreSQL with FTS)
 - **`backend/alembic/`** - Database migration files
 
 ### Frontend Production Files
@@ -118,7 +118,7 @@
 - **Auto-selected** when `DATABASE_URL` is set
 - **Migrations:** Auto-run on deployment via `Procfile` release command
 
-The storage layer (`backend/app/services/storage.py`) automatically detects which database to use.
+The storage layer (`backend/app/services/storage.py`) automatically configures the SQLAlchemy engine, enabling SQLite+FTS5 locally and PostgreSQL `tsvector` search in production based on `DATABASE_URL`.
 
 ### Database Migrations
 
