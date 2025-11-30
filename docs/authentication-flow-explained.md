@@ -158,7 +158,7 @@ def get_notes():
     user_id = g.user_id  # e.g., "user_2abc123xyz"
     
     # Query YOUR database for this user's notes only
-    notes = storage.get_notes_for_user(user_id)
+    notes = storage.list_notes(user_id=user_id)
     
     return jsonify(notes)
 ```
@@ -228,30 +228,31 @@ CREATE INDEX idx_notes_user_id ON notes(user_id);
 
 ```python
 # backend/app/services/storage.py
+from app.database import Note as NoteORM, get_session
+from app.services.models import NoteMetadata
 
 class NoteStorage:
-    def create_note(self, note_data: dict, user_id: str):
-        """Save a note for a specific user"""
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT INTO notes (
-                id, user_id, title, content, folder_path, ...
-            ) VALUES (%s, %s, %s, %s, %s, ...)
-        """, (
-            note_id, user_id, title, content, folder_path, ...
-        ))
-        self.conn.commit()
-    
-    def get_notes_for_user(self, user_id: str):
-        """Get all notes belonging to a specific user"""
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT * FROM notes 
-            WHERE user_id = %s 
-            ORDER BY created_at DESC
-        """, (user_id,))
-        
-        return cursor.fetchall()
+    def save_note(self, user_id: str, content: str, metadata: NoteMetadata):
+        """Persist a note that belongs to a single user."""
+        with get_session() as session:
+            session.add(
+                NoteORM(
+                    user_id=user_id,
+                    title=metadata.title,
+                    content=content,
+                    folder_path=metadata.folder_path,
+                )
+            )
+
+    def list_notes(self, user_id: str):
+        """Only return notes owned by the authenticated user."""
+        with get_session() as session:
+            return (
+                session.query(NoteORM)
+                .filter(NoteORM.user_id == user_id)
+                .order_by(NoteORM.created_at.desc())
+                .all()
+            )
 ```
 
 ### Step 3: Update API Routes
@@ -259,6 +260,7 @@ class NoteStorage:
 ```python
 # backend/app/routes.py
 from .auth import require_auth
+from .services.models import NoteMetadata
 from flask import g
 
 @bp.post("/transcribe")
@@ -270,12 +272,15 @@ def transcribe():
     # ... do transcription ...
     
     # Save the note with user_id
-    note_id = storage.create_note({
-        'title': title,
-        'content': transcription_text,
-        'folder_path': folder_path,
-        # ...
-    }, user_id=user_id)  # Associate with this user!
+    note_id = storage.save_note(
+        user_id=user_id,
+        content=transcription_text,
+        metadata=NoteMetadata(
+            title=title,
+            folder_path=folder_path,
+            tags=[],
+        ),
+    )  # Associate with this user!
     
     return jsonify({...})
 
@@ -286,7 +291,7 @@ def get_notes():
     user_id = g.user_id
     
     # Only return THIS user's notes
-    notes = storage.get_notes_for_user(user_id)
+    notes = storage.list_notes(user_id=user_id)
     
     return jsonify({'notes': notes})
 
@@ -297,11 +302,11 @@ def delete_note(note_id):
     user_id = g.user_id
     
     # Make sure the note belongs to this user before deleting!
-    note = storage.get_note(note_id)
-    if note['user_id'] != user_id:
+    note = storage.get_note(user_id, note_id)
+    if note.user_id != user_id:
         return jsonify({'error': 'Unauthorized'}), 403
     
-    storage.delete_note(note_id)
+    storage.delete_note(user_id, note_id)
     return jsonify({'success': True})
 ```
 
@@ -333,6 +338,7 @@ fetch('http://localhost:5001/api/transcribe', {
 @bp.post("/transcribe")
 @require_auth  # <-- This runs first!
 def transcribe():
+    from app.services.models import NoteMetadata
     # @require_auth already did:
     # - Verified JWT signature ✓
     # - Checked expiration ✓
@@ -345,13 +351,17 @@ def transcribe():
     text = transcribe_audio(audio_file)
     
     # Save to database WITH user_id
-    note = storage.create_note({
-        'title': generate_title(text),
-        'content': text,
-        'folder_path': '/personal',
-    }, user_id=user_id)  # <-- User ownership!
+    note_id = storage.save_note(
+        user_id=user_id,
+        content=text,
+        metadata=NoteMetadata(
+            title=generate_title(text),
+            folder_path='/personal',
+            tags=['meeting'],
+        ),
+    )  # <-- User ownership!
     
-    return jsonify(note)
+    return jsonify({"note_id": note_id})
 ```
 
 **4. Database row created:**
@@ -371,7 +381,7 @@ def get_notes():
     
     # SQL: SELECT * FROM notes WHERE user_id = 'user_2abc123xyz'
     # Only returns THIS user's notes!
-    notes = storage.get_notes_for_user(user_id)
+    notes = storage.list_notes(user_id=user_id)
     
     return jsonify(notes)
 ```
@@ -386,7 +396,7 @@ def get_notes():
     
     # SQL: SELECT * FROM notes WHERE user_id = 'user_999xyz'
     # Returns EMPTY or only their own notes!
-    notes = storage.get_notes_for_user(user_id)
+    notes = storage.list_notes(user_id=user_id)
     
     return jsonify(notes)  # Won't include user_2abc123xyz's notes
 ```
@@ -407,9 +417,9 @@ def get_notes():
    ```
 
 2. **Update your storage service:**
-   - Add `user_id` parameter to `create_note()`
-   - Add `get_notes_for_user(user_id)` method
-   - Filter all queries by user_id
+   - Add `user_id` parameter to `save_note(...)`
+   - Expose `list_notes(user_id)` (and other CRUD helpers) that always filter by user
+   - Filter every query by `user_id`
 
 3. **Protect all API routes:**
    ```python

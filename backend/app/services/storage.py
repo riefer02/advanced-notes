@@ -1,776 +1,542 @@
 """
-Storage service for notes with multi-database support.
+SQLAlchemy-backed storage service for notes.
 
-Supports:
-- SQLite with FTS5 for local development
-- PostgreSQL with full-text search for production
-All content stored in database, no file system dependencies.
+This module replaces the manual SQL adapter with an ORM-based repository
+that enforces user isolation while keeping feature parity across SQLite
+and PostgreSQL (including full-text search helpers).
 """
 
-import os
+from __future__ import annotations
+
 import json
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-from contextlib import contextmanager
-from urllib.parse import urlparse
+from typing import Any, Dict, Generator, List, Mapping, Optional
+from uuid import uuid4
 
-from .models import Note, NoteMetadata, FolderNode, FolderStats, SearchResult
-from ..config import config
+from sqlalchemy import Text, cast, desc, func, or_, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.dialects.postgresql import JSONB
 
+from ..database import (
+    Base,
+    Note as NoteORM,
+    create_engine_for_url,
+    get_engine,
+    get_session_factory,
+)
+from .models import (
+    FolderNode,
+    FolderStats,
+    Note as NoteDTO,
+    NoteMetadata,
+    SearchResult,
+)
 
-class DatabaseAdapter:
-    """Base class for database adapters"""
-    
-    def get_connection(self):
-        raise NotImplementedError
-    
-    def init_schema(self, conn):
-        raise NotImplementedError
-    
-    def close(self, conn):
-        raise NotImplementedError
+SQLITE_FTS_STATEMENTS = [
+    """
+    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
+        note_id UNINDEXED,
+        title,
+        content,
+        tags,
+        tokenize = 'porter ascii'
+    )
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
+        INSERT INTO notes_fts(note_id, title, content, tags)
+        VALUES (new.id, new.title, new.content, new.tags);
+    END
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
+        UPDATE notes_fts SET
+            note_id = new.id,
+            title = new.title,
+            content = new.content,
+            tags = new.tags
+        WHERE note_id = old.id;
+    END
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+        DELETE FROM notes_fts WHERE note_id = old.id;
+    END
+    """,
+]
 
-
-class SQLiteAdapter(DatabaseAdapter):
-    """SQLite database adapter with FTS5"""
-    
-    def __init__(self, db_path: Path):
-        import sqlite3
-        self.db_path = db_path
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.sqlite3 = sqlite3
-    
-    def get_connection(self):
-        conn = self.sqlite3.connect(str(self.db_path))
-        conn.row_factory = self.sqlite3.Row
-        return conn
-    
-    def init_schema(self, conn):
-        """Initialize SQLite schema with FTS5"""
-        # Enable WAL mode for better concurrency
-        conn.execute("PRAGMA journal_mode=WAL")
-        
-        # Main notes table with user isolation
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS notes (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                title TEXT NOT NULL,
-                content TEXT NOT NULL,
-                folder_path TEXT NOT NULL,
-                tags TEXT,
-                created_at TIMESTAMP NOT NULL,
-                updated_at TIMESTAMP NOT NULL,
-                word_count INTEGER DEFAULT 0,
-                confidence REAL,
-                transcription_duration REAL,
-                model_version TEXT
-            )
-        """)
-        
-        # Indexes - optimized for user-scoped queries
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_folder ON notes(user_id, folder_path)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_created ON notes(user_id, created_at DESC)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_updated ON notes(user_id, updated_at DESC)")
-        
-        # FTS5 virtual table with Porter stemmer for fuzzy matching
-        conn.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
-                note_id UNINDEXED,
-                title,
-                content,
-                tags,
-                tokenize = 'porter ascii'
-            )
-        """)
-        
-        # FTS triggers
-        conn.execute("""
-            CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
-                INSERT INTO notes_fts(note_id, title, content, tags)
-                VALUES (new.id, new.title, new.content, new.tags);
-            END
-        """)
-        
-        conn.execute("""
-            CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
-                UPDATE notes_fts SET 
-                    note_id = new.id,
-                    title = new.title, 
-                    content = new.content, 
-                    tags = new.tags
-                WHERE note_id = old.id;
-            END
-        """)
-        
-        conn.execute("""
-            CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
-                DELETE FROM notes_fts WHERE note_id = old.id;
-            END
-        """)
-        
-        conn.commit()
-    
-    def close(self, conn):
-        conn.close()
+_SQLITE_SCHEMA_CACHE: Dict[str, bool] = {}
 
 
-class PostgreSQLAdapter(DatabaseAdapter):
-    """PostgreSQL database adapter with full-text search"""
-    
-    def __init__(self, database_url: str):
-        import psycopg2
-        import psycopg2.extras
-        self.database_url = database_url
-        self.psycopg2 = psycopg2
-        self.extras = psycopg2.extras
-    
-    def get_connection(self):
-        conn = self.psycopg2.connect(self.database_url)
-        return conn
-    
-    def init_schema(self, conn):
-        """Initialize PostgreSQL schema with full-text search"""
-        cursor = conn.cursor()
-        
-        # Main notes table with user isolation
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS notes (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                title TEXT NOT NULL,
-                content TEXT NOT NULL,
-                folder_path TEXT NOT NULL,
-                tags JSONB,
-                created_at TIMESTAMP NOT NULL,
-                updated_at TIMESTAMP NOT NULL,
-                word_count INTEGER DEFAULT 0,
-                confidence REAL,
-                transcription_duration REAL,
-                model_version TEXT,
-                search_vector tsvector
-            )
-        """)
-        
-        # Indexes - optimized for user-scoped queries
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_folder ON notes(user_id, folder_path)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_created ON notes(user_id, created_at DESC)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_user_updated ON notes(user_id, updated_at DESC)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_tags ON notes USING gin(tags)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_search ON notes USING gin(search_vector)")
-        
-        # Function to update search vector
-        cursor.execute("""
-            CREATE OR REPLACE FUNCTION notes_search_update() RETURNS trigger AS $$
-            BEGIN
-                NEW.search_vector := 
-                    setweight(to_tsvector('english', coalesce(NEW.title, '')), 'A') ||
-                    setweight(to_tsvector('english', coalesce(NEW.content, '')), 'B') ||
-                    setweight(to_tsvector('english', coalesce(NEW.tags::text, '')), 'C');
-                RETURN NEW;
-            END
-            $$ LANGUAGE plpgsql;
-        """)
-        
-        # Trigger for search vector
-        cursor.execute("""
-            DROP TRIGGER IF EXISTS notes_search_vector_update ON notes;
-        """)
-        
-        cursor.execute("""
-            CREATE TRIGGER notes_search_vector_update
-            BEFORE INSERT OR UPDATE ON notes
-            FOR EACH ROW EXECUTE FUNCTION notes_search_update();
-        """)
-        
-        conn.commit()
-        cursor.close()
-    
-    def close(self, conn):
-        conn.close()
+def _serialize_tags(tags: List[str]) -> Optional[str]:
+    if not tags:
+        return None
+    return json.dumps(tags)
+
+
+def _deserialize_tags(value: Any) -> List[str]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, (bytes, bytearray)):
+        value = value.decode()
+    try:
+        return json.loads(value)
+    except (TypeError, ValueError):
+        return []
+
+
+def _coerce_datetime(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                return datetime.fromisoformat(value) if "T" in value else datetime.strptime(value, fmt)
+            except ValueError:
+                continue
+        try:
+            return datetime.fromisoformat(value.replace(" ", "T"))
+        except ValueError:
+            return None
+    return None
+
+
+def _mapping_to_note(row: Mapping[str, Any]) -> NoteDTO:
+    return NoteDTO(
+        id=row["id"],
+        user_id=row["user_id"],
+        title=row["title"],
+        content=row["content"],
+        folder_path=row["folder_path"],
+        tags=_deserialize_tags(row.get("tags")),
+        created_at=_coerce_datetime(row.get("created_at")) or datetime.utcnow(),
+        updated_at=_coerce_datetime(row.get("updated_at")) or datetime.utcnow(),
+        word_count=row.get("word_count") or 0,
+        confidence=row.get("confidence"),
+        transcription_duration=row.get("transcription_duration"),
+        model_version=row.get("model_version"),
+    )
+
+
+def _note_to_dto(note: NoteORM) -> NoteDTO:
+    return NoteDTO(
+        id=note.id,
+        user_id=note.user_id,
+        title=note.title,
+        content=note.content,
+        folder_path=note.folder_path,
+        tags=_deserialize_tags(note.tags),
+        created_at=note.created_at,
+        updated_at=note.updated_at,
+        word_count=note.word_count or 0,
+        confidence=note.confidence,
+        transcription_duration=note.transcription_duration,
+        model_version=note.model_version,
+    )
+
+
+def _build_folder_tree(rows: List[Mapping[str, Any]]) -> FolderNode:
+    root = FolderNode(name="", path="", note_count=0)
+    folder_map: Dict[str, FolderNode] = {"": root}
+
+    for row in rows:
+        path = row[0]
+        count = row[1]
+        if not path:
+            continue
+        parts = path.split("/")
+        current_path = ""
+        parent = root
+
+        for part in parts:
+            current_path = f"{current_path}/{part}".strip("/")
+            if current_path not in folder_map:
+                folder = FolderNode(name=part, path=current_path, note_count=0)
+                folder_map[current_path] = folder
+                parent.subfolders.append(folder)
+            parent = folder_map[current_path]
+        parent.note_count = count
+
+    return root
+
+
+def _ensure_sqlite_schema(engine: Engine) -> None:
+    """Create tables + FTS artifacts for SQLite if they do not exist."""
+    cache_key = str(engine.url)
+    if _SQLITE_SCHEMA_CACHE.get(cache_key):
+        return
+
+    Base.metadata.create_all(bind=engine)
+
+    with engine.begin() as conn:
+        for statement in SQLITE_FTS_STATEMENTS:
+            conn.exec_driver_sql(statement)
+
+    _SQLITE_SCHEMA_CACHE[cache_key] = True
 
 
 class NoteStorage:
     """
-    Multi-database storage for notes.
+    SQLAlchemy-based storage facade used by Flask routes and services.
     
-    Features:
-    - Auto-detects database type from DATABASE_URL or uses SQLite
-    - SQLite with FTS5 for local development
-    - PostgreSQL with full-text search for production
-    - Transaction safety
-    - Automatic schema initialization
+    The public API remains equivalent to the previous adapter-based design.
     """
-    
+
     def __init__(self, db_path: Optional[Path] = None, database_url: Optional[str] = None):
-        """
-        Initialize storage with database.
-        
-        Args:
-            db_path: Path to SQLite database (used if DATABASE_URL not set)
-            database_url: PostgreSQL connection URL (overrides db_path)
-        """
-        # Check for DATABASE_URL environment variable
-        database_url = database_url or os.getenv("DATABASE_URL")
-        
-        if database_url and database_url.startswith("postgres"):
-            # Use PostgreSQL (schema managed by Alembic migrations)
-            self.adapter = PostgreSQLAdapter(database_url)
-            self.db_type = "postgresql"
-        else:
-            # Use SQLite (local dev - initialize schema automatically)
-            if db_path is None:
-                db_path = config.DB_PATH
-            self.adapter = SQLiteAdapter(Path(db_path))
-            self.db_type = "sqlite"
-            # Initialize schema for local development
-            self._init_database()
-    
-    @contextmanager
-    def _get_connection(self):
-        """Get database connection with automatic commit/rollback"""
-        conn = self.adapter.get_connection()
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            self.adapter.close(conn)
-    
-    def _init_database(self):
-        """Initialize database schema"""
-        with self._get_connection() as conn:
-            self.adapter.init_schema(conn)
-    
-    def _execute_query(self, conn, query: str, params: tuple = ()) -> Any:
-        """Execute query with appropriate cursor for database type"""
-        if self.db_type == "postgresql":
-            cursor = conn.cursor(cursor_factory=self.adapter.extras.RealDictCursor)
-            cursor.execute(query, params)
-            return cursor
-        else:
-            return conn.execute(query, params)
-    
-    def _serialize_tags(self, tags: List[str]) -> Any:
-        """Serialize tags based on database type"""
-        if self.db_type == "postgresql":
-            return json.dumps(tags)
-        else:
-            return json.dumps(tags)
-    
-    def _deserialize_tags(self, tags: Any) -> List[str]:
-        """Deserialize tags based on database type"""
-        if not tags:
-            return []
-        if isinstance(tags, str):
-            return json.loads(tags)
-        return tags  # PostgreSQL JSONB already returns list
-    
+        self.engine, self.session_factory = self._configure_engine(db_path, database_url)
+        self.dialect = self.engine.dialect.name
+
+        if self.dialect == "sqlite":
+            _ensure_sqlite_schema(self.engine)
+
     def save_note(self, user_id: str, content: str, metadata: NoteMetadata) -> str:
-        """
-        Save a new note to the database.
-        
-        Args:
-            user_id: Clerk user ID (from authentication)
-            content: Full markdown content
-            metadata: Note metadata
-            
-        Returns:
-            Note ID (UUID)
-        """
-        note = Note(
+        note_id = str(uuid4())
+        now = datetime.utcnow()
+        db_note = NoteORM(
+            id=note_id,
             user_id=user_id,
             title=metadata.title,
             content=content,
             folder_path=metadata.folder_path,
-            tags=metadata.tags,
+            tags=_serialize_tags(metadata.tags),
+            created_at=now,
+            updated_at=now,
             word_count=len(content.split()),
             confidence=metadata.confidence,
             transcription_duration=metadata.transcription_duration,
-            model_version=metadata.model_version
+            model_version=metadata.model_version,
         )
-        
-        with self._get_connection() as conn:
-            if self.db_type == "postgresql":
-                query = """
-                    INSERT INTO notes (
-                        id, user_id, title, content, folder_path, tags,
-                        created_at, updated_at, word_count, confidence,
-                        transcription_duration, model_version
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """
-            else:
-                query = """
-                    INSERT INTO notes (
-                        id, user_id, title, content, folder_path, tags,
-                        created_at, updated_at, word_count, confidence,
-                        transcription_duration, model_version
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """
-            
-            self._execute_query(conn, query, (
-                note.id,
-                note.user_id,
-                note.title,
-                note.content,
-                note.folder_path,
-                self._serialize_tags(note.tags),
-                note.created_at.isoformat(),
-                note.updated_at.isoformat(),
-                note.word_count,
-                note.confidence,
-                note.transcription_duration,
-                note.model_version
-            ))
-        
-        return note.id
-    
-    def get_note(self, user_id: str, note_id: str) -> Optional[Note]:
-        """
-        Retrieve a note by ID (user-scoped).
-        
-        Args:
-            user_id: Clerk user ID
-            note_id: Note UUID
-            
-        Returns:
-            Note object or None if not found/not owned by user
-        """
-        with self._get_connection() as conn:
-            if self.db_type == "postgresql":
-                query = "SELECT * FROM notes WHERE id = %s AND user_id = %s"
-            else:
-                query = "SELECT * FROM notes WHERE id = ? AND user_id = ?"
-            
-            cursor = self._execute_query(conn, query, (note_id, user_id))
-            row = cursor.fetchone()
-            
-            if not row:
-                return None
-            
-            return self._row_to_note(row)
-    
+
+        with self._session_scope() as session:
+            session.add(db_note)
+
+        return note_id
+
+    def get_note(self, user_id: str, note_id: str) -> Optional[NoteDTO]:
+        with self._session_scope() as session:
+            note = (
+                session.query(NoteORM)
+                .filter(NoteORM.id == note_id, NoteORM.user_id == user_id)
+                .one_or_none()
+            )
+            return _note_to_dto(note) if note else None
+
     def update_note(
         self,
         user_id: str,
         note_id: str,
         content: Optional[str] = None,
-        metadata: Optional[NoteMetadata] = None
+        metadata: Optional[NoteMetadata] = None,
     ) -> bool:
-        """
-        Update an existing note (user-scoped).
-        
-        Args:
-            user_id: Clerk user ID
-            note_id: Note UUID
-            content: New content (optional)
-            metadata: New metadata (optional)
-            
-        Returns:
-            True if updated, False if not found/not owned by user
-        """
-        existing = self.get_note(user_id, note_id)
-        if not existing:
-            return False
-        
-        updates = {"updated_at": datetime.now().isoformat()}
-        
-        if content is not None:
-            updates["content"] = content
-            updates["word_count"] = len(content.split())
-        
-        if metadata:
-            if metadata.title:
-                updates["title"] = metadata.title
-            if metadata.folder_path:
-                updates["folder_path"] = metadata.folder_path
-            if metadata.tags:
-                updates["tags"] = self._serialize_tags(metadata.tags)
-            if metadata.confidence is not None:
-                updates["confidence"] = metadata.confidence
-        
-        set_clause = ", ".join(f"{k} = %s" if self.db_type == "postgresql" else f"{k} = ?" for k in updates.keys())
-        values = list(updates.values()) + [note_id]
-        
-        with self._get_connection() as conn:
-            if self.db_type == "postgresql":
-                query = f"UPDATE notes SET {set_clause} WHERE id = %s AND user_id = %s"
-            else:
-                query = f"UPDATE notes SET {set_clause} WHERE id = ? AND user_id = ?"
-            
-            values.append(user_id)
-            self._execute_query(conn, query, tuple(values))
-        
-        return True
-    
+        with self._session_scope() as session:
+            note = (
+                session.query(NoteORM)
+                .filter(NoteORM.id == note_id, NoteORM.user_id == user_id)
+                .one_or_none()
+            )
+
+            if not note:
+                return False
+
+            updated = False
+
+            if content is not None:
+                note.content = content
+                note.word_count = len(content.split())
+                updated = True
+
+            if metadata:
+                note.title = metadata.title or note.title
+                note.folder_path = metadata.folder_path or note.folder_path
+                note.tags = _serialize_tags(metadata.tags)
+                note.confidence = metadata.confidence if metadata.confidence is not None else note.confidence
+                note.transcription_duration = (
+                    metadata.transcription_duration
+                    if metadata.transcription_duration is not None
+                    else note.transcription_duration
+                )
+                note.model_version = metadata.model_version or note.model_version
+                updated = True
+
+            if updated:
+                note.updated_at = datetime.utcnow()
+                session.add(note)
+
+            return updated
+
     def delete_note(self, user_id: str, note_id: str) -> bool:
-        """
-        Delete a note (user-scoped).
-        
-        Args:
-            user_id: Clerk user ID
-            note_id: Note UUID
-            
-        Returns:
-            True if deleted, False if not found/not owned by user
-        """
-        with self._get_connection() as conn:
-            if self.db_type == "postgresql":
-                query = "DELETE FROM notes WHERE id = %s AND user_id = %s"
-            else:
-                query = "DELETE FROM notes WHERE id = ? AND user_id = ?"
-            
-            cursor = self._execute_query(conn, query, (note_id, user_id))
-            return cursor.rowcount > 0
-    
+        with self._session_scope() as session:
+            result = (
+                session.query(NoteORM)
+                .filter(NoteORM.id == note_id, NoteORM.user_id == user_id)
+                .delete(synchronize_session=False)
+            )
+            return result > 0
+
     def list_notes(
         self,
         user_id: str,
         folder: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-        order_by: str = "updated_at"
-    ) -> List[Note]:
-        """
-        List notes with optional filtering (user-scoped).
-        
-        Args:
-            user_id: Clerk user ID
-            folder: Filter by folder path (optional)
-            limit: Maximum number of results
-            offset: Pagination offset
-            order_by: Sort field (created_at, updated_at, title)
-            
-        Returns:
-            List of Note objects with full content
-        """
-        query = """
-            SELECT id, user_id, title, content, folder_path, tags, created_at, updated_at, 
-                   word_count, confidence, transcription_duration, model_version
-            FROM notes
-            WHERE user_id = {}
-        """.format('%s' if self.db_type == "postgresql" else '?')
-        params = [user_id]
-        
-        if folder:
-            if self.db_type == "postgresql":
-                query += " AND (folder_path = %s OR folder_path LIKE %s)"
-            else:
-                query += " AND (folder_path = ? OR folder_path LIKE ?)"
-            params.extend([folder, f"{folder}/%"])
-        
-        if self.db_type == "postgresql":
-            query += f" ORDER BY {order_by} DESC LIMIT %s OFFSET %s"
-        else:
-            query += f" ORDER BY {order_by} DESC LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
-        
-        with self._get_connection() as conn:
-            cursor = self._execute_query(conn, query, tuple(params))
-            rows = cursor.fetchall()
-            return [self._row_to_note(row) for row in rows]
-    
+        order_by: str = "updated_at",
+    ) -> List[NoteDTO]:
+        order_map = {
+            "created_at": NoteORM.created_at,
+            "updated_at": NoteORM.updated_at,
+            "title": NoteORM.title,
+        }
+        order_column = order_map.get(order_by, NoteORM.updated_at)
+
+        with self._session_scope() as session:
+            query = session.query(NoteORM).filter(NoteORM.user_id == user_id)
+
+            if folder:
+                query = query.filter(self._folder_filter_clause(folder))
+
+            notes = (
+                query.order_by(desc(order_column))
+                .offset(max(offset, 0))
+                .limit(max(limit, 1))
+                .all()
+            )
+
+            return [_note_to_dto(note) for note in notes]
+
     def search_notes(self, user_id: str, query: str, limit: int = 50) -> List[SearchResult]:
-        """
-        Full-text search across notes (user-scoped).
-        
-        Args:
-            user_id: Clerk user ID
-            query: Search query
-            limit: Maximum results
-            
-        Returns:
-            List of SearchResult objects with ranking and full note content
-        """
-        with self._get_connection() as conn:
-            if self.db_type == "postgresql":
-                # PostgreSQL full-text search
-                sql_query = """
-                    SELECT 
-                        id, user_id, title, content, folder_path, tags, created_at,
-                        updated_at, word_count, confidence, transcription_duration, model_version,
-                        ts_rank(search_vector, plainto_tsquery('english', %s)) as rank,
-                        ts_headline('english', content, plainto_tsquery('english', %s),
-                            'MaxWords=50, MinWords=25, ShortWord=3') as snippet
-                    FROM notes
-                    WHERE user_id = %s AND search_vector @@ plainto_tsquery('english', %s)
-                    ORDER BY rank DESC
-                    LIMIT %s
-                """
-                cursor = self._execute_query(conn, sql_query, (query, query, user_id, query, limit))
+        if not query or not query.strip():
+            return []
+
+        if self.dialect == "sqlite":
+            return self._search_notes_sqlite(user_id, query, limit)
+        return self._search_notes_postgres(user_id, query, limit)
+
+    def get_folder_tree(self, user_id: str) -> FolderNode:
+        with self._session_scope() as session:
+            rows = (
+                session.query(NoteORM.folder_path, func.count(NoteORM.id))
+                .filter(NoteORM.user_id == user_id)
+                .group_by(NoteORM.folder_path)
+                .order_by(NoteORM.folder_path)
+                .all()
+            )
+        return _build_folder_tree(rows)
+
+    def get_all_tags(self, user_id: str) -> List[str]:
+        with self._session_scope() as session:
+            rows = (
+                session.query(NoteORM.tags)
+                .filter(NoteORM.user_id == user_id, NoteORM.tags.isnot(None))
+                .all()
+            )
+
+        tags: set[str] = set()
+        for (value,) in rows:
+            tags.update(_deserialize_tags(value))
+
+        return sorted(tags)
+
+    def get_notes_by_tag(self, user_id: str, tag: str, limit: int = 50) -> List[NoteDTO]:
+        with self._session_scope() as session:
+            query = session.query(NoteORM).filter(NoteORM.user_id == user_id)
+
+            if self.dialect == "postgresql":
+                contains = cast(NoteORM.tags, JSONB).op("@>")(json.dumps([tag]))
+                query = query.filter(contains)
             else:
-                # SQLite FTS5 search
-                sql_query = """
-                    SELECT 
-                        n.id, n.user_id, n.title, n.content, n.folder_path, n.tags, n.created_at,
-                        n.updated_at, n.word_count, n.confidence, n.transcription_duration, n.model_version,
-                        rank,
-                        snippet(notes_fts, 2, '<mark>', '</mark>', '...', 50) as snippet
-                    FROM notes_fts
-                    JOIN notes n ON notes_fts.note_id = n.id
-                    WHERE n.user_id = ? AND notes_fts MATCH ?
-                    ORDER BY rank
-                    LIMIT ?
-                """
-                cursor = self._execute_query(conn, sql_query, (user_id, query, limit))
-            
-            rows = cursor.fetchall()
-            results = []
-            for row in rows:
-                note = self._row_to_note(row)
-                rank_value = abs(row['rank']) if self.db_type == "sqlite" else row['rank']
-                results.append(SearchResult(
+                query = query.filter(NoteORM.tags.like(f'%"{tag}"%'))
+
+            notes = query.order_by(NoteORM.updated_at.desc()).limit(limit).all()
+            return [_note_to_dto(note) for note in notes]
+
+    def get_note_count(self, user_id: str, folder: Optional[str] = None) -> int:
+        with self._session_scope() as session:
+            query = session.query(func.count(NoteORM.id)).filter(NoteORM.user_id == user_id)
+            if folder:
+                query = query.filter(self._folder_filter_clause(folder))
+            return int(query.scalar() or 0)
+
+    def get_folder_stats(self, user_id: str, folder: str) -> Optional[FolderStats]:
+        with self._session_scope() as session:
+            base_query = session.query(
+                func.count(NoteORM.id),
+                func.sum(NoteORM.transcription_duration),
+                func.avg(NoteORM.confidence),
+            ).filter(NoteORM.user_id == user_id, self._folder_filter_clause(folder))
+
+            count, total_duration, avg_confidence = base_query.one()
+
+            if count == 0:
+                return None
+
+            tag_rows = (
+                session.query(NoteORM.tags)
+                .filter(
+                    NoteORM.user_id == user_id,
+                    NoteORM.tags.isnot(None),
+                    self._folder_filter_clause(folder),
+                )
+                .all()
+            )
+
+        tag_counts: Dict[str, int] = {}
+        for (value,) in tag_rows:
+            for tag in _deserialize_tags(value):
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        most_common = sorted(tag_counts.items(), key=lambda item: item[1], reverse=True)[:5]
+        top_tags = [tag for tag, _ in most_common]
+
+        return FolderStats(
+            path=folder,
+            note_count=count,
+            total_duration=float(total_duration or 0.0),
+            avg_confidence=avg_confidence,
+            most_common_tags=top_tags,
+        )
+
+    def _search_notes_sqlite(self, user_id: str, query: str, limit: int) -> List[SearchResult]:
+        sql = text(
+            """
+            SELECT 
+                n.id,
+                n.user_id,
+                n.title,
+                n.content,
+                n.folder_path,
+                n.tags,
+                n.created_at,
+                n.updated_at,
+                n.word_count,
+                n.confidence,
+                n.transcription_duration,
+                n.model_version,
+                notes_fts.rank AS rank,
+                snippet(notes_fts, 2, '<mark>', '</mark>', '...', 50) AS snippet
+            FROM notes_fts
+            JOIN notes n ON notes_fts.note_id = n.id
+            WHERE n.user_id = :user_id AND notes_fts MATCH :match_query
+            ORDER BY rank
+            LIMIT :limit
+            """
+        )
+
+        with self._session_scope() as session:
+            rows = (
+                session.execute(
+                    sql,
+                    {
+                        "user_id": user_id,
+                        "match_query": query,
+                        "limit": max(limit, 1),
+                    },
+                )
+                .mappings()
+                .all()
+            )
+
+        results: List[SearchResult] = []
+        for row in rows:
+            note = _mapping_to_note(row)
+            rank_value = abs(row.get("rank", 0.0)) if row.get("rank") is not None else 0.0
+            results.append(
+                SearchResult(
                     note=note,
                     rank=rank_value,
-                    snippet=row['snippet']
-                ))
-            
-            return results
-    
-    def get_folder_tree(self, user_id: str) -> FolderNode:
-        """
-        Get folder hierarchy with note counts (user-scoped).
-        
-        Args:
-            user_id: Clerk user ID
-            
-        Returns:
-            Root FolderNode with nested subfolders
-        """
-        with self._get_connection() as conn:
-            if self.db_type == "postgresql":
-                query = """
-                    SELECT folder_path, COUNT(*) as count
-                    FROM notes
-                    WHERE user_id = %s
-                    GROUP BY folder_path
-                    ORDER BY folder_path
-                """
-            else:
-                query = """
-                    SELECT folder_path, COUNT(*) as count
-                    FROM notes
-                    WHERE user_id = ?
-                    GROUP BY folder_path
-                    ORDER BY folder_path
-                """
-            cursor = self._execute_query(conn, query, (user_id,))
-            rows = cursor.fetchall()
-            
-            root = FolderNode(name="", path="", note_count=0)
-            folder_map = {"": root}
-            
-            for row in rows:
-                path = row['folder_path']
-                count = row['count']
-                
-                parts = path.split('/')
-                current_path = ""
-                parent = root
-                
-                for part in parts:
-                    current_path = f"{current_path}/{part}".strip('/')
-                    
-                    if current_path not in folder_map:
-                        folder = FolderNode(
-                            name=part,
-                            path=current_path,
-                            note_count=0
-                        )
-                        folder_map[current_path] = folder
-                        parent.subfolders.append(folder)
-                    
-                    parent = folder_map[current_path]
-                
-                parent.note_count = count
-            
-            return root
-    
-    def get_all_tags(self, user_id: str) -> List[str]:
-        """
-        Get all unique tags across user's notes.
-        
-        Args:
-            user_id: Clerk user ID
-            
-        Returns:
-            Sorted list of tag names
-        """
-        with self._get_connection() as conn:
-            if self.db_type == "postgresql":
-                query = "SELECT tags FROM notes WHERE user_id = %s AND tags IS NOT NULL"
-            else:
-                query = "SELECT tags FROM notes WHERE user_id = ? AND tags IS NOT NULL"
-            cursor = self._execute_query(conn, query, (user_id,))
-            rows = cursor.fetchall()
-            
-            tags = set()
-            for row in rows:
-                if row['tags']:
-                    tags.update(self._deserialize_tags(row['tags']))
-            
-            return sorted(tags)
-    
-    def get_notes_by_tag(self, user_id: str, tag: str, limit: int = 50) -> List[Note]:
-        """
-        Get notes that have a specific tag (user-scoped).
-        
-        Args:
-            user_id: Clerk user ID
-            tag: Tag name
-            limit: Maximum results
-            
-        Returns:
-            List of Note objects with full content
-        """
-        with self._get_connection() as conn:
-            if self.db_type == "postgresql":
-                query = """
-                    SELECT id, user_id, title, content, folder_path, tags, created_at, updated_at,
-                           word_count, confidence, transcription_duration, model_version
-                    FROM notes
-                    WHERE user_id = %s AND tags @> %s::jsonb
-                    ORDER BY updated_at DESC
-                    LIMIT %s
-                """
-                params = (user_id, json.dumps([tag]), limit)
-            else:
-                query = """
-                    SELECT id, user_id, title, content, folder_path, tags, created_at, updated_at,
-                           word_count, confidence, transcription_duration, model_version
-                    FROM notes
-                    WHERE user_id = ? AND tags LIKE ?
-                    ORDER BY updated_at DESC
-                    LIMIT ?
-                """
-                params = (user_id, f'%"{tag}"%', limit)
-            
-            cursor = self._execute_query(conn, query, params)
-            rows = cursor.fetchall()
-            return [self._row_to_note(row) for row in rows]
-    
-    def get_note_count(self, user_id: str, folder: Optional[str] = None) -> int:
-        """
-        Get total note count (user-scoped), optionally filtered by folder.
-        
-        Args:
-            user_id: Clerk user ID
-            folder: Folder path (optional)
-            
-        Returns:
-            Number of notes
-        """
-        with self._get_connection() as conn:
-            if folder:
-                if self.db_type == "postgresql":
-                    query = """
-                        SELECT COUNT(*) as count FROM notes
-                        WHERE user_id = %s AND (folder_path = %s OR folder_path LIKE %s)
-                    """
-                else:
-                    query = """
-                        SELECT COUNT(*) as count FROM notes
-                        WHERE user_id = ? AND (folder_path = ? OR folder_path LIKE ?)
-                    """
-                params = (user_id, folder, f"{folder}/%")
-            else:
-                if self.db_type == "postgresql":
-                    query = "SELECT COUNT(*) as count FROM notes WHERE user_id = %s"
-                else:
-                    query = "SELECT COUNT(*) as count FROM notes WHERE user_id = ?"
-                params = (user_id,)
-            
-            cursor = self._execute_query(conn, query, params)
-            result = cursor.fetchone()
-            return result['count']
-    
-    def get_folder_stats(self, user_id: str, folder: str) -> Optional[FolderStats]:
-        """
-        Get statistics for a folder (user-scoped).
-        
-        Args:
-            user_id: Clerk user ID
-            folder: Folder path
-            
-        Returns:
-            FolderStats object or None
-        """
-        with self._get_connection() as conn:
-            if self.db_type == "postgresql":
-                query = """
-                    SELECT 
-                        COUNT(*) as count,
-                        SUM(transcription_duration) as total_duration,
-                        AVG(confidence) as avg_confidence
-                    FROM notes
-                    WHERE user_id = %s AND (folder_path = %s OR folder_path LIKE %s)
-                """
-            else:
-                query = """
-                    SELECT 
-                        COUNT(*) as count,
-                        SUM(transcription_duration) as total_duration,
-                        AVG(confidence) as avg_confidence
-                    FROM notes
-                    WHERE user_id = ? AND (folder_path = ? OR folder_path LIKE ?)
-                """
-            
-            cursor = self._execute_query(conn, query, (user_id, folder, f"{folder}/%"))
-            row = cursor.fetchone()
-            
-            if row['count'] == 0:
-                return None
-            
-            # Get most common tags
-            if self.db_type == "postgresql":
-                tag_query = """
-                    SELECT tags FROM notes
-                    WHERE user_id = %s AND (folder_path = %s OR folder_path LIKE %s) AND tags IS NOT NULL
-                """
-            else:
-                tag_query = """
-                    SELECT tags FROM notes
-                    WHERE user_id = ? AND (folder_path = ? OR folder_path LIKE ?) AND tags IS NOT NULL
-                """
-            
-            cursor = self._execute_query(conn, tag_query, (user_id, folder, f"{folder}/%"))
-            tag_rows = cursor.fetchall()
-            
-            tag_counts = {}
-            for tag_row in tag_rows:
-                if tag_row['tags']:
-                    for tag in self._deserialize_tags(tag_row['tags']):
-                        tag_counts[tag] = tag_counts.get(tag, 0) + 1
-            
-            most_common = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-            tags = [tag for tag, _ in most_common]
-            
-            return FolderStats(
-                path=folder,
-                note_count=row['count'],
-                total_duration=row['total_duration'] or 0.0,
-                avg_confidence=row['avg_confidence'],
-                most_common_tags=tags
+                    snippet=row.get("snippet") or "",
+                )
             )
-    
-    def _row_to_note(self, row: Dict) -> Note:
-        """Convert database row to Note object"""
-        return Note(
-            id=row['id'],
-            user_id=row['user_id'],
-            title=row['title'],
-            content=row['content'],
-            folder_path=row['folder_path'],
-            tags=self._deserialize_tags(row['tags']),
-            created_at=datetime.fromisoformat(row['created_at']) if isinstance(row['created_at'], str) else row['created_at'],
-            updated_at=datetime.fromisoformat(row['updated_at']) if isinstance(row['updated_at'], str) else row['updated_at'],
-            word_count=row['word_count'],
-            confidence=row['confidence'],
-            transcription_duration=row['transcription_duration'],
-            model_version=row['model_version']
+        return results
+
+    def _search_notes_postgres(self, user_id: str, query: str, limit: int) -> List[SearchResult]:
+        ts_query = func.plainto_tsquery("english", query)
+
+        title_vector = func.setweight(func.to_tsvector("english", func.coalesce(NoteORM.title, "")), "A")
+        content_vector = func.setweight(func.to_tsvector("english", func.coalesce(NoteORM.content, "")), "B")
+        tags_vector = func.setweight(
+            func.to_tsvector("english", func.coalesce(cast(NoteORM.tags, Text), "")),
+            "C",
         )
+        search_vector = title_vector.op("||")(content_vector).op("||")(tags_vector)
+        rank_expr = func.ts_rank_cd(search_vector, ts_query)
+        snippet_expr = func.ts_headline(
+            "english",
+            NoteORM.content,
+            ts_query,
+            "MaxWords=50, MinWords=25, ShortWord=3",
+        )
+
+        with self._session_scope() as session:
+            rows = (
+                session.query(NoteORM, rank_expr.label("rank"), snippet_expr.label("snippet"))
+                .filter(NoteORM.user_id == user_id)
+                .filter(search_vector.op("@@")(ts_query))
+                .order_by(desc("rank"))
+                .limit(max(limit, 1))
+                .all()
+            )
+
+        results: List[SearchResult] = []
+        for note, rank_value, snippet in rows:
+            results.append(
+                SearchResult(
+                    note=_note_to_dto(note),
+                    rank=float(rank_value or 0.0),
+                    snippet=snippet or "",
+                )
+            )
+        return results
+
+    def _folder_filter_clause(self, folder: str):
+        like_pattern = f"{folder}/%"
+        return or_(NoteORM.folder_path == folder, NoteORM.folder_path.like(like_pattern))
+
+    def _configure_engine(
+        self,
+        db_path: Optional[Path],
+        database_url: Optional[str],
+    ) -> tuple[Engine, sessionmaker]:
+        if database_url:
+            engine = create_engine_for_url(database_url)
+            factory = sessionmaker(
+                bind=engine,
+                autocommit=False,
+                autoflush=False,
+                expire_on_commit=False,
+                future=True,
+            )
+            return engine, factory
+
+        if db_path:
+            resolved = Path(db_path).resolve()
+            engine = create_engine_for_url(f"sqlite:///{resolved}")
+            factory = sessionmaker(
+                bind=engine,
+                autocommit=False,
+                autoflush=False,
+                expire_on_commit=False,
+                future=True,
+            )
+            return engine, factory
+
+        return get_engine(), get_session_factory()
+
+    @contextmanager
+    def _session_scope(self) -> Generator[Session, None, None]:
+        session = self.session_factory()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
