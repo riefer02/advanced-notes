@@ -1,16 +1,23 @@
 import { useState, useEffect, useRef } from 'react'
 import FolderTree from './FolderTree'
-import NotesList from './NotesList'
+import NotesList, { NoteItemData } from './NotesList'
 import SearchBar from './SearchBar'
 import TagCloud from './TagCloud'
-import { useNotes, useSearchNotes, useNotesByTag } from '../hooks/useNotes'
+import SlideOver from './ui/SlideOver'
+import NoteDetail from './NoteDetail'
+import { useNotes, useSearchNotes, useNotesByTag, useDeleteNote } from '../hooks/useNotes'
 
 export default function NotesPanel() {
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null)
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [showFolders, setShowFolders] = useState(false)
+  
+  // Selection State
+  const [selectedNote, setSelectedNote] = useState<NoteItemData | null>(null)
+  
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const deleteNoteMutation = useDeleteNote()
 
   // Get counts for different views
   const { data: allNotes } = useNotes()
@@ -22,7 +29,7 @@ export default function NotesPanel() {
     : selectedTag 
     ? tagNotes?.length || 0
     : selectedFolder
-    ? 0 // Will be calculated by NotesList
+    ? 0 // Will be calculated by NotesList (we don't have this easily here without filtering)
     : allNotes?.notes?.length || 0
 
   // Keyboard shortcuts
@@ -39,9 +46,24 @@ export default function NotesPanel() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  const handleDeleteNote = async () => {
+    if (!selectedNote) return
+    
+    if (!confirm('Are you sure you want to delete this note?')) {
+      return
+    }
+
+    try {
+      await deleteNoteMutation.mutateAsync(selectedNote.id)
+      setSelectedNote(null) // Close slide-over
+    } catch (err) {
+      alert('Failed to delete note')
+    }
+  }
+
   return (
-    <div className="h-full bg-white">
-      <div className="p-6 space-y-6">
+    <div className="h-full bg-white flex flex-col">
+      <div className="p-6 space-y-6 flex-1 overflow-y-auto">
         {/* Header */}
         <div className="border-b pb-4">
           <div className="flex items-baseline justify-between">
@@ -140,12 +162,16 @@ export default function NotesPanel() {
                 setSelectedTag(tag)
                 setSearchQuery('')
               }}
+              onNoteSelect={setSelectedNote}
+              selectedNoteId={selectedNote?.id}
             />
           ) : selectedTag ? (
             /* Show notes filtered by tag */
             <NotesList 
               tag={selectedTag} 
               onTagClick={(tag) => setSelectedTag(tag)}
+              onNoteSelect={setSelectedNote}
+              selectedNoteId={selectedNote?.id}
             />
           ) : (
             /* Show folder tree (de-emphasized) and selected folder notes */
@@ -185,16 +211,40 @@ export default function NotesPanel() {
                           setSelectedTag(tag)
                           setSelectedFolder(null)
                         }}
+                        onNoteSelect={setSelectedNote}
+                        selectedNoteId={selectedNote?.id}
                       />
                     </div>
                   )}
                 </>
               )}
+              
+              {!showFolders && !selectedFolder && (
+                 <NotesList 
+                   onTagClick={(tag) => setSelectedTag(tag)}
+                   onNoteSelect={setSelectedNote}
+                   selectedNoteId={selectedNote?.id}
+                 />
+              )}
             </>
           )}
         </div>
       </div>
+
+      {/* Note Detail Slide-Over */}
+      <SlideOver
+        isOpen={!!selectedNote}
+        onClose={() => setSelectedNote(null)}
+        title={selectedNote?.title || 'Note Details'}
+        width="max-w-xl"
+      >
+        {selectedNote && (
+          <NoteDetail 
+            note={selectedNote} 
+            onDelete={handleDeleteNote}
+          />
+        )}
+      </SlideOver>
     </div>
   )
 }
-

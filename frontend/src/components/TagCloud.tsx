@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTags } from '../hooks/useNotes'
 
 interface TagCloudProps {
@@ -7,90 +8,45 @@ interface TagCloudProps {
 
 export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
   const { data: tags, isLoading: loading, error } = useTags()
+  const [isExpanded, setIsExpanded] = useState(false)
 
   if (loading) {
     return (
-      <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-100">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-xl">🏷️</span>
-          <h3 className="text-lg font-semibold text-gray-900">Tags</h3>
-        </div>
-        <div className="flex flex-wrap gap-2 animate-pulse">
-          {[...Array(6)].map((_, i) => (
-            <div 
-              key={i} 
-              className="h-8 bg-white/60 rounded-full"
-              style={{ width: `${60 + Math.random() * 40}px` }}
-            ></div>
-          ))}
-        </div>
-        <div className="text-xs text-gray-500 mt-4">Loading tags...</div>
-      </div>
+      <div className="h-12 bg-gray-50 rounded-lg animate-pulse"></div>
     )
   }
 
-  if (error) {
-    return (
-      <div className="bg-red-50 rounded-lg p-6 border border-red-100">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-xl">🏷️</span>
-          <h3 className="text-lg font-semibold text-gray-900">Tags</h3>
-        </div>
-        <div className="text-sm text-red-600">
-          {error instanceof Error ? error.message : 'Failed to load tags'}
-        </div>
-      </div>
-    )
-  }
-
-  if (!tags || tags.length === 0) {
-    return (
-      <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-100">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-xl">🏷️</span>
-          <h3 className="text-lg font-semibold text-gray-900">Tags</h3>
-        </div>
-        <p className="text-sm text-gray-600">
-          No tags yet. Record your first note to get started!
-        </p>
-      </div>
-    )
+  if (error || !tags || tags.length === 0) {
+    return null
   }
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-100">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">🏷️</span>
-          <h3 className="text-lg font-semibold text-gray-900">Tags</h3>
-          <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded-full">
-            {tags?.length || 0}
-          </span>
+    <div className="relative group">
+      <div 
+        className={`flex items-center gap-2 ${
+          isExpanded 
+            ? 'flex-wrap p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg border border-blue-100' 
+            : 'overflow-x-auto pb-2 scrollbar-hide'
+        }`}
+      >
+        <div className="flex items-center gap-2 mr-2 flex-shrink-0">
+          <span className="text-lg">🏷️</span>
+          {isExpanded && <span className="font-semibold text-gray-900">Tags</span>}
         </div>
-        {selectedTag && (
-          <button
-            onClick={() => onSelectTag(null)}
-            className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-          >
-            Clear filter
-          </button>
-        )}
-      </div>
-      
-      <div className="flex flex-wrap gap-2">
-        {tags?.map((tag) => {
+
+        {tags.map((tag) => {
           const isSelected = tag === selectedTag
           return (
             <button
               key={tag}
               onClick={() => onSelectTag(isSelected ? null : tag)}
               className={`
-                px-3 py-1.5 rounded-full text-sm font-medium
-                transition-all duration-150 ease-in-out
+                flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium
+                transition-all duration-150 ease-in-out whitespace-nowrap
                 ${
                   isSelected
-                    ? 'bg-blue-600 text-white shadow-md scale-105'
-                    : 'bg-white text-gray-700 hover:bg-blue-100 hover:text-blue-700 border border-gray-200'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-700 border border-gray-200'
                 }
               `}
             >
@@ -98,12 +54,31 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
             </button>
           )
         })}
+
+        {/* Toggle Expand Button */}
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className={`
+            flex-shrink-0 p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors
+            ${!isExpanded && 'sticky right-0 bg-gradient-to-l from-white pl-4'}
+          `}
+          title={isExpanded ? "Show less" : "Show all tags"}
+        >
+          <svg 
+            className={`h-5 w-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+            fill="none" 
+            viewBox="0 0 24 24" 
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
       </div>
       
-      <p className="text-xs text-gray-500 mt-4">
-        💡 Click a tag to filter notes
-      </p>
+      {/* Scroll indicator hint for collapsed view */}
+      {!isExpanded && (
+        <div className="absolute right-8 top-0 bottom-2 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none" />
+      )}
     </div>
   )
 }
-
