@@ -41,7 +41,7 @@
 ### 1. Backend Service
 
 - **Root Directory:** `/backend`
-- **Start Command:** `gunicorn -w 4 -b 0.0.0.0:$PORT wsgi:app` (via `Procfile`)
+- **Start Command:** `python migrate.py && gunicorn -w 4 -b 0.0.0.0:$PORT wsgi:app` (via `Procfile`)
 - **Build:** Nixpacks auto-detects Python + `requirements.txt`
 - **Language:** Python 3.13+
 
@@ -136,7 +136,7 @@ uv run alembic upgrade head
 uv run alembic history
 ```
 
-**Production:** Migrations run automatically on Railway deployment via the `release` command in `Procfile`.
+**Production:** Migrations run automatically on Railway deployment via the chained startup command in `Procfile`. We moved away from the `release` command to ensure reliability.
 
 ---
 

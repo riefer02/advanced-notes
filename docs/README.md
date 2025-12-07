@@ -12,6 +12,7 @@ Complete documentation for the Chisos advanced notes project.
 
 ### Deployment
 - **[Railway Deployment Guide](./railway-deployment.md)** - Production deployment on Railway (architecture, environment variables, monitoring)
+- **[Deployment Lessons](./deployment-lessons.md)** - Critical learnings from production deployments (migrations, environment variables)
 
 ### Technical Specifications
 - **[Semantic Organization Spec](./semantic-organization-spec.md)** - AI-powered note categorization architecture
