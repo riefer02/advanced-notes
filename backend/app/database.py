@@ -96,11 +96,19 @@ def get_database_url() -> str:
     if database_url:
         # PostgreSQL
         return database_url
-    else:
-        # SQLite (development)
-        from pathlib import Path
-        db_path = Path(__file__).parent.parent / ".notes.db"
-        return f"sqlite:///{db_path}"
+    
+    # Debug/Safety check
+    flask_env = os.getenv("FLASK_ENV", "development")
+    if flask_env == "production":
+        # In production, we must have DATABASE_URL. Do not fallback to SQLite.
+        # Check if we have RAILWAY_TCP_PROXY_DOMAIN as an alternative indicator
+        raise ValueError("DATABASE_URL environment variable is not set in production environment!")
+
+    # SQLite (development)
+    from pathlib import Path
+    db_path = Path(__file__).parent.parent / ".notes.db"
+    print(f"WARNING: using SQLite database at {db_path}")
+    return f"sqlite:///{db_path}"
 
 
 def get_engine():
