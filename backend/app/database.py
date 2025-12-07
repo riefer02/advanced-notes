@@ -67,6 +67,23 @@ class Note(Base):
     )
 
 
+class Digest(Base):
+    """
+    Digest table for storing generated summaries of notes.
+    """
+    __tablename__ = "digests"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index('idx_digests_user_id', 'user_id'),
+        Index('idx_digests_user_created', 'user_id', 'created_at'),
+    )
+
+
 def get_database_url() -> str:
     """
     Get database URL from environment, defaulting to SQLite.

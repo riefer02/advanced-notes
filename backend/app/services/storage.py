@@ -22,12 +22,14 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 from ..database import (
     Base,
+    Digest as DigestORM,
     Note as NoteORM,
     create_engine_for_url,
     get_engine,
     get_session_factory,
 )
 from .models import (
+    Digest as DigestDTO,
     FolderNode,
     FolderStats,
     Note as NoteDTO,
@@ -279,6 +281,52 @@ class NoteStorage:
                 .delete(synchronize_session=False)
             )
             return result > 0
+
+    def get_recent_notes(self, user_id: str, limit: int = 10) -> List[NoteDTO]:
+        """
+        Fetch the most recently updated notes for a user.
+        
+        Args:
+            user_id: The ID of the user.
+            limit: Maximum number of notes to return.
+            
+        Returns:
+            List of NoteDTO objects.
+        """
+        with self._session_scope() as session:
+            notes = (
+                session.query(NoteORM)
+                .filter(NoteORM.user_id == user_id)
+                .order_by(desc(NoteORM.updated_at))
+                .limit(limit)
+                .all()
+            )
+            return [_note_to_dto(note) for note in notes]
+
+    def save_digest(self, user_id: str, content: str) -> str:
+        """
+        Save a new digest to the database.
+        
+        Args:
+            user_id: The ID of the user.
+            content: The digest content.
+            
+        Returns:
+            The ID of the newly created digest.
+        """
+        digest_id = str(uuid4())
+        now = datetime.utcnow()
+        db_digest = DigestORM(
+            id=digest_id,
+            user_id=user_id,
+            content=content,
+            created_at=now,
+        )
+
+        with self._session_scope() as session:
+            session.add(db_digest)
+
+        return digest_id
 
     def list_notes(
         self,
