@@ -41,6 +41,19 @@ class Note(BaseModel):
         }
 
 
+class Digest(BaseModel):
+    """Digest of recent notes"""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    user_id: str = Field(..., description="Clerk user ID")
+    content: str
+    created_at: datetime = Field(default_factory=datetime.now)
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
 class FolderNode(BaseModel):
     """Folder in the hierarchy tree"""
     name: str
@@ -67,4 +80,3 @@ class SearchResult(BaseModel):
 
 # Update forward references for recursive models
 FolderNode.model_rebuild()
-

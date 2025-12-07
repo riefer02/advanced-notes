@@ -3,8 +3,9 @@ import { useAuth, UserButton } from '@clerk/clerk-react'
 import { useState, useEffect, useRef } from 'react'
 import AudioUploader from '../components/AudioUploader'
 import NotesPanel from '../components/NotesPanel'
-import { setAuthTokenGetter } from '../lib/api'
+import { setAuthTokenGetter, generateSummary, DigestResult } from '../lib/api'
 import SlideOver from '../components/ui/SlideOver'
+import ReactMarkdown from 'react-markdown'
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardPage,
@@ -23,6 +24,8 @@ function DashboardPage() {
   // Summary Feature State
   const [showSummary, setShowSummary] = useState(false)
   const [isSummarizing, setIsSummarizing] = useState(false)
+  const [digestResult, setDigestResult] = useState<DigestResult | null>(null)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -38,13 +41,21 @@ function DashboardPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const handleSummarize = () => {
+  const handleSummarize = async () => {
     setShowSummary(true)
     setIsSummarizing(true)
-    // Mock API call
-    setTimeout(() => {
+    setDigestResult(null)
+    setSummaryError(null)
+    
+    try {
+      const result = await generateSummary()
+      setDigestResult(result)
+    } catch (error) {
+      console.error('Failed to generate summary:', error)
+      setSummaryError(error instanceof Error ? error.message : 'Failed to generate summary')
+    } finally {
       setIsSummarizing(false)
-    }, 2000)
+    }
   }
 
   // Show loading state while Clerk is loading
@@ -175,61 +186,67 @@ function DashboardPage() {
                 Analyzing your recent notes...
               </p>
             </div>
-          ) : (
-            <div className="prose prose-purple">
-              <div className="bg-purple-50 rounded-xl p-6 border border-purple-100">
-                <h3 className="text-lg font-semibold text-purple-900 mb-4">Weekly Synthesis</h3>
-                <p className="text-gray-800 leading-relaxed mb-4">
-                  Based on your recent notes, you've been focused on <strong>Product Development</strong> and <strong>User Experience</strong>.
-                </p>
-                <ul className="space-y-2 text-gray-700">
-                  <li className="flex items-start gap-2">
-                    <span className="mt-1.5 w-1.5 h-1.5 bg-purple-500 rounded-full flex-shrink-0"></span>
-                    <span>Explored new dashboard layouts with a focus on "Workbench" functionality.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="mt-1.5 w-1.5 h-1.5 bg-purple-500 rounded-full flex-shrink-0"></span>
-                    <span>Identified need for a persistent "Slide-Over" panel for better note reviewing.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="mt-1.5 w-1.5 h-1.5 bg-purple-500 rounded-full flex-shrink-0"></span>
-                    <span>Planned integration of AI summarization agents.</span>
-                  </li>
-                </ul>
-                <div className="mt-6 pt-4 border-t border-purple-200 flex items-center justify-between text-sm">
-                  <span className="text-purple-700 font-medium">Action Items Identified: 2</span>
-                  <button className="text-purple-600 hover:text-purple-800 underline">
-                    Export Report
-                  </button>
-                </div>
+          ) : summaryError ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </div>
-              
-              <div className="mt-6">
-                <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                  Source Notes
-                </h4>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-purple-300 transition-colors cursor-pointer">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs">
-                      UX
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">Workbench Design</div>
-                      <div className="text-xs text-gray-500">Just now</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-purple-300 transition-colors cursor-pointer">
-                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold text-xs">
-                      AI
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">Agent Capabilities</div>
-                      <div className="text-xs text-gray-500">2 hours ago</div>
-                    </div>
-                  </div>
+              <div>
+                <h3 className="text-sm font-medium text-red-800">Summarization Failed</h3>
+                <p className="text-sm text-red-600 mt-1">{summaryError}</p>
+              </div>
+              <button
+                onClick={handleSummarize}
+                className="px-4 py-2 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-medium transition-colors border border-red-200"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : digestResult ? (
+            <div className="prose prose-purple max-w-none">
+              <div className="bg-purple-50 rounded-xl p-6 border border-purple-100 mb-6">
+                <h3 className="text-lg font-semibold text-purple-900 mb-4 mt-0">Smart Digest</h3>
+                <div className="text-gray-800 leading-relaxed mb-4 text-sm">
+                  <ReactMarkdown>{digestResult.summary}</ReactMarkdown>
                 </div>
+                
+                {digestResult.key_themes.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="text-sm font-semibold text-purple-800 uppercase tracking-wider mb-2">Key Themes</h4>
+                    <ul className="space-y-1 text-gray-700 list-none pl-0 my-0">
+                      {digestResult.key_themes.map((theme, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="mt-1.5 w-1.5 h-1.5 bg-purple-500 rounded-full flex-shrink-0"></span>
+                          <span>{theme}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {digestResult.action_items.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-purple-200">
+                    <h4 className="text-sm font-semibold text-purple-800 uppercase tracking-wider mb-2">Action Items</h4>
+                    <ul className="space-y-2 text-gray-700 list-none pl-0 my-0">
+                      {digestResult.action_items.map((item, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <input type="checkbox" className="mt-1 rounded border-purple-300 text-purple-600 focus:ring-purple-500" />
+                          <span className="text-sm">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
+          ) : (
+             <div className="flex flex-col items-center justify-center py-12 text-center">
+                <p className="text-gray-500">
+                  Click "Summarize Recent" to generate a digest of your latest notes.
+                </p>
+             </div>
           )}
         </div>
       </SlideOver>

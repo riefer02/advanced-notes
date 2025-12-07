@@ -18,9 +18,9 @@ def create_app():
     
     # In development, allow all origins for easier testing
     if os.getenv("FLASK_ENV") == "development":
-        CORS(app)
+        CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
     else:
-        CORS(app, origins=allowed_origins)
+        CORS(app, origins=allowed_origins, supports_credentials=True)
     
     from .routes import bp as api_bp
     

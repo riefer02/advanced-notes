@@ -269,3 +269,33 @@ export async function fetchNotesByTag(tag: string, limit = 50): Promise<Note[]> 
   return data.notes
 }
 
+/**
+ * Generate a smart summary digest
+ */
+export interface DigestResult {
+  summary: string
+  key_themes: string[]
+  action_items: string[]
+  digest_id: string
+}
+
+export async function generateSummary(): Promise<DigestResult> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/summarize`, {
+    method: 'POST',
+    headers,
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    try {
+      const errorJson = JSON.parse(errorText)
+      throw new Error(errorJson.error || 'Summarization failed')
+    } catch {
+      throw new Error('Summarization failed')
+    }
+  }
+
+  return response.json()
+}
+

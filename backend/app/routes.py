@@ -16,6 +16,7 @@ from flask import Blueprint, request, jsonify, g
 from .asr import transcribe_bytes
 from .auth import require_auth
 from .services.ai_categorizer import AICategorizationService
+from .services.summarizer import AISummarizerService
 from .services.storage import NoteStorage
 from .services.models import NoteMetadata, FolderNode
 
@@ -23,12 +24,63 @@ bp = Blueprint("api", __name__)
 
 # Initialize services
 categorizer = AICategorizationService()
+summarizer = AISummarizerService()
 storage = NoteStorage()
 
 
 # ============================================================================
 # TRANSCRIPTION ENDPOINTS
 # ============================================================================
+
+
+@bp.post("/summarize")
+@require_auth
+def summarize_notes():
+    """
+    Generate a smart summary digest from recent notes.
+    
+    Returns:
+        JSON: {
+            "summary": str,
+            "key_themes": List[str],
+            "action_items": List[str],
+            "digest_id": str
+        }
+    """
+    user_id = g.user_id
+    
+    try:
+        # 1. Fetch recent notes
+        recent_notes = storage.get_recent_notes(user_id, limit=10)
+        
+        if not recent_notes:
+            return jsonify({
+                "summary": "No recent notes found to summarize. Record some thoughts first!",
+                "key_themes": [],
+                "action_items": [],
+                "digest_id": None
+            })
+            
+        # 2. Extract content
+        notes_content = [f"Title: {n.title}\nContent: {n.content}" for n in recent_notes]
+        
+        # 3. Generate summary
+        digest_result = summarizer.summarize(notes_content)
+        
+        # 4. Save to database
+        # We store the full structured result (summary + themes + actions) as a JSON string
+        # so we can retrieve the rich format later.
+        import json
+        digest_json = digest_result.model_dump_json()
+        digest_id = storage.save_digest(user_id, digest_json)
+        
+        return jsonify({
+            **digest_result.model_dump(),
+            "digest_id": digest_id
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @bp.post("/transcribe")
