@@ -34,8 +34,8 @@ export default function SlideOver({ isOpen, onClose, title, children, width = 'm
 
   return (
     <div
-      className={`fixed inset-0 z-50 overflow-hidden transition-opacity duration-300 ease-in-out ${
-        isOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+      className={`fixed inset-0 z-50 overflow-hidden transition-all duration-500 ease-in-out ${
+        isOpen ? 'visible pointer-events-auto opacity-100' : 'invisible pointer-events-none opacity-0'
       }`}
       role="dialog"
       aria-modal="true"
