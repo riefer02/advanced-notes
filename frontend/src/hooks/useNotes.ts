@@ -128,3 +128,39 @@ export function useAskNotes() {
   })
 }
 
+export function useDigests(limit = 50, offset = 0) {
+  return useQuery({
+    queryKey: ['digests', limit, offset],
+    queryFn: () => api.fetchDigests(limit, offset),
+    staleTime: 30000,
+  })
+}
+
+export function useAskHistory(limit = 50, offset = 0) {
+  return useQuery({
+    queryKey: ['ask-history', limit, offset],
+    queryFn: () => api.fetchAskHistory(limit, offset),
+    staleTime: 30000,
+  })
+}
+
+export function useDeleteDigest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (digestId: string) => api.deleteDigest(digestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['digests'] })
+    },
+  })
+}
+
+export function useDeleteAskHistoryItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (askId: string) => api.deleteAskHistoryItem(askId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ask-history'] })
+    },
+  })
+}
+

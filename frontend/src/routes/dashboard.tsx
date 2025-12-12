@@ -8,6 +8,7 @@ import type { DigestResult, AskResponse, Note } from '../lib/api'
 import SlideOver from '../components/ui/SlideOver'
 import ReactMarkdown from 'react-markdown'
 import NoteDetail from '../components/NoteDetail'
+import { Link } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardPage,
@@ -39,18 +40,7 @@ function DashboardPage() {
   const [isLoadingSourceNote, setIsLoadingSourceNote] = useState(false)
   
   // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // "R" to focus/click record button (unless in an input)
-      if ((e.key === 'r' || e.key === 'R') && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
-        e.preventDefault()
-        recordButtonRef.current?.click()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  // Note: Recording shortcut intentionally disabled for now.
 
   const handleSummarize = async () => {
     setShowSummary(true)
@@ -140,6 +130,15 @@ function DashboardPage() {
               🐺 Chisos
             </h1>
             <div className="flex items-center gap-4">
+              <Link
+                to="/summaries"
+                className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors border border-gray-200"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-6a2 2 0 012-2h2a2 2 0 012 2v6m4 0H5" />
+                </svg>
+                Summaries
+              </Link>
               <button
                 onClick={() => setShowAsk(true)}
                 className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors border border-blue-200"

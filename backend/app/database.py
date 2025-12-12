@@ -85,6 +85,30 @@ class Digest(Base):
     )
 
 
+class AskHistory(Base):
+    """
+    Persisted history of Ask Notes queries/results (compact form), with user isolation.
+    """
+
+    __tablename__ = "ask_history"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+
+    query = Column(Text, nullable=False)
+    query_plan_json = Column(Text, nullable=False)
+    answer_markdown = Column(Text, nullable=False)
+    cited_note_ids_json = Column(Text, nullable=False)
+    source_scores_json = Column(Text, nullable=True)
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_ask_history_user_id", "user_id"),
+        Index("idx_ask_history_user_created", "user_id", "created_at"),
+    )
+
+
 class _PGVector(UserDefinedType):
     """pgvector column type (declared without adding third-party dependencies)."""
 

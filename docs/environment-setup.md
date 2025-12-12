@@ -22,6 +22,7 @@ FLASK_ENV=development
 # Get your key from: https://platform.openai.com/api-keys
 OPENAI_API_KEY=sk-proj-your-actual-api-key-here
 OPENAI_MODEL=gpt-4o-mini
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 
 # Categorization Settings
 # Confidence threshold for auto-categorization (0.0-1.0)
@@ -37,6 +38,7 @@ Copy this template to `backend/.env` and fill in your actual values:
 FLASK_ENV=development
 OPENAI_API_KEY=sk-proj-abc123...xyz789
 OPENAI_MODEL=gpt-4o-mini
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 CONFIDENCE_THRESHOLD=0.7
 ```
 

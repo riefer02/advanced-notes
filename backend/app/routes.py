@@ -615,6 +615,19 @@ def ask_notes():
 
         answer = asker.answer(query, plan, retrieved_notes)
 
+        # Persist ask history (compact)
+        import json as _json
+
+        source_scores = {item["note"].id: float(item.get("score") or 0.0) for item in retrieval}
+        ask_id = storage.save_ask_history(
+            user_id=user_id,
+            query=query,
+            query_plan_json=plan.model_dump_json(),
+            answer_markdown=answer.answer_markdown,
+            cited_note_ids_json=_json.dumps(answer.cited_note_ids),
+            source_scores_json=_json.dumps(source_scores),
+        )
+
         sources = []
         for item in retrieval:
             note = item["note"]
@@ -635,6 +648,7 @@ def ask_notes():
             "sources": sources,
             "warnings": warnings,
             "followups": answer.followups,
+            "ask_id": ask_id,
         }
         if debug:
             response["debug"] = {
@@ -642,6 +656,108 @@ def ask_notes():
                 "embedding_model": embeddings.model,
             }
         return jsonify(response)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# DIGEST HISTORY
+# ============================================================================
+
+
+@bp.get("/digests")
+@require_auth
+def list_digests():
+    user_id = g.user_id
+    try:
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+        digests = storage.list_digests(user_id, limit=limit, offset=offset)
+        return jsonify(
+            {
+                "digests": [d.model_dump() for d in digests],
+                "total": len(digests),
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/digests/<digest_id>")
+@require_auth
+def get_digest(digest_id: str):
+    user_id = g.user_id
+    try:
+        digest = storage.get_digest(user_id, digest_id)
+        if not digest:
+            return jsonify({"error": "Digest not found"}), 404
+        return jsonify(digest.model_dump())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.delete("/digests/<digest_id>")
+@require_auth
+def delete_digest(digest_id: str):
+    user_id = g.user_id
+    try:
+        success = storage.delete_digest(user_id, digest_id)
+        if not success:
+            return jsonify({"error": "Digest not found"}), 404
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# ASK HISTORY
+# ============================================================================
+
+
+@bp.get("/ask-history")
+@require_auth
+def list_ask_history():
+    user_id = g.user_id
+    try:
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+        items = storage.list_ask_history(user_id, limit=limit, offset=offset)
+        return jsonify(
+            {
+                "items": [i.model_dump() for i in items],
+                "total": len(items),
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/ask-history/<ask_id>")
+@require_auth
+def get_ask_history(ask_id: str):
+    user_id = g.user_id
+    try:
+        item = storage.get_ask_history(user_id, ask_id)
+        if not item:
+            return jsonify({"error": "Ask history item not found"}), 404
+        return jsonify(item.model_dump())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.delete("/ask-history/<ask_id>")
+@require_auth
+def delete_ask_history(ask_id: str):
+    user_id = g.user_id
+    try:
+        success = storage.delete_ask_history(user_id, ask_id)
+        if not success:
+            return jsonify({"error": "Ask history item not found"}), 404
+        return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

@@ -119,7 +119,7 @@ chisos/
    - CRUD operations, folder hierarchy, tag management
 
 4. **REST API** (`app/routes.py`):
-   - 11 endpoints for transcription, notes, folders, tags, search
+   - Endpoints for transcription, notes, folders, tags, search, and **Ask Notes**
    - Returns JSON responses with comprehensive metadata
 
 5. **CORS**: Enabled via `flask-cors` so Vite dev server (`:5173`) can call Flask (`:5001`)
@@ -177,6 +177,10 @@ chisos/
   "status": "ok"
 }
 ```
+
+### `POST /api/ask`
+
+Ask a natural-language question about your notes. The backend creates a structured query plan and performs hybrid retrieval (filters + full-text search + embeddings) before generating a markdown answer with sources.
 
 ---
 
@@ -250,6 +254,12 @@ Check API usage via the `meta.model` field in responses.
 - Create `backend/.env` file with your API key
 - Get key from: https://platform.openai.com/api-keys
 - See [environment setup](./docs/environment-setup.md)
+
+**Ask Notes returns 500**
+- Verify `OPENAI_API_KEY` is set
+- Ensure your OpenAI project has access to the configured models:
+  - `OPENAI_MODEL` (default: `gpt-4o-mini`)
+  - `OPENAI_EMBEDDING_MODEL` (default: `text-embedding-3-small`)
 
 **Transcription fails with 401 error**
 - Check your API key is valid

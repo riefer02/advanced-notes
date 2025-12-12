@@ -25,6 +25,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from ..database import (
     Base,
     Digest as DigestORM,
+    AskHistory as AskHistoryORM,
     Note as NoteORM,
     NoteEmbedding as NoteEmbeddingORM,
     create_engine_for_url,
@@ -33,6 +34,7 @@ from ..database import (
 )
 from .models import (
     Digest as DigestDTO,
+    AskHistory as AskHistoryDTO,
     FolderNode,
     FolderStats,
     Note as NoteDTO,
@@ -812,6 +814,129 @@ class NoteStorage:
             session.add(db_digest)
 
         return digest_id
+
+    def list_digests(self, user_id: str, limit: int = 50, offset: int = 0) -> List[DigestDTO]:
+        with self._session_scope() as session:
+            digests = (
+                session.query(DigestORM)
+                .filter(DigestORM.user_id == user_id)
+                .order_by(desc(DigestORM.created_at))
+                .offset(max(offset, 0))
+                .limit(max(1, limit))
+                .all()
+            )
+            return [
+                DigestDTO(
+                    id=d.id,
+                    user_id=d.user_id,
+                    content=d.content,
+                    created_at=d.created_at,
+                )
+                for d in digests
+            ]
+
+    def get_digest(self, user_id: str, digest_id: str) -> Optional[DigestDTO]:
+        with self._session_scope() as session:
+            d = (
+                session.query(DigestORM)
+                .filter(DigestORM.user_id == user_id, DigestORM.id == digest_id)
+                .one_or_none()
+            )
+            if not d:
+                return None
+            return DigestDTO(id=d.id, user_id=d.user_id, content=d.content, created_at=d.created_at)
+
+    def delete_digest(self, user_id: str, digest_id: str) -> bool:
+        with self._session_scope() as session:
+            result = (
+                session.query(DigestORM)
+                .filter(DigestORM.user_id == user_id, DigestORM.id == digest_id)
+                .delete(synchronize_session=False)
+            )
+            return result > 0
+
+    def save_ask_history(
+        self,
+        user_id: str,
+        query: str,
+        query_plan_json: str,
+        answer_markdown: str,
+        cited_note_ids_json: str,
+        source_scores_json: Optional[str] = None,
+    ) -> str:
+        ask_id = str(uuid4())
+        now = datetime.utcnow()
+        row = AskHistoryORM(
+            id=ask_id,
+            user_id=user_id,
+            query=query,
+            query_plan_json=query_plan_json,
+            answer_markdown=answer_markdown,
+            cited_note_ids_json=cited_note_ids_json,
+            source_scores_json=source_scores_json,
+            created_at=now,
+        )
+        with self._session_scope() as session:
+            session.add(row)
+        return ask_id
+
+    def list_ask_history(
+        self,
+        user_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[AskHistoryDTO]:
+        with self._session_scope() as session:
+            rows = (
+                session.query(AskHistoryORM)
+                .filter(AskHistoryORM.user_id == user_id)
+                .order_by(desc(AskHistoryORM.created_at))
+                .offset(max(offset, 0))
+                .limit(max(1, limit))
+                .all()
+            )
+            return [
+                AskHistoryDTO(
+                    id=r.id,
+                    user_id=r.user_id,
+                    query=r.query,
+                    query_plan_json=r.query_plan_json,
+                    answer_markdown=r.answer_markdown,
+                    cited_note_ids_json=r.cited_note_ids_json,
+                    source_scores_json=r.source_scores_json,
+                    created_at=r.created_at,
+                )
+                for r in rows
+            ]
+
+    def get_ask_history(self, user_id: str, ask_id: str) -> Optional[AskHistoryDTO]:
+        with self._session_scope() as session:
+            r = (
+                session.query(AskHistoryORM)
+                .filter(AskHistoryORM.user_id == user_id, AskHistoryORM.id == ask_id)
+                .one_or_none()
+            )
+            if not r:
+                return None
+            return AskHistoryDTO(
+                id=r.id,
+                user_id=r.user_id,
+                query=r.query,
+                query_plan_json=r.query_plan_json,
+                answer_markdown=r.answer_markdown,
+                cited_note_ids_json=r.cited_note_ids_json,
+                source_scores_json=r.source_scores_json,
+                created_at=r.created_at,
+            )
+
+    def delete_ask_history(self, user_id: str, ask_id: str) -> bool:
+        with self._session_scope() as session:
+            result = (
+                session.query(AskHistoryORM)
+                .filter(AskHistoryORM.user_id == user_id, AskHistoryORM.id == ask_id)
+                .delete(synchronize_session=False)
+            )
+            return result > 0
 
     def list_notes(
         self,
