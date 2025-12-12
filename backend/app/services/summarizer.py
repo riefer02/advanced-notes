@@ -4,10 +4,11 @@ AI Summarizer Service using OpenAI GPT-4o-mini
 This module provides an abstraction layer for generating digests from multiple notes.
 """
 
-import os
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from openai import OpenAI, OpenAIError
+
+from .openai_provider import chat_model, get_openai_client
 
 
 class DigestResult(BaseModel):
@@ -29,7 +30,12 @@ class AISummarizerService:
     AI-powered note summarization using OpenAI GPT-4o-mini.
     """
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4o-mini"):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        client: Optional[OpenAI] = None,
+    ):
         """
         Initialize the AI summarizer service.
         
@@ -37,15 +43,8 @@ class AISummarizerService:
             api_key: OpenAI API key. If None, reads from OPENAI_API_KEY env var
             model: Model to use (default: gpt-4o-mini)
         """
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError(
-                "OpenAI API key required. Set OPENAI_API_KEY environment variable "
-                "or pass api_key parameter."
-            )
-        
-        self.client = OpenAI(api_key=self.api_key)
-        self.model = model
+        self.client = client or (OpenAI(api_key=api_key) if api_key else get_openai_client())
+        self.model = model or chat_model()
         
     def summarize(self, notes_content: List[str]) -> DigestResult:
         """

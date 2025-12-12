@@ -109,6 +109,42 @@ export interface TagsResponse {
   tags: string[]
 }
 
+export interface AskTimeRange {
+  start_date: string | null
+  end_date: string | null
+  timezone: string | null
+  is_confident: boolean
+}
+
+export interface AskQueryPlan {
+  intent: 'fact_lookup' | 'summary' | 'trend' | 'list' | 'timeline'
+  time_range: AskTimeRange | null
+  include_tags: string[]
+  exclude_tags: string[]
+  folder_paths: string[] | null
+  keywords: string[]
+  semantic_query: string
+  result_limit: number
+}
+
+export interface AskSource {
+  note_id: string
+  title: string
+  updated_at: string
+  tags: string[]
+  snippet: string
+  score: number
+}
+
+export interface AskResponse {
+  answer_markdown: string
+  query_plan: AskQueryPlan
+  sources: AskSource[]
+  warnings: string[]
+  followups: string[]
+  debug?: Record<string, unknown>
+}
+
 // ============================================================================
 // API Functions
 // ============================================================================
@@ -293,6 +329,32 @@ export async function generateSummary(): Promise<DigestResult> {
       throw new Error(errorJson.error || 'Summarization failed')
     } catch {
       throw new Error('Summarization failed')
+    }
+  }
+
+  return response.json()
+}
+
+/**
+ * Ask a natural-language question about your notes (AI planned + hybrid retrieval).
+ */
+export async function askNotes(query: string, maxResults = 12, debug = false): Promise<AskResponse> {
+  const headers = await getAuthHeaders()
+  headers['Content-Type'] = 'application/json'
+
+  const response = await fetch(`${API_BASE_URL}/api/ask`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ query, max_results: maxResults, debug }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    try {
+      const errorJson = JSON.parse(errorText)
+      throw new Error(errorJson.error || 'Ask failed')
+    } catch {
+      throw new Error('Ask failed')
     }
   }
 

@@ -118,3 +118,13 @@ export function useDeleteNote() {
   })
 }
 
+/**
+ * Ask notes mutation
+ */
+export function useAskNotes() {
+  return useMutation({
+    mutationFn: (args: { query: string; maxResults?: number; debug?: boolean }) =>
+      api.askNotes(args.query, args.maxResults ?? 12, args.debug ?? false),
+  })
+}
+
