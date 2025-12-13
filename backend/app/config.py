@@ -23,6 +23,7 @@ class Config:
     # OpenAI settings (used for both transcription and GPT categorization)
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    OPENAI_EMBEDDING_MODEL: str = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
     
     # Transcription settings
     # Using gpt-4o-mini-transcribe (newer, higher quality than whisper-1)

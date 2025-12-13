@@ -54,6 +54,22 @@ class Digest(BaseModel):
         }
 
 
+class AskHistory(BaseModel):
+    """Persisted Ask Notes query/result (compact)."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    user_id: str = Field(..., description="Clerk user ID")
+    query: str
+    query_plan_json: str
+    answer_markdown: str
+    cited_note_ids_json: str
+    source_scores_json: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.now)
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
 class FolderNode(BaseModel):
     """Folder in the hierarchy tree"""
     name: str

@@ -16,26 +16,33 @@ from typing import Any, Dict, Generator, List, Mapping, Optional
 from uuid import uuid4
 
 from sqlalchemy import Text, cast, desc, func, or_, text
+from sqlalchemy import bindparam
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.dialects.postgresql import JSONB
 
 from ..database import (
     Base,
     Digest as DigestORM,
+    AskHistory as AskHistoryORM,
     Note as NoteORM,
+    NoteEmbedding as NoteEmbeddingORM,
     create_engine_for_url,
     get_engine,
     get_session_factory,
 )
 from .models import (
     Digest as DigestDTO,
+    AskHistory as AskHistoryDTO,
     FolderNode,
     FolderStats,
     Note as NoteDTO,
     NoteMetadata,
     SearchResult,
 )
+
+from .embeddings import vector_from_json, vector_to_json
 
 SQLITE_FTS_STATEMENTS = [
     """
@@ -70,7 +77,7 @@ SQLITE_FTS_STATEMENTS = [
     """,
 ]
 
-_SQLITE_SCHEMA_CACHE: Dict[str, bool] = {}
+_SQLITE_SCHEMA_CACHE: Dict[str, str] = {}
 
 
 def _serialize_tags(tags: List[str]) -> Optional[str]:
@@ -169,19 +176,133 @@ def _build_folder_tree(rows: List[Mapping[str, Any]]) -> FolderNode:
     return root
 
 
-def _ensure_sqlite_schema(engine: Engine) -> None:
-    """Create tables + FTS artifacts for SQLite if they do not exist."""
+def _sqlite_fts_statements(table_name: str) -> List[str]:
+    return [
+        f"""
+        CREATE VIRTUAL TABLE IF NOT EXISTS {table_name} USING fts5(
+            note_id UNINDEXED,
+            title,
+            content,
+            tags,
+            tokenize = 'porter ascii'
+        )
+        """,
+        f"""
+        CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
+            INSERT INTO {table_name}(note_id, title, content, tags)
+            VALUES (new.id, new.title, new.content, new.tags);
+        END
+        """,
+        f"""
+        CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
+            UPDATE {table_name} SET
+                note_id = new.id,
+                title = new.title,
+                content = new.content,
+                tags = new.tags
+            WHERE note_id = old.id;
+        END
+        """,
+        f"""
+        CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+            DELETE FROM {table_name} WHERE note_id = old.id;
+        END
+        """,
+    ]
+
+
+def _ensure_sqlite_schema(engine: Engine) -> str:
+    """Create tables + FTS artifacts for SQLite if they do not exist.
+
+    Returns:
+        The active FTS table name (usually 'notes_fts', but may be 'notes_fts_live' if repaired).
+    """
     cache_key = str(engine.url)
-    if _SQLITE_SCHEMA_CACHE.get(cache_key):
-        return
+    cached_table = _SQLITE_SCHEMA_CACHE.get(cache_key)
+    if cached_table:
+        with engine.begin() as conn:
+            try:
+                conn.exec_driver_sql(f"SELECT 1 FROM {cached_table} LIMIT 1")
+                return cached_table
+            except Exception:
+                pass
 
     Base.metadata.create_all(bind=engine)
 
-    with engine.begin() as conn:
-        for statement in SQLITE_FTS_STATEMENTS:
+    def _fts_is_healthy(conn) -> bool:
+        try:
+            conn.exec_driver_sql("SELECT 1 FROM notes_fts LIMIT 1")
+            return True
+        except OperationalError as e:
+            if "vtable constructor failed" in str(e).lower():
+                return False
+            raise
+        except Exception:
+            return False
+
+    def _create_or_update_triggers(conn, table_name: str) -> None:
+        # Ensure triggers point to the active FTS table.
+        conn.exec_driver_sql("DROP TRIGGER IF EXISTS notes_ai")
+        conn.exec_driver_sql("DROP TRIGGER IF EXISTS notes_au")
+        conn.exec_driver_sql("DROP TRIGGER IF EXISTS notes_ad")
+        for statement in _sqlite_fts_statements(table_name)[1:]:
             conn.exec_driver_sql(statement)
 
-    _SQLITE_SCHEMA_CACHE[cache_key] = True
+    def _repair_fts(conn) -> str:
+        """
+        Repair a broken FTS virtual table.
+
+        This can happen if the virtual table entry exists but its shadow tables are missing.
+        In that case, normal DDL like DROP TABLE notes_fts may fail because SQLite cannot
+        construct the vtable. We use a guarded writable_schema repair only in this broken state.
+        """
+        # We rebuild into a fresh virtual table with a different name and repoint triggers.
+        # This avoids schema rename edge-cases while a broken vtable entry still exists.
+
+        active_table = "notes_fts_live"
+
+        # Stop triggers to avoid failing writes during repair.
+        conn.exec_driver_sql("DROP TRIGGER IF EXISTS notes_ai")
+        conn.exec_driver_sql("DROP TRIGGER IF EXISTS notes_au")
+        conn.exec_driver_sql("DROP TRIGGER IF EXISTS notes_ad")
+
+        # Create/recreate the live FTS table.
+        conn.exec_driver_sql(f"DROP TABLE IF EXISTS {active_table}")
+        conn.exec_driver_sql(_sqlite_fts_statements(active_table)[0])
+
+        # Backfill from existing notes table.
+        conn.exec_driver_sql(
+            f"INSERT INTO {active_table}(note_id, title, content, tags) "
+            "SELECT id, title, content, tags FROM notes"
+        )
+
+        # Validate the rebuilt index works.
+        conn.exec_driver_sql(f"SELECT count(*) FROM {active_table}").scalar_one()
+
+        # Recreate triggers to point to the live table.
+        _create_or_update_triggers(conn, active_table)
+
+        return active_table
+
+    with engine.begin() as conn:
+        # Create canonical notes_fts if possible.
+        for statement in _sqlite_fts_statements("notes_fts"):
+            try:
+                conn.exec_driver_sql(statement)
+            except OperationalError as e:
+                if "vtable constructor failed" in str(e).lower():
+                    break
+                raise
+
+        # If notes_fts is healthy, use it. Otherwise repair to notes_fts_live.
+        active_table = "notes_fts" if _fts_is_healthy(conn) else _repair_fts(conn)
+
+        # If notes_fts is healthy, ensure triggers point to it (might have been dropped by previous repairs).
+        if active_table == "notes_fts":
+            _create_or_update_triggers(conn, "notes_fts")
+
+    _SQLITE_SCHEMA_CACHE[cache_key] = active_table
+    return active_table
 
 
 class NoteStorage:
@@ -194,9 +315,10 @@ class NoteStorage:
     def __init__(self, db_path: Optional[Path] = None, database_url: Optional[str] = None):
         self.engine, self.session_factory = self._configure_engine(db_path, database_url)
         self.dialect = self.engine.dialect.name
+        self.sqlite_fts_table = "notes_fts"
 
         if self.dialect == "sqlite":
-            _ensure_sqlite_schema(self.engine)
+            self.sqlite_fts_table = _ensure_sqlite_schema(self.engine)
 
     def save_note(self, user_id: str, content: str, metadata: NoteMetadata) -> str:
         note_id = str(uuid4())
@@ -220,6 +342,367 @@ class NoteStorage:
             session.add(db_note)
 
         return note_id
+
+    def upsert_note_embedding(
+        self,
+        user_id: str,
+        note_id: str,
+        embedding_model: str,
+        content_hash: str,
+        embedding_value: str,
+    ) -> None:
+        """
+        Upsert a note embedding (user-scoped).
+
+        Args:
+            embedding_value: dialect-specific string value:
+              - SQLite: JSON string
+              - Postgres: pgvector literal string like "[0.1,0.2,...]"
+        """
+        now = datetime.utcnow()
+        with self._session_scope() as session:
+            existing = (
+                session.query(NoteEmbeddingORM)
+                .filter(
+                    NoteEmbeddingORM.user_id == user_id,
+                    NoteEmbeddingORM.note_id == note_id,
+                    NoteEmbeddingORM.embedding_model == embedding_model,
+                )
+                .one_or_none()
+            )
+            if existing:
+                existing.content_hash = content_hash
+                existing.embedding = embedding_value
+                existing.updated_at = now
+                session.add(existing)
+                return
+
+            db_emb = NoteEmbeddingORM(
+                id=str(uuid4()),
+                user_id=user_id,
+                note_id=note_id,
+                embedding_model=embedding_model,
+                content_hash=content_hash,
+                embedding=embedding_value,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(db_emb)
+
+    def get_note_embedding(
+        self, user_id: str, note_id: str, embedding_model: str
+    ) -> Optional[Mapping[str, Any]]:
+        with self._session_scope() as session:
+            row = (
+                session.query(NoteEmbeddingORM)
+                .filter(
+                    NoteEmbeddingORM.user_id == user_id,
+                    NoteEmbeddingORM.note_id == note_id,
+                    NoteEmbeddingORM.embedding_model == embedding_model,
+                )
+                .one_or_none()
+            )
+            if not row:
+                return None
+            return {
+                "note_id": row.note_id,
+                "embedding_model": row.embedding_model,
+                "content_hash": row.content_hash,
+                "embedding": row.embedding,
+            }
+
+    def _parse_embedding(self, value: Any) -> List[float]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [float(x) for x in value]
+        if isinstance(value, (bytes, bytearray)):
+            value = value.decode()
+        if isinstance(value, str):
+            s = value.strip()
+            # SQLite JSON
+            if s.startswith("[") and (s.endswith("]") or s.endswith("]::vector")):
+                # Postgres pgvector text output looks like "[...]" as well; try JSON first.
+                parsed = vector_from_json(s)
+                if parsed:
+                    return parsed
+                inner = s.strip("[]")
+                if not inner:
+                    return []
+                try:
+                    return [float(x) for x in inner.split(",")]
+                except Exception:
+                    return []
+            return vector_from_json(s)
+        return []
+
+    def semantic_search(
+        self,
+        user_id: str,
+        query_embedding_literal: str,
+        limit: int = 50,
+        candidate_note_ids: Optional[List[str]] = None,
+        embedding_model: str = "text-embedding-3-small",
+    ) -> List[Mapping[str, Any]]:
+        """
+        Semantic search over embeddings table.
+
+        Args:
+            query_embedding_literal:
+              - SQLite: JSON string of floats
+              - Postgres: pgvector literal string like "[0.1,0.2,...]"
+        """
+        limit = max(1, limit)
+        if self.dialect == "postgresql":
+            where_extra = ""
+            params: Dict[str, Any] = {
+                "user_id": user_id,
+                "embedding_model": embedding_model,
+                "qvec": query_embedding_literal,
+                "limit": limit,
+            }
+            if candidate_note_ids:
+                where_extra = " AND note_id IN :note_ids"
+                params["note_ids"] = candidate_note_ids
+
+            sql = text(
+                f"""
+                SELECT note_id,
+                       (1.0 / (1.0 + (embedding <=> (:qvec::vector)))) AS score
+                FROM note_embeddings
+                WHERE user_id = :user_id
+                  AND embedding_model = :embedding_model
+                  {where_extra}
+                ORDER BY embedding <=> (:qvec::vector)
+                LIMIT :limit
+                """
+            )
+            if candidate_note_ids:
+                sql = sql.bindparams(bindparam("note_ids", expanding=True))
+
+            with self._session_scope() as session:
+                rows = (
+                    session.execute(sql, params)
+                    .mappings()
+                    .all()
+                )
+            return [{"note_id": r["note_id"], "score": float(r["score"] or 0.0)} for r in rows]
+
+        # SQLite fallback: load candidate embeddings and score in Python
+        with self._session_scope() as session:
+            query = (
+                session.query(NoteEmbeddingORM)
+                .filter(
+                    NoteEmbeddingORM.user_id == user_id,
+                    NoteEmbeddingORM.embedding_model == embedding_model,
+                )
+            )
+            if candidate_note_ids:
+                query = query.filter(NoteEmbeddingORM.note_id.in_(candidate_note_ids))
+            rows = query.all()
+
+        q_vec = self._parse_embedding(query_embedding_literal)
+        if not q_vec:
+            return []
+
+        from .embeddings import cosine_similarity, normalize_similarity
+
+        scored = []
+        for row in rows:
+            vec = self._parse_embedding(row.embedding)
+            sim = normalize_similarity(cosine_similarity(q_vec, vec))
+            scored.append({"note_id": row.note_id, "score": float(sim)})
+
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        return scored[:limit]
+
+    def get_notes_by_ids(self, user_id: str, note_ids: List[str]) -> List[NoteDTO]:
+        if not note_ids:
+            return []
+        with self._session_scope() as session:
+            notes = (
+                session.query(NoteORM)
+                .filter(NoteORM.user_id == user_id, NoteORM.id.in_(note_ids))
+                .all()
+            )
+            dto_by_id = {n.id: _note_to_dto(n) for n in notes}
+        return [dto_by_id[nid] for nid in note_ids if nid in dto_by_id]
+
+    def _date_range_to_datetimes(self, start_date: Optional[str], end_date: Optional[str]) -> tuple[Optional[datetime], Optional[datetime]]:
+        if not start_date and not end_date:
+            return None, None
+
+        def to_start(d: str) -> Optional[datetime]:
+            try:
+                return datetime.fromisoformat(d).replace(hour=0, minute=0, second=0, microsecond=0)
+            except Exception:
+                return None
+
+        def to_end(d: str) -> Optional[datetime]:
+            try:
+                return datetime.fromisoformat(d).replace(hour=23, minute=59, second=59, microsecond=999999)
+            except Exception:
+                return None
+
+        return (to_start(start_date) if start_date else None, to_end(end_date) if end_date else None)
+
+    def _filter_candidate_note_ids(
+        self,
+        user_id: str,
+        folder_paths: Optional[List[str]] = None,
+        include_tags: Optional[List[str]] = None,
+        exclude_tags: Optional[List[str]] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        max_candidates: int = 5000,
+    ) -> Optional[List[str]]:
+        """
+        Returns a list of candidate note IDs, or None if no filters were applied.
+
+        This is used to constrain semantic search for performance.
+        """
+        folder_paths = [p for p in (folder_paths or []) if p]
+        include_tags = [t for t in (include_tags or []) if t]
+        exclude_tags = [t for t in (exclude_tags or []) if t]
+
+        start_dt, end_dt = self._date_range_to_datetimes(start_date, end_date)
+
+        any_filter = bool(folder_paths or include_tags or exclude_tags or start_dt or end_dt)
+        if not any_filter:
+            return None
+
+        with self._session_scope() as session:
+            query = session.query(NoteORM.id).filter(NoteORM.user_id == user_id)
+
+            # Time filter: use created_at for "in February" semantics.
+            if start_dt is not None:
+                query = query.filter(NoteORM.created_at >= start_dt)
+            if end_dt is not None:
+                query = query.filter(NoteORM.created_at <= end_dt)
+
+            if folder_paths:
+                folder_clauses = [self._folder_filter_clause(p) for p in folder_paths]
+                query = query.filter(or_(*folder_clauses))
+
+            if include_tags:
+                if self.dialect == "postgresql":
+                    include_any = [
+                        cast(NoteORM.tags, JSONB).op("@>")(json.dumps([tag]))
+                        for tag in include_tags
+                    ]
+                    query = query.filter(or_(*include_any))
+                else:
+                    include_any = [NoteORM.tags.like(f'%\"{tag}\"%') for tag in include_tags]
+                    query = query.filter(or_(*include_any))
+
+            if exclude_tags:
+                if self.dialect == "postgresql":
+                    exclude_any = [
+                        cast(NoteORM.tags, JSONB).op("@>")(json.dumps([tag]))
+                        for tag in exclude_tags
+                    ]
+                    query = query.filter(~or_(*exclude_any))
+                else:
+                    exclude_any = [NoteORM.tags.like(f'%\"{tag}\"%') for tag in exclude_tags]
+                    query = query.filter(~or_(*exclude_any))
+
+            rows = query.limit(max(1, max_candidates)).all()
+            return [note_id for (note_id,) in rows]
+
+    def retrieve_for_question(
+        self,
+        user_id: str,
+        *,
+        fts_query: str,
+        query_embedding_literal: str,
+        folder_paths: Optional[List[str]] = None,
+        include_tags: Optional[List[str]] = None,
+        exclude_tags: Optional[List[str]] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: int = 12,
+        embedding_model: str = "text-embedding-3-small",
+    ) -> List[Mapping[str, Any]]:
+        """
+        Hybrid retrieval: metadata filters + FTS + semantic embeddings.
+
+        Returns ranked note payloads (note DTO + snippet + score).
+        """
+        limit = max(1, min(limit, 50))
+        candidate_ids = self._filter_candidate_note_ids(
+            user_id=user_id,
+            folder_paths=folder_paths,
+            include_tags=include_tags,
+            exclude_tags=exclude_tags,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        # Candidate generation
+        semantic_k = min(200, limit * 5)
+        fts_k = min(200, limit * 5)
+
+        semantic_hits = self.semantic_search(
+            user_id=user_id,
+            query_embedding_literal=query_embedding_literal,
+            limit=semantic_k,
+            candidate_note_ids=candidate_ids,
+            embedding_model=embedding_model,
+        )
+        fts_results = self.search_notes(user_id, fts_query, limit=fts_k)
+
+        # Normalize FTS scores into [0, 1]
+        fts_scores: Dict[str, float] = {}
+        if fts_results:
+            if self.dialect == "sqlite":
+                # SQLite rank: lower is better, convert via 1/(1+rank)
+                for r in fts_results:
+                    fts_scores[r.note.id] = 1.0 / (1.0 + float(r.rank or 0.0))
+            else:
+                max_rank = max(float(r.rank or 0.0) for r in fts_results) or 1.0
+                for r in fts_results:
+                    fts_scores[r.note.id] = float(r.rank or 0.0) / max_rank
+
+        semantic_scores: Dict[str, float] = {
+            h["note_id"]: float(h.get("score") or 0.0) for h in semantic_hits
+        }
+
+        # Combine/dedupe
+        note_ids = set(semantic_scores.keys()) | set(fts_scores.keys())
+        if candidate_ids is not None:
+            note_ids &= set(candidate_ids)
+
+        # Weighted blend
+        def blended(nid: str) -> float:
+            s = semantic_scores.get(nid, 0.0)
+            f = fts_scores.get(nid, 0.0)
+            return 0.65 * s + 0.35 * f
+
+        ranked_ids = sorted(note_ids, key=blended, reverse=True)[:limit]
+        notes = self.get_notes_by_ids(user_id, ranked_ids)
+        note_by_id = {n.id: n for n in notes}
+
+        # Snippets: use FTS snippet when available, otherwise a small content preview.
+        fts_snippets = {r.note.id: r.snippet for r in fts_results}
+
+        results: List[Mapping[str, Any]] = []
+        for nid in ranked_ids:
+            note = note_by_id.get(nid)
+            if not note:
+                continue
+            snippet = fts_snippets.get(nid)
+            if not snippet:
+                snippet = (note.content or "")[:220]
+            results.append(
+                {
+                    "note": note,
+                    "snippet": snippet,
+                    "score": blended(nid),
+                    "semantic_score": semantic_scores.get(nid, 0.0),
+                    "fts_score": fts_scores.get(nid, 0.0),
+                }
+            )
+        return results
 
     def get_note(self, user_id: str, note_id: str) -> Optional[NoteDTO]:
         with self._session_scope() as session:
@@ -275,6 +758,10 @@ class NoteStorage:
 
     def delete_note(self, user_id: str, note_id: str) -> bool:
         with self._session_scope() as session:
+            session.query(NoteEmbeddingORM).filter(
+                NoteEmbeddingORM.user_id == user_id,
+                NoteEmbeddingORM.note_id == note_id,
+            ).delete(synchronize_session=False)
             result = (
                 session.query(NoteORM)
                 .filter(NoteORM.id == note_id, NoteORM.user_id == user_id)
@@ -327,6 +814,129 @@ class NoteStorage:
             session.add(db_digest)
 
         return digest_id
+
+    def list_digests(self, user_id: str, limit: int = 50, offset: int = 0) -> List[DigestDTO]:
+        with self._session_scope() as session:
+            digests = (
+                session.query(DigestORM)
+                .filter(DigestORM.user_id == user_id)
+                .order_by(desc(DigestORM.created_at))
+                .offset(max(offset, 0))
+                .limit(max(1, limit))
+                .all()
+            )
+            return [
+                DigestDTO(
+                    id=d.id,
+                    user_id=d.user_id,
+                    content=d.content,
+                    created_at=d.created_at,
+                )
+                for d in digests
+            ]
+
+    def get_digest(self, user_id: str, digest_id: str) -> Optional[DigestDTO]:
+        with self._session_scope() as session:
+            d = (
+                session.query(DigestORM)
+                .filter(DigestORM.user_id == user_id, DigestORM.id == digest_id)
+                .one_or_none()
+            )
+            if not d:
+                return None
+            return DigestDTO(id=d.id, user_id=d.user_id, content=d.content, created_at=d.created_at)
+
+    def delete_digest(self, user_id: str, digest_id: str) -> bool:
+        with self._session_scope() as session:
+            result = (
+                session.query(DigestORM)
+                .filter(DigestORM.user_id == user_id, DigestORM.id == digest_id)
+                .delete(synchronize_session=False)
+            )
+            return result > 0
+
+    def save_ask_history(
+        self,
+        user_id: str,
+        query: str,
+        query_plan_json: str,
+        answer_markdown: str,
+        cited_note_ids_json: str,
+        source_scores_json: Optional[str] = None,
+    ) -> str:
+        ask_id = str(uuid4())
+        now = datetime.utcnow()
+        row = AskHistoryORM(
+            id=ask_id,
+            user_id=user_id,
+            query=query,
+            query_plan_json=query_plan_json,
+            answer_markdown=answer_markdown,
+            cited_note_ids_json=cited_note_ids_json,
+            source_scores_json=source_scores_json,
+            created_at=now,
+        )
+        with self._session_scope() as session:
+            session.add(row)
+        return ask_id
+
+    def list_ask_history(
+        self,
+        user_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[AskHistoryDTO]:
+        with self._session_scope() as session:
+            rows = (
+                session.query(AskHistoryORM)
+                .filter(AskHistoryORM.user_id == user_id)
+                .order_by(desc(AskHistoryORM.created_at))
+                .offset(max(offset, 0))
+                .limit(max(1, limit))
+                .all()
+            )
+            return [
+                AskHistoryDTO(
+                    id=r.id,
+                    user_id=r.user_id,
+                    query=r.query,
+                    query_plan_json=r.query_plan_json,
+                    answer_markdown=r.answer_markdown,
+                    cited_note_ids_json=r.cited_note_ids_json,
+                    source_scores_json=r.source_scores_json,
+                    created_at=r.created_at,
+                )
+                for r in rows
+            ]
+
+    def get_ask_history(self, user_id: str, ask_id: str) -> Optional[AskHistoryDTO]:
+        with self._session_scope() as session:
+            r = (
+                session.query(AskHistoryORM)
+                .filter(AskHistoryORM.user_id == user_id, AskHistoryORM.id == ask_id)
+                .one_or_none()
+            )
+            if not r:
+                return None
+            return AskHistoryDTO(
+                id=r.id,
+                user_id=r.user_id,
+                query=r.query,
+                query_plan_json=r.query_plan_json,
+                answer_markdown=r.answer_markdown,
+                cited_note_ids_json=r.cited_note_ids_json,
+                source_scores_json=r.source_scores_json,
+                created_at=r.created_at,
+            )
+
+    def delete_ask_history(self, user_id: str, ask_id: str) -> bool:
+        with self._session_scope() as session:
+            result = (
+                session.query(AskHistoryORM)
+                .filter(AskHistoryORM.user_id == user_id, AskHistoryORM.id == ask_id)
+                .delete(synchronize_session=False)
+            )
+            return result > 0
 
     def list_notes(
         self,
@@ -451,8 +1061,9 @@ class NoteStorage:
         )
 
     def _search_notes_sqlite(self, user_id: str, query: str, limit: int) -> List[SearchResult]:
+        fts_table = getattr(self, "sqlite_fts_table", "notes_fts")
         sql = text(
-            """
+            f"""
             SELECT 
                 n.id,
                 n.user_id,
@@ -466,11 +1077,11 @@ class NoteStorage:
                 n.confidence,
                 n.transcription_duration,
                 n.model_version,
-                notes_fts.rank AS rank,
-                snippet(notes_fts, 2, '<mark>', '</mark>', '...', 50) AS snippet
-            FROM notes_fts
-            JOIN notes n ON notes_fts.note_id = n.id
-            WHERE n.user_id = :user_id AND notes_fts MATCH :match_query
+                {fts_table}.rank AS rank,
+                snippet({fts_table}, 2, '<mark>', '</mark>', '...', 50) AS snippet
+            FROM {fts_table}
+            JOIN notes n ON {fts_table}.note_id = n.id
+            WHERE n.user_id = :user_id AND {fts_table} MATCH :match_query
             ORDER BY rank
             LIMIT :limit
             """

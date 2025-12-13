@@ -5,11 +5,12 @@ This module provides an abstraction layer for AI-powered note categorization.
 Uses structured outputs with Pydantic models for reliable JSON responses.
 """
 
-import os
 from typing import List, Optional
 from enum import Enum
 from pydantic import BaseModel, Field
 from openai import OpenAI, OpenAIError
+
+from .openai_provider import chat_model, get_openai_client
 
 
 class CategoryAction(str, Enum):
@@ -54,7 +55,12 @@ class AICategorizationService:
     - Error handling with fallback strategies
     """
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4o-mini"):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        client: Optional[OpenAI] = None,
+    ):
         """
         Initialize the AI categorization service.
         
@@ -62,15 +68,8 @@ class AICategorizationService:
             api_key: OpenAI API key. If None, reads from OPENAI_API_KEY env var
             model: Model to use (default: gpt-4o-mini for cost/speed balance)
         """
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError(
-                "OpenAI API key required. Set OPENAI_API_KEY environment variable "
-                "or pass api_key parameter."
-            )
-        
-        self.client = OpenAI(api_key=self.api_key)
-        self.model = model
+        self.client = client or (OpenAI(api_key=api_key) if api_key else get_openai_client())
+        self.model = model or chat_model()
         
     def categorize(
         self,

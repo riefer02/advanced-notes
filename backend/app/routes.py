@@ -16,6 +16,15 @@ from flask import Blueprint, request, jsonify, g
 from .asr import transcribe_bytes
 from .auth import require_auth
 from .services.ai_categorizer import AICategorizationService
+from .services.ask_service import AskService, RetrievedNote
+from .services.embeddings import (
+    EmbeddingsService,
+    build_note_embedding_text,
+    content_hash,
+    vector_to_json,
+    vector_to_pg_literal,
+)
+from .services.query_planner import QueryPlanner
 from .services.summarizer import AISummarizerService
 from .services.storage import NoteStorage
 from .services.models import NoteMetadata, FolderNode
@@ -26,6 +35,9 @@ bp = Blueprint("api", __name__)
 categorizer = AICategorizationService()
 summarizer = AISummarizerService()
 storage = NoteStorage()
+planner = QueryPlanner()
+asker = AskService()
+embeddings = EmbeddingsService()
 
 
 # ============================================================================
@@ -168,6 +180,29 @@ def transcribe():
 
         note_id = storage.save_note(user_id=user_id, content=text, metadata=note_metadata)
 
+        # Step 3.5: Upsert embedding for semantic search (best-effort)
+        try:
+            embedding_text = build_note_embedding_text(
+                title=note_metadata.title,
+                content=text,
+                tags=note_metadata.tags,
+            )
+            h = content_hash(embedding_text)
+            vec = embeddings.embed_text(embedding_text)
+            emb_value = (
+                vector_to_pg_literal(vec) if storage.dialect == "postgresql" else vector_to_json(vec)
+            )
+            storage.upsert_note_embedding(
+                user_id=user_id,
+                note_id=note_id,
+                embedding_model=embeddings.model,
+                content_hash=h,
+                embedding_value=emb_value,
+            )
+        except Exception as e:
+            # Do not fail the transcription flow if embeddings fail.
+            print(f"Embedding upsert failed for note {note_id}: {e}")
+
         # Step 4: Return comprehensive response
         return jsonify(
             {
@@ -302,6 +337,30 @@ def update_note(note_id: str):
 
         # Return updated note
         updated_note = storage.get_note(user_id, note_id)
+
+        # Best-effort embedding refresh
+        try:
+            if updated_note:
+                embedding_text = build_note_embedding_text(
+                    title=updated_note.title,
+                    content=updated_note.content,
+                    tags=updated_note.tags,
+                )
+                h = content_hash(embedding_text)
+                vec = embeddings.embed_text(embedding_text)
+                emb_value = (
+                    vector_to_pg_literal(vec) if storage.dialect == "postgresql" else vector_to_json(vec)
+                )
+                storage.upsert_note_embedding(
+                    user_id=user_id,
+                    note_id=updated_note.id,
+                    embedding_model=embeddings.model,
+                    content_hash=h,
+                    embedding_value=emb_value,
+                )
+        except Exception as e:
+            print(f"Embedding upsert failed for note {note_id}: {e}")
+
         return jsonify(updated_note.model_dump())
 
     except Exception as e:
@@ -454,6 +513,251 @@ def search_notes():
             {"query": query, "results": [result.model_dump() for result in results]}
         )
 
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# ASK NOTES (AI QUERY + SUMMARY)
+# ============================================================================
+
+
+@bp.post("/ask")
+@require_auth
+def ask_notes():
+    """
+    Ask a natural-language question about your notes.
+
+    Body:
+        { "query": str, "max_results": int?, "debug": bool? }
+
+    Returns:
+        {
+          "answer_markdown": str,
+          "query_plan": object,
+          "sources": [{note_id,title,updated_at,tags,snippet,score}],
+          "warnings": [str],
+          "debug": object? (if requested)
+        }
+    """
+    user_id = g.user_id
+    data = request.get_json(silent=True) or {}
+
+    query = (data.get("query") or "").strip()
+    if not query:
+        return jsonify({"error": "Body field 'query' is required"}), 400
+
+    max_results = int(data.get("max_results", 12) or 12)
+    max_results = max(1, min(max_results, 50))
+    debug = bool(data.get("debug", False))
+
+    try:
+        known_tags = storage.get_all_tags(user_id)
+        folder_tree = storage.get_folder_tree(user_id)
+
+        def extract_folder_paths(node: FolderNode, paths: list[str] | None = None) -> list[str]:
+            if paths is None:
+                paths = []
+            if node.path:
+                paths.append(node.path)
+            for sub in node.subfolders:
+                extract_folder_paths(sub, paths)
+            return paths
+
+        known_folders = extract_folder_paths(folder_tree)
+
+        plan = planner.plan(
+            question=query,
+            known_tags=known_tags,
+            known_folders=known_folders,
+            result_limit=max_results,
+        )
+
+        q_vec = embeddings.embed_query(plan.semantic_query)
+        q_literal = (
+            vector_to_pg_literal(q_vec) if storage.dialect == "postgresql" else vector_to_json(q_vec)
+        )
+
+        fts_query = " ".join(plan.keywords).strip() if plan.keywords else plan.semantic_query
+
+        retrieval = storage.retrieve_for_question(
+            user_id=user_id,
+            fts_query=fts_query,
+            query_embedding_literal=q_literal,
+            folder_paths=plan.folder_paths,
+            include_tags=plan.include_tags,
+            exclude_tags=plan.exclude_tags,
+            start_date=plan.time_range.start_date if plan.time_range else None,
+            end_date=plan.time_range.end_date if plan.time_range else None,
+            limit=plan.result_limit,
+            embedding_model=embeddings.model,
+        )
+
+        warnings: list[str] = []
+        if not retrieval:
+            warnings.append("No matching notes found for this question.")
+
+        retrieved_notes: list[RetrievedNote] = []
+        for item in retrieval:
+            note = item["note"]
+            excerpt = (note.content or "")[:2000]
+            retrieved_notes.append(
+                RetrievedNote(
+                    note_id=note.id,
+                    title=note.title,
+                    updated_at=note.updated_at.isoformat() if hasattr(note.updated_at, "isoformat") else str(note.updated_at),
+                    tags=note.tags,
+                    snippet=item.get("snippet") or "",
+                    score=float(item.get("score") or 0.0),
+                    content_excerpt=excerpt,
+                )
+            )
+
+        answer = asker.answer(query, plan, retrieved_notes)
+
+        # Persist ask history (compact)
+        import json as _json
+
+        source_scores = {item["note"].id: float(item.get("score") or 0.0) for item in retrieval}
+        ask_id = storage.save_ask_history(
+            user_id=user_id,
+            query=query,
+            query_plan_json=plan.model_dump_json(),
+            answer_markdown=answer.answer_markdown,
+            cited_note_ids_json=_json.dumps(answer.cited_note_ids),
+            source_scores_json=_json.dumps(source_scores),
+        )
+
+        sources = []
+        for item in retrieval:
+            note = item["note"]
+            sources.append(
+                {
+                    "note_id": note.id,
+                    "title": note.title,
+                    "updated_at": note.updated_at.isoformat() if hasattr(note.updated_at, "isoformat") else str(note.updated_at),
+                    "tags": note.tags,
+                    "snippet": item.get("snippet") or "",
+                    "score": float(item.get("score") or 0.0),
+                }
+            )
+
+        response = {
+            "answer_markdown": answer.answer_markdown,
+            "query_plan": plan.model_dump(),
+            "sources": sources,
+            "warnings": warnings,
+            "followups": answer.followups,
+            "ask_id": ask_id,
+        }
+        if debug:
+            response["debug"] = {
+                "fts_query": fts_query,
+                "embedding_model": embeddings.model,
+            }
+        return jsonify(response)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# DIGEST HISTORY
+# ============================================================================
+
+
+@bp.get("/digests")
+@require_auth
+def list_digests():
+    user_id = g.user_id
+    try:
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+        digests = storage.list_digests(user_id, limit=limit, offset=offset)
+        return jsonify(
+            {
+                "digests": [d.model_dump() for d in digests],
+                "total": len(digests),
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/digests/<digest_id>")
+@require_auth
+def get_digest(digest_id: str):
+    user_id = g.user_id
+    try:
+        digest = storage.get_digest(user_id, digest_id)
+        if not digest:
+            return jsonify({"error": "Digest not found"}), 404
+        return jsonify(digest.model_dump())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.delete("/digests/<digest_id>")
+@require_auth
+def delete_digest(digest_id: str):
+    user_id = g.user_id
+    try:
+        success = storage.delete_digest(user_id, digest_id)
+        if not success:
+            return jsonify({"error": "Digest not found"}), 404
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# ASK HISTORY
+# ============================================================================
+
+
+@bp.get("/ask-history")
+@require_auth
+def list_ask_history():
+    user_id = g.user_id
+    try:
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+        items = storage.list_ask_history(user_id, limit=limit, offset=offset)
+        return jsonify(
+            {
+                "items": [i.model_dump() for i in items],
+                "total": len(items),
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/ask-history/<ask_id>")
+@require_auth
+def get_ask_history(ask_id: str):
+    user_id = g.user_id
+    try:
+        item = storage.get_ask_history(user_id, ask_id)
+        if not item:
+            return jsonify({"error": "Ask history item not found"}), 404
+        return jsonify(item.model_dump())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.delete("/ask-history/<ask_id>")
+@require_auth
+def delete_ask_history(ask_id: str):
+    user_id = g.user_id
+    try:
+        success = storage.delete_ask_history(user_id, ask_id)
+        if not success:
+            return jsonify({"error": "Ask history item not found"}), 404
+        return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

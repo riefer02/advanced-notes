@@ -273,6 +273,52 @@ Full-text search across all notes (uses SQLite FTS5).
 
 ---
 
+## Ask Notes (AI)
+
+### POST `/ask`
+
+Ask a natural-language question about your notes. The backend uses AI to create a structured query plan (time range/tags/folders), then performs hybrid retrieval (filters + full-text search + embeddings) before generating a markdown answer with sources.
+
+**Request:** `application/json`
+
+```json
+{
+  "query": "Tell me what I've been eating in February",
+  "max_results": 12,
+  "debug": false
+}
+```
+
+**Response:** `200 OK`
+
+```json
+{
+  "answer_markdown": "…markdown answer…",
+  "query_plan": {
+    "intent": "summary",
+    "time_range": { "start_date": "2025-02-01", "end_date": "2025-02-28", "timezone": null, "is_confident": true },
+    "include_tags": ["food"],
+    "exclude_tags": [],
+    "folder_paths": null,
+    "keywords": ["eating", "food"],
+    "semantic_query": "what did I eat in February",
+    "result_limit": 12
+  },
+  "sources": [
+    { "note_id": "uuid", "title": "Food log", "updated_at": "2025-12-12T23:22:14.716526", "tags": ["food"], "snippet": "…", "score": 0.83 }
+  ],
+  "warnings": [],
+  "followups": ["What did I eat most often?", "Show a timeline of meals in February"]
+}
+```
+
+**Errors:**
+- `400`: Body field `query` is required
+- `401`: Missing/invalid authentication token
+- `500`: Server-side error (often model access/quota or provider errors)
+
+---
+
 ## Utility
 
 ### GET `/health`
