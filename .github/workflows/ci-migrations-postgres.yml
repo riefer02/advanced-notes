@@ -14,7 +14,7 @@ jobs:
         env:
           POSTGRES_DB: chisos_ci
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -25,7 +25,7 @@ jobs:
 
     env:
       FLASK_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/chisos_ci
+      DATABASE_URL: postgresql://postgres@localhost:5432/chisos_ci
 
     steps:
       - name: Checkout
@@ -41,10 +41,15 @@ jobs:
 
       - name: Install backend dependencies
         working-directory: backend
-        run: uv sync --frozen
+        shell: bash
+        run: |
+          if [[ -f "uv.lock" ]]; then
+            uv sync --frozen
+          else
+            echo "::warning::backend/uv.lock not found; falling back to non-frozen dependency install. Commit uv.lock to make CI fully reproducible."
+            uv sync
+          fi
 
       - name: Run Alembic migrations on Postgres
         working-directory: backend
         run: uv run alembic upgrade head
-
-
