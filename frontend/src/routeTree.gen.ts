@@ -10,6 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SummariesRouteImport } from './routes/summaries'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as NotesRouteImport } from './routes/notes'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignUpSplatRouteImport } from './routes/sign-up.$'
@@ -18,6 +20,16 @@ import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
 const SummariesRoute = SummariesRouteImport.update({
   id: '/summaries',
   path: '/summaries',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotesRoute = NotesRouteImport.update({
+  id: '/notes',
+  path: '/notes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -44,6 +56,8 @@ const SignInSplatRoute = SignInSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/notes': typeof NotesRoute
+  '/settings': typeof SettingsRoute
   '/summaries': typeof SummariesRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
@@ -51,6 +65,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/notes': typeof NotesRoute
+  '/settings': typeof SettingsRoute
   '/summaries': typeof SummariesRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
@@ -59,19 +75,37 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/notes': typeof NotesRoute
+  '/settings': typeof SettingsRoute
   '/summaries': typeof SummariesRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dashboard' | '/summaries' | '/sign-in/$' | '/sign-up/$'
+  fullPaths:
+    | '/'
+    | '/dashboard'
+    | '/notes'
+    | '/settings'
+    | '/summaries'
+    | '/sign-in/$'
+    | '/sign-up/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dashboard' | '/summaries' | '/sign-in/$' | '/sign-up/$'
+  to:
+    | '/'
+    | '/dashboard'
+    | '/notes'
+    | '/settings'
+    | '/summaries'
+    | '/sign-in/$'
+    | '/sign-up/$'
   id:
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/notes'
+    | '/settings'
     | '/summaries'
     | '/sign-in/$'
     | '/sign-up/$'
@@ -80,6 +114,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
+  NotesRoute: typeof NotesRoute
+  SettingsRoute: typeof SettingsRoute
   SummariesRoute: typeof SummariesRoute
   SignInSplatRoute: typeof SignInSplatRoute
   SignUpSplatRoute: typeof SignUpSplatRoute
@@ -92,6 +128,20 @@ declare module '@tanstack/react-router' {
       path: '/summaries'
       fullPath: '/summaries'
       preLoaderRoute: typeof SummariesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notes': {
+      id: '/notes'
+      path: '/notes'
+      fullPath: '/notes'
+      preLoaderRoute: typeof NotesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -128,6 +178,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
+  NotesRoute: NotesRoute,
+  SettingsRoute: SettingsRoute,
   SummariesRoute: SummariesRoute,
   SignInSplatRoute: SignInSplatRoute,
   SignUpSplatRoute: SignUpSplatRoute,

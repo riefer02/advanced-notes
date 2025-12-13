@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useAuth, UserButton } from '@clerk/clerk-react'
+import { useAuth } from '@clerk/clerk-react'
 import { useState, useEffect, useRef } from 'react'
 import AudioUploader from '../components/AudioUploader'
 import NotesPanel from '../components/NotesPanel'
@@ -8,7 +8,6 @@ import type { DigestResult, AskResponse, Note } from '../lib/api'
 import SlideOver from '../components/ui/SlideOver'
 import ReactMarkdown from 'react-markdown'
 import NoteDetail from '../components/NoteDetail'
-import { Link } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardPage,
@@ -121,48 +120,7 @@ function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col h-screen overflow-hidden">
-      {/* Header */}
-      <header className="border-b bg-white sticky top-0 z-10 shadow-sm flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
-              🐺 Chisos
-            </h1>
-            <div className="flex items-center gap-4">
-              <Link
-                to="/summaries"
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors border border-gray-200"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-6a2 2 0 012-2h2a2 2 0 012 2v6m4 0H5" />
-                </svg>
-                Summaries
-              </Link>
-              <button
-                onClick={() => setShowAsk(true)}
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors border border-blue-200"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16h6M12 20a8 8 0 100-16 8 8 0 000 16z" />
-                </svg>
-                Ask Notes
-              </button>
-              <button
-                onClick={handleSummarize}
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg text-sm font-medium transition-colors border border-purple-200"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Summarize Recent
-              </button>
-              <UserButton afterSignOutUrl="/" />
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Mobile Tabs - Visible only on mobile */}
       <div className="lg:hidden border-b bg-white flex-shrink-0">
         <div className="flex">

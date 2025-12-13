@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useAuth, UserButton } from '@clerk/clerk-react'
+import { createFileRoute } from '@tanstack/react-router'
+import { useAuth } from '@clerk/clerk-react'
 import { useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
@@ -95,29 +95,11 @@ function SummariesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col h-screen overflow-hidden">
-      <header className="border-b bg-white sticky top-0 z-10 shadow-sm flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-4">
-              <Link
-                to="/dashboard"
-                className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                ← Dashboard
-              </Link>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
-                🐺 Chisos
-              </h1>
-              <span className="text-sm font-semibold text-gray-900">Summaries</span>
-            </div>
-            <UserButton afterSignOutUrl="/" />
-          </div>
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-semibold text-gray-900">Summaries</h2>
         </div>
-      </header>
-
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setTab('digests')}
@@ -156,7 +138,6 @@ function SummariesPage() {
               onSelect={setSelectedAsk}
             />
           )}
-        </div>
       </div>
 
       <SlideOver
