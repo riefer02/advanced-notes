@@ -1,11 +1,16 @@
 import os
+from typing import Optional
+
 from flask import Flask
 from flask_cors import CORS
 
-from .services.container import create_services
+from .services.container import Services, create_services
 
-def create_app():
+def create_app(*, services: Optional[Services] = None, testing: bool = False):
     app = Flask(__name__)
+
+    if testing:
+        app.config["TESTING"] = True
     
     # CORS configuration for development and production
     allowed_origins = [
@@ -24,8 +29,14 @@ def create_app():
     else:
         CORS(app, origins=allowed_origins, supports_credentials=True)
     
-    # Attach dependency container for routes/services (supports route-level injection in tests).
-    app.extensions["services"] = create_services()
+    # Attach dependency container for routes/services.
+    #
+    # In tests, callers can pass `services=` (or set it later) to avoid initializing
+    # OpenAI-backed clients during app creation.
+    if services is not None:
+        app.extensions["services"] = services
+    elif not app.config.get("TESTING"):
+        app.extensions["services"] = create_services()
 
     from .routes import bp as api_bp
     

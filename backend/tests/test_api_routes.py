@@ -6,9 +6,7 @@ import pytest
 
 from app import create_app
 from app.services.container import Services
-from app.services.embeddings import EmbeddingsService
 from app.services.models import NoteMetadata
-from app.services.query_planner import QueryPlanner
 from app.services.storage import NoteStorage
 
 
@@ -31,6 +29,14 @@ class _FakeSummarizer:
     def summarize(self, notes_content):  # noqa: ANN001 - test fake
         raise AssertionError("summarizer should not be called in these tests")
 
+class _FakeEmbeddings:
+    model = "test-embedding-model"
+
+
+class _FakePlanner:
+    def plan(self, *args, **kwargs):  # noqa: ANN001 - test fake
+        raise AssertionError("planner should not be called in these tests")
+
 
 @pytest.fixture()
 def app(tmp_path: Path):
@@ -38,16 +44,14 @@ def app(tmp_path: Path):
     storage = NoteStorage(db_path=test_db)
     services = Services(
         storage=storage,
-        embeddings=EmbeddingsService(),
-        planner=QueryPlanner(),
+        embeddings=_FakeEmbeddings(),
+        planner=_FakePlanner(),
         asker=_FakeAsker(),
         categorizer=_FakeCategorizer(),
         summarizer=_FakeSummarizer(),
     )
 
-    app = create_app()
-    app.config.update(TESTING=True)
-    app.extensions["services"] = services
+    app = create_app(testing=True, services=services)
     yield app
 
 
