@@ -66,6 +66,14 @@ Frontend:
 3. Pass to storage method
 4. All queries automatically user-scoped
 
+## Verification Checklist (Before You Finish)
+
+When you’ve made changes, confirm the app still builds and behaves as expected.
+
+1. **Frontend build (required for UI changes)**:
+   - Run: `cd frontend && pnpm run build`
+   - Fix any TypeScript or Vite build errors before handing off.
+
 ## Key Files
 - `backend/app/database.py` - SQLAlchemy models (source of truth)
 - `backend/app/services/storage.py` - Database adapter layer
