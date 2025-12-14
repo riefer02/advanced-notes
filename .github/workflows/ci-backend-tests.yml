@@ -1,0 +1,38 @@
+name: CI - Backend unit tests
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install backend dependencies
+        working-directory: backend
+        shell: bash
+        run: |
+          if [[ -f "uv.lock" ]]; then
+            uv sync --frozen
+          else
+            echo "::warning::backend/uv.lock not found; falling back to non-frozen dependency install. Commit uv.lock to make CI fully reproducible."
+            uv sync
+          fi
+
+      - name: Run pytest
+        working-directory: backend
+        run: uv run python -m pytest tests/
+
+

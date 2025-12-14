@@ -8,7 +8,7 @@ import os
 import json
 from functools import wraps
 from typing import Optional, Dict, Any
-from flask import request, jsonify
+from flask import request, jsonify, current_app
 import requests
 from jose import jwt, jwk
 from jose.exceptions import JWTError
@@ -129,6 +129,16 @@ def require_auth(f):
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # TESTING seam: allow deterministic auth without external JWKS/network.
+        # This is only enabled when Flask TESTING is true.
+        if current_app.config.get("TESTING") is True:
+            test_user_id = request.headers.get("X-Test-User-Id")
+            if test_user_id:
+                from flask import g
+                g.user = {"sub": test_user_id}
+                g.user_id = test_user_id
+                return f(*args, **kwargs)
+
         # Get token from header
         token = get_auth_token()
         

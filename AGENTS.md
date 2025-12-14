@@ -74,6 +74,12 @@ When you’ve made changes, confirm the app still builds and behaves as expected
    - Run: `cd frontend && pnpm run build`
    - Fix any TypeScript or Vite build errors before handing off.
 
+2. **Backend regression tests (required for backend changes)**:
+   - Run: `cd backend && uv run python -m pytest tests/`
+   - This runs the full backend test suite, including the API route tests in `backend/tests/test_api_routes.py`.
+   - **Route test seam**: when `app.config["TESTING"] == True`, you can authenticate requests by sending `X-Test-User-Id: <user_id>` instead of a Clerk JWT.
+   - **Route dependency injection**: routes fetch dependencies from `app.extensions["services"]` via `get_services()`. Tests can override that container to inject fakes.
+
 ## Key Files
 - `backend/app/database.py` - SQLAlchemy models (source of truth)
 - `backend/app/services/storage.py` - Database adapter layer
