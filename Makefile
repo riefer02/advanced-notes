@@ -1,4 +1,4 @@
-.PHONY: help dev backend frontend clean
+.PHONY: help dev backend frontend clean install test-backend test-backend-fast test-frontend-build
 
 help:
 	@echo "Available targets:"
@@ -7,6 +7,9 @@ help:
 	@echo "  make frontend  - Start only the frontend (Vite)"
 	@echo "  make clean     - Remove all generated files and caches"
 	@echo "  make install   - Install all dependencies"
+	@echo "  make test-backend       - Run backend pytest suite"
+	@echo "  make test-backend-fast  - Run backend pytest suite (stop on first failure)"
+	@echo "  make test-frontend-build - Run frontend production build"
 
 dev:
 	@echo "Starting backend and frontend..."
@@ -27,6 +30,18 @@ install:
 	@echo "Installing frontend dependencies..."
 	@cd frontend && pnpm install
 	@echo "✓ All dependencies installed"
+
+test-backend:
+	@echo "Running backend tests..."
+	@cd backend && uv run python -m pytest tests/
+
+test-backend-fast:
+	@echo "Running backend tests (fast fail)..."
+	@cd backend && uv run python -m pytest -x tests/
+
+test-frontend-build:
+	@echo "Running frontend build..."
+	@cd frontend && pnpm run build
 
 clean:
 	@echo "Cleaning build artifacts and caches..."

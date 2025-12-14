@@ -2,6 +2,8 @@ import os
 from flask import Flask
 from flask_cors import CORS
 
+from .services.container import create_services
+
 def create_app():
     app = Flask(__name__)
     
@@ -22,6 +24,9 @@ def create_app():
     else:
         CORS(app, origins=allowed_origins, supports_credentials=True)
     
+    # Attach dependency container for routes/services (supports route-level injection in tests).
+    app.extensions["services"] = create_services()
+
     from .routes import bp as api_bp
     
     app.register_blueprint(api_bp, url_prefix="/api")

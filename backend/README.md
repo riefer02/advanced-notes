@@ -31,6 +31,16 @@ uv run alembic upgrade head
 ./run.sh
 ```
 
+## Service Container (Dependency Injection)
+
+Routes do not construct global singletons. Instead, the app initializes a `Services` container and stores it on the Flask app:
+
+- `backend/app/services/container.py`: `Services`, `create_services()`, `get_services()`
+- `backend/app/__init__.py`: attaches `app.extensions["services"] = create_services()`
+- `backend/app/routes.py`: calls `svc = get_services()` per-request
+
+This pattern keeps route code thin and makes route tests able to inject fakes by overriding `app.extensions["services"]`.
+
 ## API Endpoints
 
 All endpoints (except `/api/health`) require authentication via `Authorization: Bearer <token>` header.
@@ -63,6 +73,13 @@ uv run alembic history
 
 # Rollback one migration
 uv run alembic downgrade -1
+```
+
+## Running Tests
+
+```bash
+cd backend
+uv run python -m pytest tests/
 ```
 
 ## Deployment Benefits

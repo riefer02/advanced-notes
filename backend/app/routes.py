@@ -15,29 +15,18 @@ from flask import Blueprint, request, jsonify, g
 
 from .asr import transcribe_bytes
 from .auth import require_auth
-from .services.ai_categorizer import AICategorizationService
-from .services.ask_service import AskService, RetrievedNote
+from .services.ask_service import RetrievedNote
 from .services.embeddings import (
-    EmbeddingsService,
     build_note_embedding_text,
     content_hash,
     vector_to_json,
     vector_to_pg_literal,
 )
-from .services.query_planner import QueryPlanner
-from .services.summarizer import AISummarizerService
-from .services.storage import NoteStorage
-from .services.models import NoteMetadata, FolderNode
+from .services.models import NoteMetadata
+from .services.container import get_services
+from .services.folder_utils import extract_folder_paths
 
 bp = Blueprint("api", __name__)
-
-# Initialize services
-categorizer = AICategorizationService()
-summarizer = AISummarizerService()
-storage = NoteStorage()
-planner = QueryPlanner()
-asker = AskService()
-embeddings = EmbeddingsService()
 
 
 # ============================================================================
@@ -50,7 +39,7 @@ embeddings = EmbeddingsService()
 def summarize_notes():
     """
     Generate a smart summary digest from recent notes.
-    
+
     Returns:
         JSON: {
             "summary": str,
@@ -60,37 +49,36 @@ def summarize_notes():
         }
     """
     user_id = g.user_id
-    
+    svc = get_services()
+
     try:
         # 1. Fetch recent notes
-        recent_notes = storage.get_recent_notes(user_id, limit=10)
-        
+        recent_notes = svc.storage.get_recent_notes(user_id, limit=10)
+
         if not recent_notes:
-            return jsonify({
-                "summary": "No recent notes found to summarize. Record some thoughts first!",
-                "key_themes": [],
-                "action_items": [],
-                "digest_id": None
-            })
-            
+            return jsonify(
+                {
+                    "summary": "No recent notes found to summarize. Record some thoughts first!",
+                    "key_themes": [],
+                    "action_items": [],
+                    "digest_id": None,
+                }
+            )
+
         # 2. Extract content
-        notes_content = [f"Title: {n.title}\nContent: {n.content}" for n in recent_notes]
-        
+        notes_content = [
+            f"Title: {n.title}\nContent: {n.content}" for n in recent_notes
+        ]
+
         # 3. Generate summary
-        digest_result = summarizer.summarize(notes_content)
-        
-        # 4. Save to database
-        # We store the full structured result (summary + themes + actions) as a JSON string
-        # so we can retrieve the rich format later.
-        import json
+        digest_result = svc.summarizer.summarize(notes_content)
+
+        # 4. Save to database (store the structured result as JSON string)
         digest_json = digest_result.model_dump_json()
-        digest_id = storage.save_digest(user_id, digest_json)
-        
-        return jsonify({
-            **digest_result.model_dump(),
-            "digest_id": digest_id
-        })
-        
+        digest_id = svc.storage.save_digest(user_id, digest_json)
+
+        return jsonify({**digest_result.model_dump(), "digest_id": digest_id})
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -119,7 +107,8 @@ def transcribe():
         }
     """
     user_id = g.user_id  # Get authenticated user ID
-    
+    svc = get_services()
+
     # Check for file upload
     content_type = None
     if "file" in request.files:
@@ -145,26 +134,18 @@ def transcribe():
             # OpenAI API errors
             error_msg = str(e)
             if "corrupted" in error_msg.lower() or "unsupported" in error_msg.lower():
-                return jsonify({
-                    "error": "Audio format not supported or corrupted. Please try recording again."
-                }), 400
+                return jsonify(
+                    {
+                        "error": "Audio format not supported or corrupted. Please try recording again."
+                    }
+                ), 400
             raise
 
         # Step 2: Get AI categorization (user-scoped folders)
-        folder_tree = storage.get_folder_tree(user_id)
-
-        # Extract all folder paths from tree for AI context
-        def extract_folder_paths(node: "FolderNode", paths: list = None) -> list:
-            if paths is None:
-                paths = []
-            if node.path:  # Skip empty root
-                paths.append(node.path)
-            for subfolder in node.subfolders:
-                extract_folder_paths(subfolder, paths)
-            return paths
+        folder_tree = svc.storage.get_folder_tree(user_id)
 
         existing_folders = extract_folder_paths(folder_tree)
-        categorization_result = categorizer.categorize(text, existing_folders)
+        categorization_result = svc.categorizer.categorize(text, existing_folders)
 
         # Step 3: Save to database (user-scoped)
         note_metadata = NoteMetadata(
@@ -178,7 +159,9 @@ def transcribe():
             model_version=meta.get("model"),
         )
 
-        note_id = storage.save_note(user_id=user_id, content=text, metadata=note_metadata)
+        note_id = svc.storage.save_note(
+            user_id=user_id, content=text, metadata=note_metadata
+        )
 
         # Step 3.5: Upsert embedding for semantic search (best-effort)
         try:
@@ -188,14 +171,16 @@ def transcribe():
                 tags=note_metadata.tags,
             )
             h = content_hash(embedding_text)
-            vec = embeddings.embed_text(embedding_text)
+            vec = svc.embeddings.embed_text(embedding_text)
             emb_value = (
-                vector_to_pg_literal(vec) if storage.dialect == "postgresql" else vector_to_json(vec)
+                vector_to_pg_literal(vec)
+                if svc.storage.dialect == "postgresql"
+                else vector_to_json(vec)
             )
-            storage.upsert_note_embedding(
+            svc.storage.upsert_note_embedding(
                 user_id=user_id,
                 note_id=note_id,
-                embedding_model=embeddings.model,
+                embedding_model=svc.embeddings.model,
                 content_hash=h,
                 embedding_value=emb_value,
             )
@@ -244,13 +229,16 @@ def list_notes():
         JSON: {"notes": [...], "total": int, "limit": int, "offset": int}
     """
     user_id = g.user_id
-    
+    svc = get_services()
+
     try:
         folder = request.args.get("folder")
         limit = int(request.args.get("limit", 50))
         offset = int(request.args.get("offset", 0))
 
-        notes = storage.list_notes(user_id=user_id, folder=folder, limit=limit, offset=offset)
+        notes = svc.storage.list_notes(
+            user_id=user_id, folder=folder, limit=limit, offset=offset
+        )
 
         return jsonify(
             {
@@ -275,9 +263,10 @@ def get_note(note_id: str):
         JSON: Note object or 404 error
     """
     user_id = g.user_id
-    
+    svc = get_services()
+
     try:
-        note = storage.get_note(user_id, note_id)
+        note = svc.storage.get_note(user_id, note_id)
 
         if not note:
             return jsonify({"error": "Note not found"}), 404
@@ -306,7 +295,8 @@ def update_note(note_id: str):
         JSON: Updated note object or 404 error
     """
     user_id = g.user_id
-    
+    svc = get_services()
+
     try:
         data = request.get_json()
 
@@ -314,7 +304,7 @@ def update_note(note_id: str):
             return jsonify({"error": "No data provided"}), 400
 
         # Get existing note (user-scoped)
-        note = storage.get_note(user_id, note_id)
+        note = svc.storage.get_note(user_id, note_id)
         if not note:
             return jsonify({"error": "Note not found"}), 404
 
@@ -330,13 +320,13 @@ def update_note(note_id: str):
             model_version=note.model_version,
         )
 
-        success = storage.update_note(user_id, note_id, content, metadata)
+        success = svc.storage.update_note(user_id, note_id, content, metadata)
 
         if not success:
             return jsonify({"error": "Failed to update note"}), 500
 
         # Return updated note
-        updated_note = storage.get_note(user_id, note_id)
+        updated_note = svc.storage.get_note(user_id, note_id)
 
         # Best-effort embedding refresh
         try:
@@ -347,14 +337,16 @@ def update_note(note_id: str):
                     tags=updated_note.tags,
                 )
                 h = content_hash(embedding_text)
-                vec = embeddings.embed_text(embedding_text)
+                vec = svc.embeddings.embed_text(embedding_text)
                 emb_value = (
-                    vector_to_pg_literal(vec) if storage.dialect == "postgresql" else vector_to_json(vec)
+                    vector_to_pg_literal(vec)
+                    if svc.storage.dialect == "postgresql"
+                    else vector_to_json(vec)
                 )
-                storage.upsert_note_embedding(
+                svc.storage.upsert_note_embedding(
                     user_id=user_id,
                     note_id=updated_note.id,
-                    embedding_model=embeddings.model,
+                    embedding_model=svc.embeddings.model,
                     content_hash=h,
                     embedding_value=emb_value,
                 )
@@ -377,9 +369,10 @@ def delete_note(note_id: str):
         JSON: {"success": bool, "message": str}
     """
     user_id = g.user_id
-    
+    svc = get_services()
+
     try:
-        success = storage.delete_note(user_id, note_id)
+        success = svc.storage.delete_note(user_id, note_id)
 
         if not success:
             return jsonify({"error": "Note not found"}), 404
@@ -407,9 +400,10 @@ def get_folders():
         JSON: {"folders": FolderNode} (root node with nested subfolders)
     """
     user_id = g.user_id
-    
+    svc = get_services()
+
     try:
-        folder_tree = storage.get_folder_tree(user_id)
+        folder_tree = svc.storage.get_folder_tree(user_id)
 
         return jsonify({"folders": folder_tree.model_dump()})
 
@@ -427,9 +421,10 @@ def get_folder_stats(folder_path: str):
         JSON: FolderStats object
     """
     user_id = g.user_id
-    
+    svc = get_services()
+
     try:
-        stats = storage.get_folder_stats(user_id, folder_path)
+        stats = svc.storage.get_folder_stats(user_id, folder_path)
 
         return jsonify(stats.model_dump())
 
@@ -452,9 +447,10 @@ def get_tags():
         JSON: {"tags": [...]}
     """
     user_id = g.user_id
-    
+    svc = get_services()
+
     try:
-        tags = storage.get_all_tags(user_id)
+        tags = svc.storage.get_all_tags(user_id)
 
         return jsonify({"tags": tags})
 
@@ -472,9 +468,10 @@ def get_notes_by_tag(tag: str):
         JSON: {"notes": [...], "tag": str}
     """
     user_id = g.user_id
-    
+    svc = get_services()
+
     try:
-        notes = storage.get_notes_by_tag(user_id, tag)
+        notes = svc.storage.get_notes_by_tag(user_id, tag)
 
         return jsonify({"tag": tag, "notes": [note.model_dump() for note in notes]})
 
@@ -500,14 +497,15 @@ def search_notes():
         JSON: {"results": [...], "query": str}
     """
     user_id = g.user_id
-    
+    svc = get_services()
+
     try:
         query = request.args.get("q")
 
         if not query:
             return jsonify({"error": "Query parameter 'q' is required"}), 400
 
-        results = storage.search_notes(user_id, query)
+        results = svc.storage.search_notes(user_id, query)
 
         return jsonify(
             {"query": query, "results": [result.model_dump() for result in results]}
@@ -541,6 +539,7 @@ def ask_notes():
         }
     """
     user_id = g.user_id
+    svc = get_services()
     data = request.get_json(silent=True) or {}
 
     query = (data.get("query") or "").strip()
@@ -552,35 +551,30 @@ def ask_notes():
     debug = bool(data.get("debug", False))
 
     try:
-        known_tags = storage.get_all_tags(user_id)
-        folder_tree = storage.get_folder_tree(user_id)
-
-        def extract_folder_paths(node: FolderNode, paths: list[str] | None = None) -> list[str]:
-            if paths is None:
-                paths = []
-            if node.path:
-                paths.append(node.path)
-            for sub in node.subfolders:
-                extract_folder_paths(sub, paths)
-            return paths
+        known_tags = svc.storage.get_all_tags(user_id)
+        folder_tree = svc.storage.get_folder_tree(user_id)
 
         known_folders = extract_folder_paths(folder_tree)
 
-        plan = planner.plan(
+        plan = svc.planner.plan(
             question=query,
             known_tags=known_tags,
             known_folders=known_folders,
             result_limit=max_results,
         )
 
-        q_vec = embeddings.embed_query(plan.semantic_query)
+        q_vec = svc.embeddings.embed_query(plan.semantic_query)
         q_literal = (
-            vector_to_pg_literal(q_vec) if storage.dialect == "postgresql" else vector_to_json(q_vec)
+            vector_to_pg_literal(q_vec)
+            if svc.storage.dialect == "postgresql"
+            else vector_to_json(q_vec)
         )
 
-        fts_query = " ".join(plan.keywords).strip() if plan.keywords else plan.semantic_query
+        fts_query = (
+            " ".join(plan.keywords).strip() if plan.keywords else plan.semantic_query
+        )
 
-        retrieval = storage.retrieve_for_question(
+        retrieval = svc.storage.retrieve_for_question(
             user_id=user_id,
             fts_query=fts_query,
             query_embedding_literal=q_literal,
@@ -590,7 +584,7 @@ def ask_notes():
             start_date=plan.time_range.start_date if plan.time_range else None,
             end_date=plan.time_range.end_date if plan.time_range else None,
             limit=plan.result_limit,
-            embedding_model=embeddings.model,
+            embedding_model=svc.embeddings.model,
         )
 
         warnings: list[str] = []
@@ -605,7 +599,9 @@ def ask_notes():
                 RetrievedNote(
                     note_id=note.id,
                     title=note.title,
-                    updated_at=note.updated_at.isoformat() if hasattr(note.updated_at, "isoformat") else str(note.updated_at),
+                    updated_at=note.updated_at.isoformat()
+                    if hasattr(note.updated_at, "isoformat")
+                    else str(note.updated_at),
                     tags=note.tags,
                     snippet=item.get("snippet") or "",
                     score=float(item.get("score") or 0.0),
@@ -613,13 +609,15 @@ def ask_notes():
                 )
             )
 
-        answer = asker.answer(query, plan, retrieved_notes)
+        answer = svc.asker.answer(query, plan, retrieved_notes)
 
         # Persist ask history (compact)
         import json as _json
 
-        source_scores = {item["note"].id: float(item.get("score") or 0.0) for item in retrieval}
-        ask_id = storage.save_ask_history(
+        source_scores = {
+            item["note"].id: float(item.get("score") or 0.0) for item in retrieval
+        }
+        ask_id = svc.storage.save_ask_history(
             user_id=user_id,
             query=query,
             query_plan_json=plan.model_dump_json(),
@@ -635,7 +633,9 @@ def ask_notes():
                 {
                     "note_id": note.id,
                     "title": note.title,
-                    "updated_at": note.updated_at.isoformat() if hasattr(note.updated_at, "isoformat") else str(note.updated_at),
+                    "updated_at": note.updated_at.isoformat()
+                    if hasattr(note.updated_at, "isoformat")
+                    else str(note.updated_at),
                     "tags": note.tags,
                     "snippet": item.get("snippet") or "",
                     "score": float(item.get("score") or 0.0),
@@ -653,7 +653,7 @@ def ask_notes():
         if debug:
             response["debug"] = {
                 "fts_query": fts_query,
-                "embedding_model": embeddings.model,
+                "embedding_model": svc.embeddings.model,
             }
         return jsonify(response)
     except Exception as e:
@@ -669,10 +669,11 @@ def ask_notes():
 @require_auth
 def list_digests():
     user_id = g.user_id
+    svc = get_services()
     try:
         limit = int(request.args.get("limit", 50))
         offset = int(request.args.get("offset", 0))
-        digests = storage.list_digests(user_id, limit=limit, offset=offset)
+        digests = svc.storage.list_digests(user_id, limit=limit, offset=offset)
         return jsonify(
             {
                 "digests": [d.model_dump() for d in digests],
@@ -689,8 +690,9 @@ def list_digests():
 @require_auth
 def get_digest(digest_id: str):
     user_id = g.user_id
+    svc = get_services()
     try:
-        digest = storage.get_digest(user_id, digest_id)
+        digest = svc.storage.get_digest(user_id, digest_id)
         if not digest:
             return jsonify({"error": "Digest not found"}), 404
         return jsonify(digest.model_dump())
@@ -702,8 +704,9 @@ def get_digest(digest_id: str):
 @require_auth
 def delete_digest(digest_id: str):
     user_id = g.user_id
+    svc = get_services()
     try:
-        success = storage.delete_digest(user_id, digest_id)
+        success = svc.storage.delete_digest(user_id, digest_id)
         if not success:
             return jsonify({"error": "Digest not found"}), 404
         return jsonify({"success": True})
@@ -720,10 +723,11 @@ def delete_digest(digest_id: str):
 @require_auth
 def list_ask_history():
     user_id = g.user_id
+    svc = get_services()
     try:
         limit = int(request.args.get("limit", 50))
         offset = int(request.args.get("offset", 0))
-        items = storage.list_ask_history(user_id, limit=limit, offset=offset)
+        items = svc.storage.list_ask_history(user_id, limit=limit, offset=offset)
         return jsonify(
             {
                 "items": [i.model_dump() for i in items],
@@ -740,8 +744,9 @@ def list_ask_history():
 @require_auth
 def get_ask_history(ask_id: str):
     user_id = g.user_id
+    svc = get_services()
     try:
-        item = storage.get_ask_history(user_id, ask_id)
+        item = svc.storage.get_ask_history(user_id, ask_id)
         if not item:
             return jsonify({"error": "Ask history item not found"}), 404
         return jsonify(item.model_dump())
@@ -753,8 +758,9 @@ def get_ask_history(ask_id: str):
 @require_auth
 def delete_ask_history(ask_id: str):
     user_id = g.user_id
+    svc = get_services()
     try:
-        success = storage.delete_ask_history(user_id, ask_id)
+        success = svc.storage.delete_ask_history(user_id, ask_id)
         if not success:
             return jsonify({"error": "Ask history item not found"}), 404
         return jsonify({"success": True})
