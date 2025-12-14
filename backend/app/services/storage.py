@@ -468,12 +468,12 @@ class NoteStorage:
             sql = text(
                 f"""
                 SELECT note_id,
-                       (1.0 / (1.0 + (embedding <=> (:qvec::vector)))) AS score
+                       (1.0 / (1.0 + (embedding <=> ((:qvec)::vector)))) AS score
                 FROM note_embeddings
                 WHERE user_id = :user_id
                   AND embedding_model = :embedding_model
                   {where_extra}
-                ORDER BY embedding <=> (:qvec::vector)
+                ORDER BY embedding <=> ((:qvec)::vector)
                 LIMIT :limit
                 """
             )
