@@ -372,8 +372,8 @@ export async function generateSummary(): Promise<DigestResult> {
  * Ask a natural-language question about your notes (AI planned + hybrid retrieval).
  */
 export async function askNotes(query: string, maxResults = 12, debug = false): Promise<AskResponse> {
-  const headers = await getAuthHeaders()
-  headers['Content-Type'] = 'application/json'
+  const headers = new Headers(await getAuthHeaders())
+  headers.set('Content-Type', 'application/json')
 
   const response = await fetch(`${API_BASE_URL}/api/ask`, {
     method: 'POST',
