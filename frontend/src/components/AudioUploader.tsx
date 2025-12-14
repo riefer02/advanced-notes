@@ -4,9 +4,10 @@ import type { TranscriptionResponse } from '../lib/api'
 
 interface AudioUploaderProps {
   recordButtonRef?: React.RefObject<HTMLButtonElement>
+  onAskNotes?: (query: string) => void
 }
 
-export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
+export default function AudioUploader({ recordButtonRef, onAskNotes }: AudioUploaderProps) {
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [lastResult, setLastResult] = useState<TranscriptionResponse | null>(null)
@@ -166,7 +167,7 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
                 ref={recordButtonRef}
                 onClick={startRecording}
                 disabled={transcribeMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
@@ -185,7 +186,7 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
           </div>
           {!isRecording && (
             <p className="text-xs text-gray-500">
-              💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded">R</kbd> to start recording
+              💡 Tip: Use <span className="font-semibold text-gray-700">Start Recording</span> to capture a note.
             </p>
           )}
         </div>
@@ -228,6 +229,27 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
           <p className="text-xs text-green-700 mt-3">
             ✓ Saved and organized automatically
           </p>
+          {onAskNotes && (
+            <div className="mt-4 pt-4 border-t border-green-200">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  onClick={() => onAskNotes('Summarize what I just recorded.')}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white font-medium text-sm transition-colors bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16h6M12 20a8 8 0 100-16 8 8 0 000 16z" />
+                  </svg>
+                  Ask about this
+                </button>
+                <button
+                  onClick={() => onAskNotes('What are the action items from my latest note?')}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white border border-purple-200 text-purple-800 hover:bg-purple-50 font-medium text-sm transition-colors"
+                >
+                  Action items
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
