@@ -107,20 +107,8 @@ export default function NotesList({
         </p>
         {!isSearchMode && !isTagMode && (
           <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              onClick={() => {
-                // Trigger the record button via keyboard shortcut simulation
-                window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r' }))
-              }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
-              </svg>
-              Record Your First Note
-            </button>
             <p className="text-xs text-gray-500">
-              or press <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-800 bg-white border border-gray-300 rounded shadow-sm">R</kbd>
+              Use the <span className="font-semibold text-gray-700">Start Recording</span> button in the left panel to create your first note.
             </p>
           </div>
         )}

@@ -109,6 +109,75 @@ export interface TagsResponse {
   tags: string[]
 }
 
+export interface AskTimeRange {
+  start_date: string | null
+  end_date: string | null
+  timezone: string | null
+  is_confident: boolean
+}
+
+export interface AskQueryPlan {
+  intent: 'fact_lookup' | 'summary' | 'trend' | 'list' | 'timeline'
+  time_range: AskTimeRange | null
+  include_tags: string[]
+  exclude_tags: string[]
+  folder_paths: string[] | null
+  keywords: string[]
+  semantic_query: string
+  result_limit: number
+}
+
+export interface AskSource {
+  note_id: string
+  title: string
+  updated_at: string
+  tags: string[]
+  snippet: string
+  score: number
+}
+
+export interface AskResponse {
+  answer_markdown: string
+  query_plan: AskQueryPlan
+  sources: AskSource[]
+  warnings: string[]
+  followups: string[]
+  ask_id: string
+  debug?: Record<string, unknown>
+}
+
+export interface DigestHistoryItem {
+  id: string
+  user_id: string
+  content: string
+  created_at: string
+}
+
+export interface DigestsResponse {
+  digests: DigestHistoryItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface AskHistoryItem {
+  id: string
+  user_id: string
+  query: string
+  query_plan_json: string
+  answer_markdown: string
+  cited_note_ids_json: string
+  source_scores_json: string | null
+  created_at: string
+}
+
+export interface AskHistoryResponse {
+  items: AskHistoryItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
 // ============================================================================
 // API Functions
 // ============================================================================
@@ -297,5 +366,85 @@ export async function generateSummary(): Promise<DigestResult> {
   }
 
   return response.json()
+}
+
+/**
+ * Ask a natural-language question about your notes (AI planned + hybrid retrieval).
+ */
+export async function askNotes(query: string, maxResults = 12, debug = false): Promise<AskResponse> {
+  const headers = await getAuthHeaders()
+  headers['Content-Type'] = 'application/json'
+
+  const response = await fetch(`${API_BASE_URL}/api/ask`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ query, max_results: maxResults, debug }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    try {
+      const errorJson = JSON.parse(errorText)
+      throw new Error(errorJson.error || 'Ask failed')
+    } catch {
+      throw new Error('Ask failed')
+    }
+  }
+
+  return response.json()
+}
+
+export async function fetchDigests(limit = 50, offset = 0): Promise<DigestsResponse> {
+  const params = new URLSearchParams({ limit: limit.toString(), offset: offset.toString() })
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/digests?${params}`, { headers })
+  if (!response.ok) {
+    throw new Error('Failed to fetch digests')
+  }
+  return response.json()
+}
+
+export async function fetchDigest(digestId: string): Promise<DigestHistoryItem> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/digests/${digestId}`, { headers })
+  if (!response.ok) {
+    throw new Error('Digest not found')
+  }
+  return response.json()
+}
+
+export async function deleteDigest(digestId: string): Promise<void> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/digests/${digestId}`, { method: 'DELETE', headers })
+  if (!response.ok) {
+    throw new Error('Failed to delete digest')
+  }
+}
+
+export async function fetchAskHistory(limit = 50, offset = 0): Promise<AskHistoryResponse> {
+  const params = new URLSearchParams({ limit: limit.toString(), offset: offset.toString() })
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/ask-history?${params}`, { headers })
+  if (!response.ok) {
+    throw new Error('Failed to fetch ask history')
+  }
+  return response.json()
+}
+
+export async function fetchAskHistoryItem(askId: string): Promise<AskHistoryItem> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/ask-history/${askId}`, { headers })
+  if (!response.ok) {
+    throw new Error('Ask history item not found')
+  }
+  return response.json()
+}
+
+export async function deleteAskHistoryItem(askId: string): Promise<void> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/ask-history/${askId}`, { method: 'DELETE', headers })
+  if (!response.ok) {
+    throw new Error('Failed to delete ask history item')
+  }
 }
 

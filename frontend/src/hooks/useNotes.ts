@@ -118,3 +118,49 @@ export function useDeleteNote() {
   })
 }
 
+/**
+ * Ask notes mutation
+ */
+export function useAskNotes() {
+  return useMutation({
+    mutationFn: (args: { query: string; maxResults?: number; debug?: boolean }) =>
+      api.askNotes(args.query, args.maxResults ?? 12, args.debug ?? false),
+  })
+}
+
+export function useDigests(limit = 50, offset = 0) {
+  return useQuery({
+    queryKey: ['digests', limit, offset],
+    queryFn: () => api.fetchDigests(limit, offset),
+    staleTime: 30000,
+  })
+}
+
+export function useAskHistory(limit = 50, offset = 0) {
+  return useQuery({
+    queryKey: ['ask-history', limit, offset],
+    queryFn: () => api.fetchAskHistory(limit, offset),
+    staleTime: 30000,
+  })
+}
+
+export function useDeleteDigest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (digestId: string) => api.deleteDigest(digestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['digests'] })
+    },
+  })
+}
+
+export function useDeleteAskHistoryItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (askId: string) => api.deleteAskHistoryItem(askId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ask-history'] })
+    },
+  })
+}
+

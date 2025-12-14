@@ -19,6 +19,7 @@ from sqlalchemy import (
     create_engine,
     event,
 )
+from sqlalchemy.types import TypeDecorator, UserDefinedType
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, sessionmaker
@@ -81,6 +82,87 @@ class Digest(Base):
     __table_args__ = (
         Index('idx_digests_user_id', 'user_id'),
         Index('idx_digests_user_created', 'user_id', 'created_at'),
+    )
+
+
+class AskHistory(Base):
+    """
+    Persisted history of Ask Notes queries/results (compact form), with user isolation.
+    """
+
+    __tablename__ = "ask_history"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+
+    query = Column(Text, nullable=False)
+    query_plan_json = Column(Text, nullable=False)
+    answer_markdown = Column(Text, nullable=False)
+    cited_note_ids_json = Column(Text, nullable=False)
+    source_scores_json = Column(Text, nullable=True)
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_ask_history_user_id", "user_id"),
+        Index("idx_ask_history_user_created", "user_id", "created_at"),
+    )
+
+
+class _PGVector(UserDefinedType):
+    """pgvector column type (declared without adding third-party dependencies)."""
+
+    def __init__(self, dims: int):
+        self.dims = dims
+
+    def get_col_spec(self, **kw):
+        return f"vector({self.dims})"
+
+
+class VectorEmbedding(TypeDecorator):
+    """
+    Cross-dialect embedding type:
+    - SQLite: stored as TEXT (JSON list of floats)
+    - Postgres: stored as pgvector vector(dims)
+    """
+
+    impl = Text
+    cache_ok = True
+
+    def __init__(self, dims: int, **kwargs):
+        super().__init__(**kwargs)
+        self.dims = dims
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(_PGVector(self.dims))
+        return dialect.type_descriptor(Text())
+
+
+class NoteEmbedding(Base):
+    """
+    Embeddings for semantic search, with user isolation.
+    """
+
+    __tablename__ = "note_embeddings"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    note_id = Column(String(36), nullable=False, index=True)
+
+    embedding_model = Column(String(100), nullable=False)
+    content_hash = Column(String(64), nullable=False)
+    embedding = Column(VectorEmbedding(1536), nullable=False)
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_note_embeddings_user_note", "user_id", "note_id"),
+        Index("idx_note_embeddings_user_model", "user_id", "embedding_model"),
+        Index("idx_note_embeddings_user_updated", "user_id", "updated_at"),
     )
 
 
