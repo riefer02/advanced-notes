@@ -2,7 +2,7 @@
 Audio transcription using OpenAI GPT-4o-mini-transcribe.
 
 Uses OpenAI's latest transcription model for easy deployment.
-Model: gpt-4o-mini-transcribe (newer, higher quality than whisper-1)
+Model: gpt-4o-mini-transcribe-2025-12-15 (pinned snapshot; newer, higher quality than whisper-1)
 """
 
 import tempfile
