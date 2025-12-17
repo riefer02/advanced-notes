@@ -4,10 +4,9 @@ import type { TranscriptionResponse } from '../lib/api'
 
 interface AudioUploaderProps {
   recordButtonRef?: React.RefObject<HTMLButtonElement>
-  onAskNotes?: (query: string) => void
 }
 
-export default function AudioUploader({ recordButtonRef, onAskNotes }: AudioUploaderProps) {
+export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [lastResult, setLastResult] = useState<TranscriptionResponse | null>(null)
@@ -229,27 +228,6 @@ export default function AudioUploader({ recordButtonRef, onAskNotes }: AudioUplo
           <p className="text-xs text-green-700 mt-3">
             ✓ Saved and organized automatically
           </p>
-          {onAskNotes && (
-            <div className="mt-4 pt-4 border-t border-green-200">
-              <div className="flex flex-col sm:flex-row gap-2">
-                <button
-                  onClick={() => onAskNotes('Summarize what I just recorded.')}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white font-medium text-sm transition-colors bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16h6M12 20a8 8 0 100-16 8 8 0 000 16z" />
-                  </svg>
-                  Ask about this
-                </button>
-                <button
-                  onClick={() => onAskNotes('What are the action items from my latest note?')}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white border border-purple-200 text-purple-800 hover:bg-purple-50 font-medium text-sm transition-colors"
-                >
-                  Action items
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

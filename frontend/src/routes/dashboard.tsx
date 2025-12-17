@@ -3,7 +3,6 @@ import { useAuth } from '@clerk/clerk-react'
 import { useState, useRef } from 'react'
 import AudioUploader from '../components/AudioUploader'
 import NotesPanel from '../components/NotesPanel'
-import { useAIActions } from '../components/layout/AppShell'
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardPage,
@@ -13,7 +12,6 @@ function DashboardPage() {
   const { isLoaded, isSignedIn } = useAuth()
   const recordButtonRef = useRef<HTMLButtonElement>(null)
   const [activeTab, setActiveTab] = useState<'transcribe' | 'notes'>('transcribe')
-  const ai = useAIActions()
 
   // Show loading state while Clerk is loading
   if (!isLoaded) {
@@ -69,27 +67,7 @@ function DashboardPage() {
           }`}
         >
           <div className="p-4 lg:p-8 max-w-2xl mx-auto">
-             <div className="lg:hidden mb-6">
-                <button
-                  onClick={() => ai.openAsk()}
-                  className="w-full mb-3 flex justify-center items-center gap-2 px-4 py-3 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors border border-blue-200"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16h6M12 20a8 8 0 100-16 8 8 0 000 16z" />
-                  </svg>
-                  Ask Your Notes
-                </button>
-                <button
-                  onClick={() => ai.openSummarize()}
-                  className="w-full flex justify-center items-center gap-2 px-4 py-3 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg text-sm font-medium transition-colors border border-purple-200"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Summarize Recent Notes
-                </button>
-             </div>
-             <AudioUploader recordButtonRef={recordButtonRef} onAskNotes={(q) => ai.openAskWithQuery(q)} />
+             <AudioUploader recordButtonRef={recordButtonRef} />
           </div>
         </div>
 
