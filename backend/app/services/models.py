@@ -94,5 +94,26 @@ class SearchResult(BaseModel):
     snippet: str = Field(description="Matching text snippet")
 
 
+class AudioClip(BaseModel):
+    """Audio clip metadata (audio bytes stored in object storage)."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    user_id: str = Field(..., description="Clerk user ID")
+    note_id: Optional[str] = Field(None, description="Associated note ID (optional)")
+
+    bucket: Optional[str] = None
+    storage_key: str
+
+    mime_type: str
+    bytes: int = Field(..., ge=1)
+    duration_ms: Optional[int] = Field(None, ge=0)
+
+    status: str = Field(default="pending")
+    created_at: datetime = Field(default_factory=datetime.now)
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
 # Update forward references for recursive models
 FolderNode.model_rebuild()
