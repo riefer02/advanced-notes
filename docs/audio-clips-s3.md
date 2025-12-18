@@ -2,6 +2,19 @@
 
 Advanced Notes stores **audio bytes in S3** and keeps only **metadata in Postgres/SQLite**.
 
+### Feature flag (opt-in)
+
+Audio clips are **disabled by default**. Enable them by setting:
+
+- `AUDIO_CLIPS_ENABLED=true`
+
+When disabled, audio-related endpoints return `501` with a clear message.
+
+### Privacy behavior
+
+- Deleting a note via `DELETE /api/notes/<note_id>` will **also delete all associated audio clips** and will **best-effort delete** the stored audio objects.
+- If object deletion fails (permissions/transient errors), the note delete still succeeds but may return a `warning` field.
+
 ### Recommendation: single bucket, env-prefixed keys
 
 Use **one bucket** and isolate objects by environment using an object key prefix.
@@ -19,6 +32,7 @@ Prefix values are normalized to keep keys tidy:
 
 ### Required environment variables (backend)
 
+- **AUDIO_CLIPS_ENABLED**: must be `true` to enable audio clips (default: disabled)
 - **S3_BUCKET**: S3 bucket name (e.g. `advanced-notes-audio`)
 - **AWS_REGION**: AWS region (e.g. `us-east-1`)
 - **AWS_ACCESS_KEY_ID** / **AWS_SECRET_ACCESS_KEY**: IAM credentials with access to the bucket

@@ -30,6 +30,43 @@ OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 CONFIDENCE_THRESHOLD=0.7
 ```
 
+---
+
+## Optional: Audio clips (S3 object storage)
+
+Audio clips are **disabled by default**. If enabled, the backend stores original audio bytes in S3 (or an S3-compatible provider) and stores only metadata in the database.
+
+### Enable the feature
+
+Add to `backend/.env`:
+
+```bash
+AUDIO_CLIPS_ENABLED=true
+```
+
+### Required when enabled
+
+```bash
+S3_BUCKET=your-audio-bucket-name
+```
+
+### Common additional settings
+
+```bash
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+
+# Optional for S3-compatible providers (R2/MinIO)
+S3_ENDPOINT_URL=https://...
+
+# Optional: isolate keys by environment within one bucket
+APP_ENV=dev
+# or: S3_KEY_PREFIX=dev
+```
+
+See [`docs/audio-clips-s3.md`](./audio-clips-s3.md) for the upload/playback API flow and key prefix behavior.
+
 ### Example `.env` File
 
 Copy this template to `backend/.env` and fill in your actual values:

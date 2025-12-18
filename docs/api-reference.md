@@ -12,6 +12,8 @@ Complete API documentation for the Chisos backend.
 
 Transcribe audio and automatically categorize/save to database.
 
+This endpoint requires audio clips to be enabled (`AUDIO_CLIPS_ENABLED=true`) because the backend persists the original audio in object storage.
+
 **Request:**
 - **Content-Type:** `multipart/form-data` or `application/octet-stream`
 - **Body:** Audio file (WAV, FLAC, OGG, WebM, MP3) or raw audio bytes
@@ -25,6 +27,10 @@ Transcribe audio and automatically categorize/save to database.
     "model": "parakeet-tdt-0.6b-v3",
     "sample_rate": 48000,
     "duration": 3.48
+  },
+  "audio": {
+    "clip_id": "uuid",
+    "storage_key": "dev/user_123/uuid.webm"
   },
   "categorization": {
     "note_id": "uuid",
@@ -40,7 +46,51 @@ Transcribe audio and automatically categorize/save to database.
 
 **Errors:**
 - `400`: No audio data provided
+- `501`: Audio clips are disabled (enable with `AUDIO_CLIPS_ENABLED=true`)
 - `500`: Transcription/categorization error
+
+---
+
+## Audio clips
+
+Audio bytes are stored in object storage (S3/S3-compatible). The database stores clip metadata scoped to the authenticated user.
+
+All endpoints in this section return `501` if audio clips are disabled.
+
+### POST `/audio-clips`
+
+Create a pending audio clip row and return a presigned PUT URL for direct upload.
+
+**Request:** `application/json`
+```json
+{ "note_id": "optional-note-id", "mime_type": "audio/m4a", "bytes": 1234, "duration_ms": 1000 }
+```
+
+**Response:** `200 OK`
+```json
+{
+  "clip": { "id": "uuid", "note_id": "uuid", "mime_type": "audio/m4a", "bytes": 1234, "status": "pending" },
+  "upload": { "url": "https://...", "method": "PUT", "headers": { "Content-Type": "audio/m4a" }, "storage_key": "dev/user/uuid.m4a", "expires_at": "..." }
+}
+```
+
+### POST `/audio-clips/<clip_id>/complete`
+
+Mark a pending clip as ready after the client uploads to object storage.
+
+The backend verifies the upload exists (HEAD) and validates `bytes` and `mime_type` before marking `ready`.
+
+### GET `/audio-clips/<clip_id>/playback`
+
+Return a presigned GET URL for playback.
+
+### DELETE `/audio-clips/<clip_id>`
+
+Delete clip metadata and best-effort delete the stored object.
+
+### GET `/notes/<note_id>/audio`
+
+Convenience endpoint: return the note’s primary (most recent ready) audio clip + playback URL.
 
 ---
 
@@ -134,6 +184,8 @@ Update an existing note.
 ### DELETE `/notes/<note_id>`
 
 Delete a note by ID.
+
+If audio clips are enabled, deleting a note also deletes associated audio clips and best-effort deletes the stored audio objects.
 
 **Response:** `200 OK`
 ```json

@@ -14,6 +14,7 @@
 **Complete documentation**: See [`docs/`](./docs/) folder
 
 - **[Environment Setup](./docs/environment-setup.md)** - OpenAI API keys, configuration
+- **[Audio clips (S3)](./docs/audio-clips-s3.md)** - Optional audio storage + upload/playback flow
 - **[Technical Specification](./docs/semantic-organization-spec.md)** - AI categorization architecture  
 - **[Documentation Index](./docs/README.md)** - Full documentation catalog
 
@@ -36,6 +37,10 @@ uv sync
 
 # Create .env file with your OpenAI API key
 echo "OPENAI_API_KEY=sk-your-key-here" > .env
+
+# Optional: enable audio clips (S3-backed)
+# echo "AUDIO_CLIPS_ENABLED=true" >> .env
+# echo "S3_BUCKET=your-bucket-name" >> .env
 
 # Start Flask server on http://localhost:5001
 ./run.sh
