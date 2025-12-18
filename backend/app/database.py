@@ -166,6 +166,40 @@ class NoteEmbedding(Base):
     )
 
 
+class AudioClip(Base):
+    """
+    Audio clip metadata (bytes stored in S3/object storage; metadata stored here), with user isolation.
+    """
+
+    __tablename__ = "audio_clips"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+
+    # Optional association to a note. For v1 we treat the most-recent clip for a note as its "primary".
+    note_id = Column(String(36), nullable=True, index=True)
+
+    # Object storage location.
+    bucket = Column(String(255), nullable=True)
+    storage_key = Column(Text, nullable=False)
+
+    # Media metadata.
+    mime_type = Column(String(100), nullable=False)
+    bytes = Column(Integer, nullable=False)
+    duration_ms = Column(Integer, nullable=True)
+
+    # Simple lifecycle state: pending (upload not completed) / ready (playable) / failed.
+    status = Column(String(20), nullable=False, server_default="pending")
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_audio_clips_user_id", "user_id"),
+        Index("idx_audio_clips_user_note", "user_id", "note_id"),
+        Index("idx_audio_clips_user_created", "user_id", "created_at"),
+    )
+
+
 def get_database_url() -> str:
     """
     Get database URL from environment, defaulting to SQLite.

@@ -19,6 +19,9 @@ class Config:
     # Flask settings
     FLASK_ENV: str = os.getenv("FLASK_ENV", "development")
     DEBUG: bool = FLASK_ENV == "development"
+    # Generic environment name (preferred for non-Flask deployments).
+    # Use APP_ENV (recommended) or ENV; falls back to FLASK_ENV.
+    APP_ENV: Optional[str] = os.getenv("APP_ENV") or os.getenv("ENV")
 
     # OpenAI settings (used for both transcription and GPT categorization)
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
@@ -40,6 +43,84 @@ class Config:
     CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.7"))
     DEFAULT_FOLDERS: list = ["inbox", "archive"]
     MAX_NOTES_PER_FOLDER: int = 50
+
+    # Object storage (S3) settings for audio clips
+    S3_BUCKET: Optional[str] = os.getenv("S3_BUCKET")
+    AWS_REGION: Optional[str] = os.getenv("AWS_REGION")
+    AWS_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY")
+    # Optional override (useful for S3-compatible endpoints like MinIO/R2)
+    S3_ENDPOINT_URL: Optional[str] = os.getenv("S3_ENDPOINT_URL")
+    # Optional prefix to isolate objects by environment within a single bucket.
+    # If unset, we default to APP_ENV/ENV, then FLASK_ENV (e.g. 'development', 'production').
+    S3_KEY_PREFIX: Optional[str] = os.getenv("S3_KEY_PREFIX")
+    # Signed URL expirations (seconds)
+    S3_PRESIGN_PUT_EXPIRES_SECONDS: int = int(
+        os.getenv("S3_PRESIGN_PUT_EXPIRES_SECONDS", "900")
+    )
+    S3_PRESIGN_GET_EXPIRES_SECONDS: int = int(
+        os.getenv("S3_PRESIGN_GET_EXPIRES_SECONDS", "900")
+    )
+
+    @classmethod
+    def audio_clips_enabled(cls) -> bool:
+        """
+        Feature flag for audio clip storage/upload/playback.
+
+        Default: disabled (opt-in).
+        """
+        raw = (os.getenv("AUDIO_CLIPS_ENABLED", "false") or "").strip().lower()
+        return raw in {"1", "true", "yes", "on"}
+
+    @classmethod
+    def validate_audio_clips(cls) -> None:
+        """
+        Validate configuration required when audio clips are enabled.
+
+        We intentionally keep the requirements minimal to support multiple providers:
+        - Bucket is always required.
+        - Region/credentials may be optional for some S3-compatible setups or IAM roles.
+        """
+        if not cls.audio_clips_enabled():
+            return
+        if not (os.getenv("S3_BUCKET") or cls.S3_BUCKET):
+            raise ValueError("AUDIO_CLIPS_ENABLED is true but S3_BUCKET is not set")
+
+    @classmethod
+    def effective_s3_key_prefix(cls) -> str:
+        """
+        Resolve the effective object key prefix for S3, normalized to a small set of values.
+
+        Priority:
+          1) S3_KEY_PREFIX (explicit override)
+          2) APP_ENV / ENV (generic)
+          3) FLASK_ENV (fallback)
+        """
+
+        raw = (cls.S3_KEY_PREFIX or cls.APP_ENV or cls.FLASK_ENV or "").strip()
+        if not raw:
+            return ""
+
+        # Normalize: lowercase, remove slashes, trim whitespace/underscores.
+        v = raw.strip().lower().strip().strip("/").replace(" ", "-").replace("_", "-")
+        v = v.strip("-")
+
+        # Canonicalize common variants to stable prefixes.
+        aliases = {
+            "prod": "prod",
+            "production": "prod",
+            "live": "prod",
+            "release": "prod",
+            "dev": "dev",
+            "development": "dev",
+            "local": "dev",
+            "staging": "staging",
+            "stage": "staging",
+            "test": "test",
+            "testing": "test",
+            "ci": "test",
+        }
+        return aliases.get(v, v)
 
     @classmethod
     def validate(cls):

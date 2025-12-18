@@ -15,7 +15,9 @@ from flask import Blueprint, request, jsonify, g
 
 from .asr import transcribe_bytes
 from .auth import require_auth
+from .config import Config
 from .services.ask_service import RetrievedNote
+from .services import s3_audio
 from .services.embeddings import (
     build_note_embedding_text,
     content_hash,
@@ -27,6 +29,46 @@ from .services.container import get_services
 from .services.folder_utils import extract_folder_paths
 
 bp = Blueprint("api", __name__)
+
+def _json_error(message: str, status: int = 400):
+    return jsonify({"error": message}), status
+
+
+def _require_audio_clips_enabled():
+    if not Config.audio_clips_enabled():
+        return _json_error("Audio clips are disabled. Set AUDIO_CLIPS_ENABLED=true to enable.", 501)
+    return None
+
+
+def _cleanup_stale_pending_audio_clips(user_id: str, svc) -> None:  # noqa: ANN001 - small route helper
+    """
+    Opportunistically clean up old pending clips for the current user.
+
+    This avoids needing a separate cron/janitor job for v1 while preventing cost leakage
+    from abandoned uploads.
+    """
+    try:
+        stale = svc.storage.list_stale_pending_audio_clips(
+            user_id,
+            older_than_minutes=60,
+            limit=100,
+        )
+    except Exception:
+        return
+
+    if not stale:
+        return
+
+    # Best-effort: delete objects first, then delete DB rows.
+    for clip in stale:
+        try:
+            s3_audio.delete_object(storage_key=clip.storage_key)
+        except Exception:
+            pass
+    try:
+        svc.storage.delete_audio_clips(user_id, [c.id for c in stale])
+    except Exception:
+        pass
 
 
 # ============================================================================
@@ -109,6 +151,10 @@ def transcribe():
     user_id = g.user_id  # Get authenticated user ID
     svc = get_services()
 
+    disabled = _require_audio_clips_enabled()
+    if disabled is not None:
+        return disabled
+
     # Check for file upload
     content_type = None
     if "file" in request.files:
@@ -124,21 +170,72 @@ def transcribe():
         return jsonify({"error": "No audio data provided"}), 400
 
     try:
+        _cleanup_stale_pending_audio_clips(user_id, svc)
+
+        # Create a pending audio clip row first (so we never have silent S3 orphans without DB metadata).
+        # Then upload bytes to S3; we only mark the clip ready after the full flow succeeds.
+        from uuid import uuid4
+
+        audio_clip_id = str(uuid4())
+        resolved_mime = content_type or "application/octet-stream"
+        audio_storage_key = s3_audio.object_key_for_clip(
+            user_id=user_id,
+            clip_id=audio_clip_id,
+            mime_type=resolved_mime,
+        )
+
+        svc.storage.create_audio_clip_pending(
+            user_id,
+            clip_id=audio_clip_id,
+            note_id=None,
+            mime_type=resolved_mime,
+            bytes=len(data),
+            duration_ms=None,
+            storage_key=audio_storage_key,
+            bucket=None,
+        )
+
+        try:
+            s3_audio.put_object_bytes(
+                storage_key=audio_storage_key,
+                content_type=resolved_mime,
+                data=data,
+            )
+        except Exception:
+            # Upload failed: mark clip failed and bubble up.
+            svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
+            raise
+
         # Step 1: Transcribe audio
         try:
             text, meta = transcribe_bytes(data, content_type)
         except ValueError as e:
             # Validation errors (empty audio, too small, etc.)
+            try:
+                s3_audio.delete_object(storage_key=audio_storage_key)
+            except Exception:
+                pass
+            svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
             return jsonify({"error": str(e)}), 400
         except Exception as e:
             # OpenAI API errors
             error_msg = str(e)
             if "corrupted" in error_msg.lower() or "unsupported" in error_msg.lower():
+                try:
+                    s3_audio.delete_object(storage_key=audio_storage_key)
+                except Exception:
+                    pass
+                svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
                 return jsonify(
                     {
                         "error": "Audio format not supported or corrupted. Please try recording again."
                     }
                 ), 400
+            try:
+                s3_audio.delete_object(storage_key=audio_storage_key)
+            except Exception:
+                pass
+            svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
             raise
 
         # Step 2: Get AI categorization (user-scoped folders)
@@ -161,6 +258,22 @@ def transcribe():
 
         note_id = svc.storage.save_note(
             user_id=user_id, content=text, metadata=note_metadata
+        )
+
+        # Persist audio clip metadata linked to the new note + mark ready.
+        duration_ms = None
+        try:
+            dur = meta.get("duration")
+            if dur is not None:
+                duration_ms = int(float(dur) * 1000.0)
+        except Exception:
+            duration_ms = None
+
+        svc.storage.mark_audio_clip_ready(
+            user_id,
+            audio_clip_id,
+            note_id=note_id,
+            duration_ms=duration_ms,
         )
 
         # Step 3.5: Upsert embedding for semantic search (best-effort)
@@ -193,6 +306,10 @@ def transcribe():
             {
                 "text": text,
                 "meta": meta,
+                "audio": {
+                    "clip_id": audio_clip_id,
+                    "storage_key": audio_storage_key,
+                },
                 "categorization": {
                     "note_id": note_id,
                     "action": categorization_result.action,
@@ -206,7 +323,215 @@ def transcribe():
         )
 
     except Exception as e:
+        # Best-effort cleanup if we already staged an S3 object.
+        try:
+            if "audio_storage_key" in locals():
+                s3_audio.delete_object(storage_key=audio_storage_key)
+        except Exception:
+            pass
+        try:
+            if "audio_clip_id" in locals():
+                svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
+        except Exception:
+            pass
         return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# AUDIO CLIPS (UPLOAD + PLAYBACK)
+# ============================================================================
+
+
+@bp.post("/audio-clips")
+@require_auth
+def create_audio_clip_upload():
+    """
+    Create a pending audio clip row and return a presigned S3 PUT URL for direct upload.
+
+    Body JSON:
+      { note_id?: str, mime_type: str, bytes: int, duration_ms?: int }
+    """
+    user_id = g.user_id
+    svc = get_services()
+    data = request.get_json(silent=True) or {}
+
+    disabled = _require_audio_clips_enabled()
+    if disabled is not None:
+        return disabled
+
+    _cleanup_stale_pending_audio_clips(user_id, svc)
+
+    mime_type = (data.get("mime_type") or "").strip()
+    if not mime_type:
+        return _json_error("Body field 'mime_type' is required")
+
+    try:
+        bytes_value = int(data.get("bytes") or 0)
+    except Exception:
+        return _json_error("Body field 'bytes' must be an integer")
+    if bytes_value <= 0:
+        return _json_error("Body field 'bytes' must be > 0")
+
+    note_id = data.get("note_id")
+    duration_ms = data.get("duration_ms")
+    if duration_ms is not None:
+        try:
+            duration_ms = int(duration_ms)
+        except Exception:
+            return _json_error("Body field 'duration_ms' must be an integer")
+
+    # Create DB row first so clip_id is stable for key generation.
+    # We'll fill storage_key deterministically as {user_id}/{clip_id}{ext}.
+    from uuid import uuid4
+
+    clip_id = str(uuid4())
+    storage_key = s3_audio.object_key_for_clip(
+        user_id=user_id, clip_id=clip_id, mime_type=mime_type
+    )
+
+    clip = svc.storage.create_audio_clip_pending(
+        user_id,
+        clip_id=clip_id,
+        note_id=note_id,
+        mime_type=mime_type,
+        bytes=bytes_value,
+        duration_ms=duration_ms,
+        storage_key=storage_key,
+        bucket=None,
+    )
+
+    upload = s3_audio.presign_put_object(storage_key=storage_key, content_type=mime_type)
+    return jsonify(
+        {
+            "clip": clip.model_dump(),
+            "upload": {
+                "url": upload.url,
+                "method": upload.method,
+                "headers": upload.headers,
+                "storage_key": storage_key,
+                "expires_at": upload.expires_at,
+            },
+        }
+    )
+
+
+@bp.post("/audio-clips/<clip_id>/complete")
+@require_auth
+def complete_audio_clip_upload(clip_id: str):
+    """
+    Mark a pending clip as ready after the client successfully PUTs to S3.
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    disabled = _require_audio_clips_enabled()
+    if disabled is not None:
+        return disabled
+
+    clip = svc.storage.get_audio_clip(user_id, clip_id)
+    if not clip:
+        return _json_error("Audio clip not found", 404)
+
+    # Idempotent: if already ready, return current state.
+    if clip.status == "ready":
+        return jsonify({"clip": clip.model_dump()})
+
+    # Verify upload exists and matches expected metadata before marking ready.
+    try:
+        head = s3_audio.head_object(storage_key=clip.storage_key)
+    except Exception:
+        return _json_error("Audio upload not found", 409)
+
+    if int(head.content_length or 0) != int(clip.bytes or 0):
+        return _json_error("Uploaded audio size does not match expected bytes", 409)
+
+    expected = s3_audio.base_mime(clip.mime_type)
+    actual = s3_audio.base_mime(head.content_type or "")
+    if expected and actual and expected != actual:
+        return _json_error("Uploaded audio content-type does not match expected mime_type", 409)
+
+    updated = svc.storage.mark_audio_clip_ready(user_id, clip_id)
+    if not updated:
+        return _json_error("Audio clip not found", 404)
+    return jsonify({"clip": updated.model_dump()})
+
+
+@bp.get("/audio-clips/<clip_id>/playback")
+@require_auth
+def get_audio_clip_playback(clip_id: str):
+    """
+    Return a presigned GET URL for playback.
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    disabled = _require_audio_clips_enabled()
+    if disabled is not None:
+        return disabled
+
+    clip = svc.storage.get_audio_clip(user_id, clip_id)
+    if not clip:
+        return _json_error("Audio clip not found", 404)
+    if clip.status != "ready":
+        return _json_error("Audio clip is not ready", 409)
+
+    dl = s3_audio.presign_get_object(storage_key=clip.storage_key)
+    return jsonify({"url": dl.url, "expires_at": dl.expires_at})
+
+
+@bp.delete("/audio-clips/<clip_id>")
+@require_auth
+def delete_audio_clip(clip_id: str):
+    """
+    Delete audio clip metadata row + best-effort delete the S3 object.
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    disabled = _require_audio_clips_enabled()
+    if disabled is not None:
+        return disabled
+
+    clip = svc.storage.get_audio_clip(user_id, clip_id)
+    if not clip:
+        return _json_error("Audio clip not found", 404)
+
+    warning = None
+    try:
+        s3_audio.delete_object(storage_key=clip.storage_key)
+    except Exception as e:
+        # Keep deletion idempotent and user-friendly; record for logs.
+        warning = f"Failed to delete audio object from storage: {e}"
+        print(warning)
+
+    success = svc.storage.delete_audio_clip(user_id, clip_id)
+    if not success:
+        return _json_error("Audio clip not found", 404)
+    payload = {"success": True}
+    if warning:
+        payload["warning"] = warning
+    return jsonify(payload)
+
+
+@bp.get("/notes/<note_id>/audio")
+@require_auth
+def get_primary_audio_clip_for_note(note_id: str):
+    """
+    Convenience endpoint: return the note's primary (most recent ready) audio clip + playback URL.
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    disabled = _require_audio_clips_enabled()
+    if disabled is not None:
+        return disabled
+
+    clip = svc.storage.get_primary_audio_clip_for_note(user_id, note_id)
+    if not clip:
+        return _json_error("Audio clip not found", 404)
+
+    dl = s3_audio.presign_get_object(storage_key=clip.storage_key)
+    return jsonify({"clip": clip.model_dump(), "playback": {"url": dl.url, "expires_at": dl.expires_at}})
 
 
 # ============================================================================
@@ -372,14 +697,35 @@ def delete_note(note_id: str):
     svc = get_services()
 
     try:
+        # Privacy-first cascade: when audio clips are enabled, delete associated audio clips + objects.
+        warning = None
+        if Config.audio_clips_enabled():
+            try:
+                clips = svc.storage.list_audio_clips_for_note(user_id, note_id)
+                for clip in clips:
+                    try:
+                        s3_audio.delete_object(storage_key=clip.storage_key)
+                    except Exception as e:
+                        # Keep the UX simple: note deletion still succeeds; we may retry later via opportunistic cleanup.
+                        warning = f"Failed to delete one or more audio objects: {e}"
+            except Exception as e:
+                warning = f"Failed to list/delete note audio clips: {e}"
+
+            try:
+                svc.storage.delete_audio_clips_for_note(user_id, note_id)
+            except Exception as e:
+                # If we can't delete clip rows, abort the note deletion to avoid a confusing half-state.
+                return jsonify({"error": f"Failed to delete note audio clips: {e}"}), 500
+
         success = svc.storage.delete_note(user_id, note_id)
 
         if not success:
             return jsonify({"error": "Note not found"}), 404
 
-        return jsonify(
-            {"success": True, "message": f"Note {note_id} deleted successfully"}
-        )
+        payload = {"success": True, "message": f"Note {note_id} deleted successfully"}
+        if warning:
+            payload["warning"] = warning
+        return jsonify(payload)
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
