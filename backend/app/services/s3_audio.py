@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from app.config import Config
 
@@ -24,6 +23,12 @@ class PresignedRequest:
     expires_at: str
     # Optional headers a client should set (we keep this empty for now)
     headers: dict[str, str]
+
+
+@dataclass(frozen=True)
+class ObjectHead:
+    content_length: int
+    content_type: str | None
 
 
 _MIME_TO_EXT: dict[str, str] = {
@@ -41,6 +46,11 @@ _MIME_TO_EXT: dict[str, str] = {
 
 def _base_mime(mime_type: str) -> str:
     return (mime_type or "").split(";")[0].strip().lower()
+
+
+def base_mime(mime_type: str) -> str:
+    """Public helper for normalizing MIME types (drops parameters, lowercases)."""
+    return _base_mime(mime_type)
 
 
 def object_key_for_clip(*, user_id: str, clip_id: str, mime_type: str) -> str:
@@ -93,7 +103,13 @@ def presign_put_object(*, storage_key: str, content_type: str) -> PresignedReque
         ExpiresIn=expires,
     )
     expires_at = (datetime.now(timezone.utc) + timedelta(seconds=expires)).isoformat()
-    return PresignedRequest(url=url, method="PUT", expires_at=expires_at, headers={})
+    # Many S3 providers require the client to send the same Content-Type that was presigned.
+    return PresignedRequest(
+        url=url,
+        method="PUT",
+        expires_at=expires_at,
+        headers={"Content-Type": content_type},
+    )
 
 
 def presign_get_object(*, storage_key: str) -> PresignedRequest:
@@ -106,6 +122,17 @@ def presign_get_object(*, storage_key: str) -> PresignedRequest:
     )
     expires_at = (datetime.now(timezone.utc) + timedelta(seconds=expires)).isoformat()
     return PresignedRequest(url=url, method="GET", expires_at=expires_at, headers={})
+
+
+def head_object(*, storage_key: str) -> ObjectHead:
+    if not storage_key:
+        raise ValueError("storage_key is required")
+    s3, bucket = _client()
+    resp = s3.head_object(Bucket=bucket, Key=storage_key)
+    return ObjectHead(
+        content_length=int(resp.get("ContentLength") or 0),
+        content_type=resp.get("ContentType"),
+    )
 
 
 def put_object_bytes(*, storage_key: str, content_type: str, data: bytes) -> None:
@@ -121,3 +148,13 @@ def put_object_bytes(*, storage_key: str, content_type: str, data: bytes) -> Non
     s3.put_object(Bucket=bucket, Key=storage_key, Body=data, ContentType=content_type)
 
 
+def delete_object(*, storage_key: str) -> None:
+    """
+    Best-effort delete an object from S3.
+
+    Note: S3 delete is idempotent; deleting a non-existent key is not an error for many providers.
+    """
+    if not storage_key:
+        raise ValueError("storage_key is required")
+    s3, bucket = _client()
+    s3.delete_object(Bucket=bucket, Key=storage_key)

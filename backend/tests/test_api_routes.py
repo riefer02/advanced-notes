@@ -102,6 +102,43 @@ def test_transcribe_uploads_audio_to_s3_and_links_clip(client, app, monkeypatch)
     assert uploaded["storage_key"]
 
 
+def test_transcribe_cleans_up_when_transcription_fails(client, app, monkeypatch):  # noqa: ANN001
+    # Ensure we delete the uploaded object and mark the clip failed when transcription errors out.
+    from app import routes as _routes
+    from app.services import s3_audio as _s3_audio
+
+    monkeypatch.setattr(_routes, "transcribe_bytes", lambda *a, **k: (_ for _ in ()).throw(ValueError("bad audio")))
+
+    deleted: list[str] = []
+
+    monkeypatch.setattr(
+        _s3_audio,
+        "delete_object",
+        lambda *, storage_key: deleted.append(storage_key),
+    )
+
+    failed: list[tuple[str, str]] = []
+
+    def _record_failed(user_id: str, clip_id: str):
+        failed.append((user_id, clip_id))
+        return None
+
+    monkeypatch.setattr(app.extensions["services"].storage, "mark_audio_clip_failed", _record_failed)
+
+    # Prevent boto3 usage in tests.
+    monkeypatch.setattr(_s3_audio, "put_object_bytes", lambda **kwargs: None)
+    monkeypatch.setattr(_s3_audio, "object_key_for_clip", lambda **kwargs: "user-a/fixed.m4a")
+
+    resp = client.post(
+        "/api/transcribe",
+        data=b"x" * 2000,
+        headers={"X-Test-User-Id": "user-a", "Content-Type": "audio/m4a"},
+    )
+    assert resp.status_code == 400
+    assert deleted == ["user-a/fixed.m4a"]
+    assert failed and failed[0][0] == "user-a"
+
+
 @pytest.fixture()
 def app(tmp_path: Path):
     test_db = tmp_path / "api_test.db"
@@ -148,6 +185,14 @@ def test_audio_clip_flow_is_user_scoped(client, app, monkeypatch):  # noqa: ANN0
         "object_key_for_clip",
         lambda **kwargs: f"{kwargs['user_id']}/{kwargs['clip_id']}.m4a",
     )
+    monkeypatch.setattr(
+        _s3_audio,
+        "head_object",
+        lambda **kwargs: _s3_audio.ObjectHead(content_length=1234, content_type="audio/m4a"),
+    )
+
+    deleted: list[str] = []
+    monkeypatch.setattr(_s3_audio, "delete_object", lambda *, storage_key: deleted.append(storage_key))
 
     # Create a note for user-a (optional association)
     note_id = svc.storage.save_note(
@@ -218,6 +263,131 @@ def test_audio_clip_flow_is_user_scoped(client, app, monkeypatch):  # noqa: ANN0
     )
     assert resp.status_code == 200
     assert resp.get_json()["success"] is True
+    assert deleted == [f"user-a/{clip_id}.m4a"]
+
+
+def test_audio_clip_complete_requires_uploaded_object(client, app, monkeypatch):  # noqa: ANN001
+    # /complete must verify the upload exists and matches metadata before marking ready.
+    from app.services import s3_audio as _s3_audio
+
+    monkeypatch.setattr(
+        _s3_audio,
+        "presign_put_object",
+        lambda **kwargs: _stub_presign("https://example.com/put", "PUT"),
+    )
+    monkeypatch.setattr(
+        _s3_audio,
+        "object_key_for_clip",
+        lambda **kwargs: f"{kwargs['user_id']}/{kwargs['clip_id']}.m4a",
+    )
+
+    # Create upload session
+    resp = client.post(
+        "/api/audio-clips",
+        json={"mime_type": "audio/m4a", "bytes": 1234},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 200
+    clip_id = resp.get_json()["clip"]["id"]
+
+    # HEAD failure -> 409
+    monkeypatch.setattr(_s3_audio, "head_object", lambda **kwargs: (_ for _ in ()).throw(Exception("404")))
+    resp = client.post(
+        f"/api/audio-clips/{clip_id}/complete",
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 409
+
+    # Size mismatch -> 409
+    monkeypatch.setattr(
+        _s3_audio,
+        "head_object",
+        lambda **kwargs: _s3_audio.ObjectHead(content_length=999, content_type="audio/m4a"),
+    )
+    resp = client.post(
+        f"/api/audio-clips/{clip_id}/complete",
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 409
+
+    # Correct -> ready
+    monkeypatch.setattr(
+        _s3_audio,
+        "head_object",
+        lambda **kwargs: _s3_audio.ObjectHead(content_length=1234, content_type="audio/m4a"),
+    )
+    resp = client.post(
+        f"/api/audio-clips/{clip_id}/complete",
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["clip"]["status"] == "ready"
+
+
+def test_delete_note_cascades_to_audio_clips(client, app, monkeypatch):  # noqa: ANN001
+    # Deleting a note should delete its audio clips and best-effort delete stored objects.
+    from app.services import s3_audio as _s3_audio
+
+    monkeypatch.setattr(
+        _s3_audio,
+        "presign_put_object",
+        lambda **kwargs: _stub_presign("https://example.com/put", "PUT"),
+    )
+    monkeypatch.setattr(
+        _s3_audio,
+        "presign_get_object",
+        lambda **kwargs: _stub_presign("https://example.com/get", "GET"),
+    )
+    monkeypatch.setattr(
+        _s3_audio,
+        "object_key_for_clip",
+        lambda **kwargs: f"{kwargs['user_id']}/{kwargs['clip_id']}.m4a",
+    )
+    monkeypatch.setattr(
+        _s3_audio,
+        "head_object",
+        lambda **kwargs: _s3_audio.ObjectHead(content_length=1234, content_type="audio/m4a"),
+    )
+
+    deleted: list[str] = []
+    monkeypatch.setattr(_s3_audio, "delete_object", lambda *, storage_key: deleted.append(storage_key))
+
+    # Create a note
+    note_id = app.extensions["services"].storage.save_note(
+        user_id="user-a",
+        content="hello",
+        metadata=NoteMetadata(title="A", folder_path="x", tags=[]),
+    )
+
+    # Create a clip linked to the note and mark ready
+    resp = client.post(
+        "/api/audio-clips",
+        json={"note_id": note_id, "mime_type": "audio/m4a", "bytes": 1234},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 200
+    clip_id = resp.get_json()["clip"]["id"]
+
+    resp = client.post(
+        f"/api/audio-clips/{clip_id}/complete",
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 200
+
+    # Delete the note -> should cascade delete the clip + S3 object
+    resp = client.delete(
+        f"/api/notes/{note_id}",
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 200
+    assert deleted == [f"user-a/{clip_id}.m4a"]
+
+    # Clip should now be gone
+    resp = client.get(
+        f"/api/audio-clips/{clip_id}/playback",
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 404
 
 
 def test_list_notes_is_user_scoped(client, app):  # noqa: ANN001 - pytest fixtures

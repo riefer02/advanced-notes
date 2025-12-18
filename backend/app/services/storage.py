@@ -409,6 +409,8 @@ class NoteStorage:
         *,
         bucket: Optional[str] = None,
         storage_key: Optional[str] = None,
+        note_id: Optional[str] = None,
+        duration_ms: Optional[int] = None,
     ) -> Optional[AudioClipDTO]:
         with self._session_scope() as session:
             clip = (
@@ -422,7 +424,24 @@ class NoteStorage:
                 clip.bucket = bucket
             if storage_key is not None:
                 clip.storage_key = storage_key
+            if note_id is not None:
+                clip.note_id = note_id
+            if duration_ms is not None:
+                clip.duration_ms = duration_ms
             clip.status = "ready"
+            session.add(clip)
+            return _audio_clip_to_dto(clip)
+
+    def mark_audio_clip_failed(self, user_id: str, clip_id: str) -> Optional[AudioClipDTO]:
+        with self._session_scope() as session:
+            clip = (
+                session.query(AudioClipORM)
+                .filter(AudioClipORM.user_id == user_id, AudioClipORM.id == clip_id)
+                .one_or_none()
+            )
+            if not clip:
+                return None
+            clip.status = "failed"
             session.add(clip)
             return _audio_clip_to_dto(clip)
 
@@ -452,6 +471,29 @@ class NoteStorage:
             )
             return _audio_clip_to_dto(clip) if clip else None
 
+    def list_audio_clips_for_note(self, user_id: str, note_id: str) -> List[AudioClipDTO]:
+        if not note_id:
+            return []
+        with self._session_scope() as session:
+            rows = (
+                session.query(AudioClipORM)
+                .filter(AudioClipORM.user_id == user_id, AudioClipORM.note_id == note_id)
+                .order_by(desc(AudioClipORM.created_at))
+                .all()
+            )
+            return [_audio_clip_to_dto(r) for r in rows]
+
+    def delete_audio_clips_for_note(self, user_id: str, note_id: str) -> int:
+        if not note_id:
+            return 0
+        with self._session_scope() as session:
+            result = (
+                session.query(AudioClipORM)
+                .filter(AudioClipORM.user_id == user_id, AudioClipORM.note_id == note_id)
+                .delete(synchronize_session=False)
+            )
+            return int(result or 0)
+
     def delete_audio_clip(self, user_id: str, clip_id: str) -> bool:
         with self._session_scope() as session:
             result = (
@@ -460,6 +502,46 @@ class NoteStorage:
                 .delete(synchronize_session=False)
             )
             return result > 0
+
+    def list_stale_pending_audio_clips(
+        self,
+        user_id: str,
+        *,
+        older_than_minutes: int = 60,
+        limit: int = 100,
+    ) -> List[AudioClipDTO]:
+        """
+        Return stale pending clips for a user (used by opportunistic cleanup).
+        """
+        older_than_minutes = max(1, int(older_than_minutes))
+        limit = max(1, min(int(limit), 1000))
+        cutoff = datetime.utcnow().timestamp() - (older_than_minutes * 60)
+        cutoff_dt = datetime.utcfromtimestamp(cutoff)
+
+        with self._session_scope() as session:
+            rows = (
+                session.query(AudioClipORM)
+                .filter(
+                    AudioClipORM.user_id == user_id,
+                    AudioClipORM.status == "pending",
+                    AudioClipORM.created_at < cutoff_dt,
+                )
+                .order_by(AudioClipORM.created_at.asc())
+                .limit(limit)
+                .all()
+            )
+            return [_audio_clip_to_dto(r) for r in rows]
+
+    def delete_audio_clips(self, user_id: str, clip_ids: List[str]) -> int:
+        if not clip_ids:
+            return 0
+        with self._session_scope() as session:
+            result = (
+                session.query(AudioClipORM)
+                .filter(AudioClipORM.user_id == user_id, AudioClipORM.id.in_(clip_ids))
+                .delete(synchronize_session=False)
+            )
+            return int(result or 0)
 
     def upsert_note_embedding(
         self,
