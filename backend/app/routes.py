@@ -15,6 +15,7 @@ from flask import Blueprint, request, jsonify, g
 
 from .asr import transcribe_bytes
 from .auth import require_auth
+from .config import Config
 from .services.ask_service import RetrievedNote
 from .services import s3_audio
 from .services.embeddings import (
@@ -31,6 +32,12 @@ bp = Blueprint("api", __name__)
 
 def _json_error(message: str, status: int = 400):
     return jsonify({"error": message}), status
+
+
+def _require_audio_clips_enabled():
+    if not Config.audio_clips_enabled():
+        return _json_error("Audio clips are disabled. Set AUDIO_CLIPS_ENABLED=true to enable.", 501)
+    return None
 
 
 def _cleanup_stale_pending_audio_clips(user_id: str, svc) -> None:  # noqa: ANN001 - small route helper
@@ -143,6 +150,10 @@ def transcribe():
     """
     user_id = g.user_id  # Get authenticated user ID
     svc = get_services()
+
+    disabled = _require_audio_clips_enabled()
+    if disabled is not None:
+        return disabled
 
     # Check for file upload
     content_type = None
@@ -344,6 +355,10 @@ def create_audio_clip_upload():
     svc = get_services()
     data = request.get_json(silent=True) or {}
 
+    disabled = _require_audio_clips_enabled()
+    if disabled is not None:
+        return disabled
+
     _cleanup_stale_pending_audio_clips(user_id, svc)
 
     mime_type = (data.get("mime_type") or "").strip()
@@ -409,6 +424,10 @@ def complete_audio_clip_upload(clip_id: str):
     user_id = g.user_id
     svc = get_services()
 
+    disabled = _require_audio_clips_enabled()
+    if disabled is not None:
+        return disabled
+
     clip = svc.storage.get_audio_clip(user_id, clip_id)
     if not clip:
         return _json_error("Audio clip not found", 404)
@@ -446,6 +465,10 @@ def get_audio_clip_playback(clip_id: str):
     user_id = g.user_id
     svc = get_services()
 
+    disabled = _require_audio_clips_enabled()
+    if disabled is not None:
+        return disabled
+
     clip = svc.storage.get_audio_clip(user_id, clip_id)
     if not clip:
         return _json_error("Audio clip not found", 404)
@@ -464,6 +487,10 @@ def delete_audio_clip(clip_id: str):
     """
     user_id = g.user_id
     svc = get_services()
+
+    disabled = _require_audio_clips_enabled()
+    if disabled is not None:
+        return disabled
 
     clip = svc.storage.get_audio_clip(user_id, clip_id)
     if not clip:
@@ -494,6 +521,10 @@ def get_primary_audio_clip_for_note(note_id: str):
     """
     user_id = g.user_id
     svc = get_services()
+
+    disabled = _require_audio_clips_enabled()
+    if disabled is not None:
+        return disabled
 
     clip = svc.storage.get_primary_audio_clip_for_note(user_id, note_id)
     if not clip:
@@ -666,24 +697,25 @@ def delete_note(note_id: str):
     svc = get_services()
 
     try:
-        # Privacy-first cascade: delete associated audio clips + their stored objects.
+        # Privacy-first cascade: when audio clips are enabled, delete associated audio clips + objects.
         warning = None
-        try:
-            clips = svc.storage.list_audio_clips_for_note(user_id, note_id)
-            for clip in clips:
-                try:
-                    s3_audio.delete_object(storage_key=clip.storage_key)
-                except Exception as e:
-                    # Keep the UX simple: note deletion still succeeds; we may retry later via opportunistic cleanup.
-                    warning = f"Failed to delete one or more audio objects: {e}"
-        except Exception as e:
-            warning = f"Failed to list/delete note audio clips: {e}"
+        if Config.audio_clips_enabled():
+            try:
+                clips = svc.storage.list_audio_clips_for_note(user_id, note_id)
+                for clip in clips:
+                    try:
+                        s3_audio.delete_object(storage_key=clip.storage_key)
+                    except Exception as e:
+                        # Keep the UX simple: note deletion still succeeds; we may retry later via opportunistic cleanup.
+                        warning = f"Failed to delete one or more audio objects: {e}"
+            except Exception as e:
+                warning = f"Failed to list/delete note audio clips: {e}"
 
-        try:
-            svc.storage.delete_audio_clips_for_note(user_id, note_id)
-        except Exception as e:
-            # If we can't delete clip rows, abort the note deletion to avoid a confusing half-state.
-            return jsonify({"error": f"Failed to delete note audio clips: {e}"}), 500
+            try:
+                svc.storage.delete_audio_clips_for_note(user_id, note_id)
+            except Exception as e:
+                # If we can't delete clip rows, abort the note deletion to avoid a confusing half-state.
+                return jsonify({"error": f"Failed to delete note audio clips: {e}"}), 500
 
         success = svc.storage.delete_note(user_id, note_id)
 

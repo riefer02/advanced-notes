@@ -140,7 +140,8 @@ def test_transcribe_cleans_up_when_transcription_fails(client, app, monkeypatch)
 
 
 @pytest.fixture()
-def app(tmp_path: Path):
+def app(tmp_path: Path, monkeypatch):  # noqa: ANN001 - pytest fixture
+    monkeypatch.setenv("AUDIO_CLIPS_ENABLED", "true")
     test_db = tmp_path / "api_test.db"
     storage = NoteStorage(db_path=test_db)
     services = Services(

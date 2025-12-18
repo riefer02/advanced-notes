@@ -63,6 +63,30 @@ class Config:
     )
 
     @classmethod
+    def audio_clips_enabled(cls) -> bool:
+        """
+        Feature flag for audio clip storage/upload/playback.
+
+        Default: disabled (opt-in).
+        """
+        raw = (os.getenv("AUDIO_CLIPS_ENABLED", "false") or "").strip().lower()
+        return raw in {"1", "true", "yes", "on"}
+
+    @classmethod
+    def validate_audio_clips(cls) -> None:
+        """
+        Validate configuration required when audio clips are enabled.
+
+        We intentionally keep the requirements minimal to support multiple providers:
+        - Bucket is always required.
+        - Region/credentials may be optional for some S3-compatible setups or IAM roles.
+        """
+        if not cls.audio_clips_enabled():
+            return
+        if not (os.getenv("S3_BUCKET") or cls.S3_BUCKET):
+            raise ValueError("AUDIO_CLIPS_ENABLED is true but S3_BUCKET is not set")
+
+    @classmethod
     def effective_s3_key_prefix(cls) -> str:
         """
         Resolve the effective object key prefix for S3, normalized to a small set of values.

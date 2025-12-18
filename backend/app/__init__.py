@@ -5,12 +5,17 @@ from flask import Flask
 from flask_cors import CORS
 
 from .services.container import Services, create_services
+from .config import Config
 
 def create_app(*, services: Optional[Services] = None, testing: bool = False):
     app = Flask(__name__)
 
     if testing:
         app.config["TESTING"] = True
+    else:
+        # Fail fast for misconfigured environments when audio clips are enabled.
+        # (We intentionally do NOT require S3 config when the feature flag is off.)
+        Config.validate_audio_clips()
     
     # CORS configuration for development and production
     allowed_origins = [
