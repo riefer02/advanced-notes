@@ -13,6 +13,38 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+# ============================================================================
+# CONSTANTS - Magic numbers extracted for clarity
+# ============================================================================
+
+
+class SearchConfig:
+    """Configuration constants for search operations."""
+    MAX_SEMANTIC_CANDIDATES = 200
+    MAX_FTS_CANDIDATES = 200
+    MAX_ASK_RESULTS = 50
+    DEFAULT_ASK_RESULTS = 12
+    STALE_CLIP_MINUTES = 60
+    STALE_CLIP_BATCH_SIZE = 100
+
+
+class PaginationConfig:
+    """Configuration constants for pagination."""
+    DEFAULT_LIMIT = 50
+    MAX_LIMIT = 100
+    TODO_DEFAULT_LIMIT = 100
+    TODO_MAX_LIMIT = 200
+
+
+class ContentConfig:
+    """Configuration constants for content processing."""
+    MAX_TITLE_LENGTH = 500
+    MAX_DESCRIPTION_LENGTH = 2000
+    MAX_QUERY_LENGTH = 2000
+    CONTENT_EXCERPT_LENGTH = 2000
+    SNIPPET_LENGTH = 220
+
+
 class Config:
     """Application configuration"""
 

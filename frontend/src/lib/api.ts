@@ -22,15 +22,92 @@ export function setAuthTokenGetter(getter: () => Promise<string | null>) {
 
 async function getAuthHeaders(): Promise<HeadersInit> {
   const headers: HeadersInit = {}
-  
+
   if (getAuthToken) {
     const token = await getAuthToken()
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
     }
   }
-  
+
   return headers
+}
+
+// ============================================================================
+// Generic API Request Helper
+// ============================================================================
+
+interface ApiRequestOptions {
+  params?: Record<string, string | number | boolean | undefined>
+  body?: unknown
+}
+
+/**
+ * Generic typed API request helper that handles auth, JSON, and error handling.
+ *
+ * @example
+ * const notes = await apiRequest<NotesResponse>('GET', '/api/notes', {
+ *   params: { limit: 50, offset: 0 }
+ * })
+ *
+ * const todo = await apiRequest<Todo>('POST', '/api/todos', {
+ *   body: { title: 'My todo' }
+ * })
+ */
+export async function apiRequest<T>(
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  endpoint: string,
+  options?: ApiRequestOptions
+): Promise<T> {
+  const headers = new Headers(await getAuthHeaders())
+
+  let url = `${API_BASE_URL}${endpoint}`
+
+  // Add query params for GET requests
+  if (options?.params) {
+    const searchParams = new URLSearchParams()
+    for (const [key, value] of Object.entries(options.params)) {
+      if (value !== undefined) {
+        searchParams.set(key, String(value))
+      }
+    }
+    const queryString = searchParams.toString()
+    if (queryString) {
+      url += `?${queryString}`
+    }
+  }
+
+  const fetchOptions: RequestInit = {
+    method,
+    headers,
+  }
+
+  // Add JSON body for non-GET requests
+  if (options?.body && method !== 'GET') {
+    headers.set('Content-Type', 'application/json')
+    fetchOptions.body = JSON.stringify(options.body)
+  }
+
+  const response = await fetch(url, fetchOptions)
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    let errorMessage: string
+    try {
+      const errorJson = JSON.parse(errorText)
+      errorMessage = errorJson.error || `Request failed: ${response.status}`
+    } catch {
+      errorMessage = errorText || `Request failed: ${response.status}`
+    }
+    throw new Error(errorMessage)
+  }
+
+  // Handle empty responses (204 No Content)
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  return response.json()
 }
 
 // ============================================================================

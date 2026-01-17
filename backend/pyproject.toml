@@ -30,5 +30,61 @@ packages = ["app"]
 [tool.uv]
 dev-dependencies = [
     "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
 ]
+
+# ============================================================================
+# Ruff Configuration - Fast Python linter
+# ============================================================================
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "F",      # Pyflakes
+    "I",      # isort (import sorting)
+    "N",      # pep8-naming
+    "UP",     # pyupgrade (modern Python syntax)
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # function call in default argument (ok for FastAPI/Flask)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+# ============================================================================
+# Mypy Configuration - Static type checking
+# ============================================================================
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_incomplete_defs = false
+
+# ============================================================================
+# Pytest Configuration
+# ============================================================================
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]
+addopts = "--cov=app --cov-report=term-missing --cov-report=html --cov-fail-under=50"
 

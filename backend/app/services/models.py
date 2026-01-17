@@ -147,3 +147,49 @@ class Todo(BaseModel):
 
 # Update forward references for recursive models
 FolderNode.model_rebuild()
+
+
+# ============================================================================
+# REQUEST VALIDATION MODELS
+# ============================================================================
+
+
+class CreateTodoRequest(BaseModel):
+    """Request body for creating a new todo."""
+    title: str = Field(..., min_length=1, max_length=500, description="Todo title")
+    description: Optional[str] = Field(None, max_length=2000, description="Optional description")
+    note_id: Optional[str] = Field(None, description="Associated note ID")
+
+
+class UpdateTodoRequest(BaseModel):
+    """Request body for updating an existing todo."""
+    title: Optional[str] = Field(None, min_length=1, max_length=500, description="New title")
+    description: Optional[str] = Field(None, max_length=2000, description="New description")
+
+
+class UpdateNoteRequest(BaseModel):
+    """Request body for updating an existing note."""
+    content: Optional[str] = Field(None, min_length=1, description="Note content")
+    title: Optional[str] = Field(None, min_length=1, max_length=500, description="Note title")
+    folder_path: Optional[str] = Field(None, description="Folder path")
+    tags: Optional[List[str]] = Field(None, description="List of tags")
+
+
+class UpdateSettingsRequest(BaseModel):
+    """Request body for updating user settings."""
+    auto_accept_todos: Optional[bool] = Field(None, description="Auto-accept extracted todos")
+
+
+class AskRequest(BaseModel):
+    """Request body for asking questions about notes."""
+    query: str = Field(..., min_length=1, max_length=2000, description="The question to ask")
+    max_results: int = Field(default=12, ge=1, le=50, description="Maximum results to return")
+    debug: bool = Field(default=False, description="Include debug info in response")
+
+
+class AudioClipUploadRequest(BaseModel):
+    """Request body for creating a pending audio clip upload."""
+    mime_type: str = Field(..., min_length=1, description="MIME type of the audio")
+    bytes: int = Field(..., ge=1, description="Size in bytes")
+    note_id: Optional[str] = Field(None, description="Associated note ID")
+    duration_ms: Optional[int] = Field(None, ge=0, description="Duration in milliseconds")

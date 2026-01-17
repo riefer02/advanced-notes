@@ -355,11 +355,32 @@ def _ensure_sqlite_schema(engine: Engine) -> str:
 class NoteStorage:
     """
     SQLAlchemy-based storage facade used by Flask routes and services.
-    
-    The public API remains equivalent to the previous adapter-based design.
+
+    This is the primary data access layer for the application. All methods
+    enforce user isolation by requiring `user_id` as the first parameter.
+
+    Features:
+    - Multi-tenancy via user_id filtering on all queries
+    - Full-text search (SQLite FTS5 or PostgreSQL tsvector)
+    - Semantic search via note embeddings
+    - Transaction management via session scopes
+
+    Usage:
+        svc = get_services()
+        notes = svc.storage.list_notes(user_id, folder="work")
     """
 
     def __init__(self, db_path: Optional[Path] = None, database_url: Optional[str] = None):
+        """
+        Initialize the storage service.
+
+        Args:
+            db_path: Path to SQLite database file (dev mode).
+            database_url: Full database URL (production mode, e.g., PostgreSQL).
+
+        Note:
+            If neither is provided, uses default from database.py.
+        """
         self.engine, self.session_factory = self._configure_engine(db_path, database_url)
         self.dialect = self.engine.dialect.name
         self.sqlite_fts_table = "notes_fts"
@@ -368,6 +389,17 @@ class NoteStorage:
             self.sqlite_fts_table = _ensure_sqlite_schema(self.engine)
 
     def save_note(self, user_id: str, content: str, metadata: NoteMetadata) -> str:
+        """
+        Create a new note in the database.
+
+        Args:
+            user_id: The user ID who owns the note.
+            content: The note content (transcription text).
+            metadata: NoteMetadata with title, folder_path, tags, etc.
+
+        Returns:
+            The ID of the newly created note.
+        """
         note_id = str(uuid4())
         now = datetime.utcnow()
         db_note = NoteORM(
