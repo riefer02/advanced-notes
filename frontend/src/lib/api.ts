@@ -1,6 +1,6 @@
 /**
  * API Client for Chisos Backend
- * 
+ *
  * All API calls go through this module for consistency and type safety.
  */
 
@@ -22,15 +22,92 @@ export function setAuthTokenGetter(getter: () => Promise<string | null>) {
 
 async function getAuthHeaders(): Promise<HeadersInit> {
   const headers: HeadersInit = {}
-  
+
   if (getAuthToken) {
     const token = await getAuthToken()
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
     }
   }
-  
+
   return headers
+}
+
+// ============================================================================
+// Generic API Request Helper
+// ============================================================================
+
+interface ApiRequestOptions {
+  params?: Record<string, string | number | boolean | undefined>
+  body?: unknown
+}
+
+/**
+ * Generic typed API request helper that handles auth, JSON, and error handling.
+ *
+ * @example
+ * const notes = await apiRequest<NotesResponse>('GET', '/api/notes', {
+ *   params: { limit: 50, offset: 0 }
+ * })
+ *
+ * const todo = await apiRequest<Todo>('POST', '/api/todos', {
+ *   body: { title: 'My todo' }
+ * })
+ */
+export async function apiRequest<T>(
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  endpoint: string,
+  options?: ApiRequestOptions
+): Promise<T> {
+  const headers = new Headers(await getAuthHeaders())
+
+  let url = `${API_BASE_URL}${endpoint}`
+
+  // Add query params for GET requests
+  if (options?.params) {
+    const searchParams = new URLSearchParams()
+    for (const [key, value] of Object.entries(options.params)) {
+      if (value !== undefined) {
+        searchParams.set(key, String(value))
+      }
+    }
+    const queryString = searchParams.toString()
+    if (queryString) {
+      url += `?${queryString}`
+    }
+  }
+
+  const fetchOptions: RequestInit = {
+    method,
+    headers,
+  }
+
+  // Add JSON body for non-GET requests
+  if (options?.body && method !== 'GET') {
+    headers.set('Content-Type', 'application/json')
+    fetchOptions.body = JSON.stringify(options.body)
+  }
+
+  const response = await fetch(url, fetchOptions)
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    let errorMessage: string
+    try {
+      const errorJson = JSON.parse(errorText)
+      errorMessage = errorJson.error || `Request failed: ${response.status}`
+    } catch {
+      errorMessage = errorText || `Request failed: ${response.status}`
+    }
+    throw new Error(errorMessage)
+  }
+
+  // Handle empty responses (204 No Content)
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  return response.json()
 }
 
 // ============================================================================
@@ -247,12 +324,12 @@ export async function transcribeAudio(audioBlob: Blob): Promise<TranscriptionRes
     'audio/ogg': 'ogg',
     'audio/m4a': 'm4a',
   }
-  
+
   // Get file extension from blob type, default to webm
   const baseType = audioBlob.type.split(';')[0].trim()
   const extension = mimeToExt[baseType] || 'webm'
   const filename = `recording.${extension}`
-  
+
   const formData = new FormData()
   formData.append('file', audioBlob, filename)
 
@@ -277,7 +354,7 @@ export async function transcribeAudio(audioBlob: Blob): Promise<TranscriptionRes
  */
 export async function fetchFolders(): Promise<FolderNode> {
   const headers = await getAuthHeaders()
-  
+
   const response = await fetch(`${API_BASE_URL}/api/folders`, { headers })
 
   if (!response.ok) {
@@ -380,7 +457,10 @@ export async function fetchTags(): Promise<string[]> {
  */
 export async function fetchNotesByTag(tag: string, limit = 50): Promise<Note[]> {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/tags/${encodeURIComponent(tag)}/notes?limit=${limit}`, { headers })
+  const response = await fetch(
+    `${API_BASE_URL}/api/tags/${encodeURIComponent(tag)}/notes?limit=${limit}`,
+    { headers }
+  )
 
   if (!response.ok) {
     throw new Error('Failed to fetch notes by tag')
@@ -423,7 +503,11 @@ export async function generateSummary(): Promise<DigestResult> {
 /**
  * Ask a natural-language question about your notes (AI planned + hybrid retrieval).
  */
-export async function askNotes(query: string, maxResults = 12, debug = false): Promise<AskResponse> {
+export async function askNotes(
+  query: string,
+  maxResults = 12,
+  debug = false
+): Promise<AskResponse> {
   const headers = new Headers(await getAuthHeaders())
   headers.set('Content-Type', 'application/json')
 
@@ -467,7 +551,10 @@ export async function fetchDigest(digestId: string): Promise<DigestHistoryItem> 
 
 export async function deleteDigest(digestId: string): Promise<void> {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/digests/${digestId}`, { method: 'DELETE', headers })
+  const response = await fetch(`${API_BASE_URL}/api/digests/${digestId}`, {
+    method: 'DELETE',
+    headers,
+  })
   if (!response.ok) {
     throw new Error('Failed to delete digest')
   }
@@ -494,7 +581,10 @@ export async function fetchAskHistoryItem(askId: string): Promise<AskHistoryItem
 
 export async function deleteAskHistoryItem(askId: string): Promise<void> {
   const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/ask-history/${askId}`, { method: 'DELETE', headers })
+  const response = await fetch(`${API_BASE_URL}/api/ask-history/${askId}`, {
+    method: 'DELETE',
+    headers,
+  })
   if (!response.ok) {
     throw new Error('Failed to delete ask history item')
   }
@@ -513,7 +603,9 @@ export async function fetchUserSettings(): Promise<UserSettings> {
   return response.json()
 }
 
-export async function updateUserSettings(settings: { auto_accept_todos?: boolean }): Promise<UserSettings> {
+export async function updateUserSettings(settings: {
+  auto_accept_todos?: boolean
+}): Promise<UserSettings> {
   const headers = new Headers(await getAuthHeaders())
   headers.set('Content-Type', 'application/json')
 
@@ -581,10 +673,13 @@ export async function createTodo(data: {
   return response.json()
 }
 
-export async function updateTodo(todoId: string, data: {
-  title?: string
-  description?: string
-}): Promise<Todo> {
+export async function updateTodo(
+  todoId: string,
+  data: {
+    title?: string
+    description?: string
+  }
+): Promise<Todo> {
   const headers = new Headers(await getAuthHeaders())
   headers.set('Content-Type', 'application/json')
 
@@ -654,7 +749,10 @@ export async function fetchNoteTodos(noteId: string): Promise<{ todos: Todo[] }>
   return response.json()
 }
 
-export async function acceptNoteTodos(noteId: string, todoIds: string[]): Promise<{ accepted: number }> {
+export async function acceptNoteTodos(
+  noteId: string,
+  todoIds: string[]
+): Promise<{ accepted: number }> {
   const headers = new Headers(await getAuthHeaders())
   headers.set('Content-Type', 'application/json')
 
@@ -668,4 +766,3 @@ export async function acceptNoteTodos(noteId: string, todoIds: string[]): Promis
   }
   return response.json()
 }
-

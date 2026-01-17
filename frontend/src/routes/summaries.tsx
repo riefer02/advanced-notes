@@ -7,7 +7,12 @@ import SlideOver from '../components/ui/SlideOver'
 import NoteDetail from '../components/NoteDetail'
 import { fetchNote } from '../lib/api'
 import type { AskHistoryItem, DigestHistoryItem, Note } from '../lib/api'
-import { useAskHistory, useDigests, useDeleteAskHistoryItem, useDeleteDigest } from '../hooks/useNotes'
+import {
+  useAskHistory,
+  useDigests,
+  useDeleteAskHistoryItem,
+  useDeleteDigest,
+} from '../hooks/useNotes'
 
 export const Route = createFileRoute('/summaries')({
   component: SummariesPage,
@@ -34,7 +39,11 @@ function SummariesPage() {
   const parsedDigest = useMemo(() => {
     if (!selectedDigest) return null
     try {
-      return JSON.parse(selectedDigest.content) as { summary?: string; key_themes?: string[]; action_items?: string[] }
+      return JSON.parse(selectedDigest.content) as {
+        summary?: string
+        key_themes?: string[]
+        action_items?: string[]
+      }
     } catch {
       return null
     }
@@ -47,13 +56,19 @@ function SummariesPage() {
     let scores: Record<string, number> = {}
     try {
       queryPlan = JSON.parse(selectedAsk.query_plan_json)
-    } catch {}
+    } catch (error) {
+      console.warn('Unable to parse query plan JSON', error)
+    }
     try {
       cited = JSON.parse(selectedAsk.cited_note_ids_json)
-    } catch {}
+    } catch (error) {
+      console.warn('Unable to parse cited note IDs JSON', error)
+    }
     try {
       scores = selectedAsk.source_scores_json ? JSON.parse(selectedAsk.source_scores_json) : {}
-    } catch {}
+    } catch (error) {
+      console.warn('Unable to parse source score JSON', error)
+    }
     return { queryPlan, cited, scores }
   }, [selectedAsk])
 
@@ -100,44 +115,44 @@ function SummariesPage() {
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-xl font-semibold text-gray-900">Summaries</h2>
         </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setTab('digests')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                tab === 'digests'
-                  ? 'bg-purple-50 text-purple-800 border-purple-200'
-                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              Digests
-            </button>
-            <button
-              onClick={() => setTab('ask')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                tab === 'ask'
-                  ? 'bg-blue-50 text-blue-800 border-blue-200'
-                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              Ask History
-            </button>
-          </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setTab('digests')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              tab === 'digests'
+                ? 'bg-purple-50 text-purple-800 border-purple-200'
+                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            Digests
+          </button>
+          <button
+            onClick={() => setTab('ask')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              tab === 'ask'
+                ? 'bg-blue-50 text-blue-800 border-blue-200'
+                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            Ask History
+          </button>
+        </div>
 
-          {tab === 'digests' ? (
-            <DigestList
-              digests={digestsQuery.data?.digests ?? []}
-              isLoading={digestsQuery.isLoading}
-              error={digestsQuery.error}
-              onSelect={setSelectedDigest}
-            />
-          ) : (
-            <AskHistoryList
-              items={askHistoryQuery.data?.items ?? []}
-              isLoading={askHistoryQuery.isLoading}
-              error={askHistoryQuery.error}
-              onSelect={setSelectedAsk}
-            />
-          )}
+        {tab === 'digests' ? (
+          <DigestList
+            digests={digestsQuery.data?.digests ?? []}
+            isLoading={digestsQuery.isLoading}
+            error={digestsQuery.error}
+            onSelect={setSelectedDigest}
+          />
+        ) : (
+          <AskHistoryList
+            items={askHistoryQuery.data?.items ?? []}
+            isLoading={askHistoryQuery.isLoading}
+            error={askHistoryQuery.error}
+            onSelect={setSelectedAsk}
+          />
+        )}
       </div>
 
       <SlideOver
@@ -156,7 +171,9 @@ function SummariesPage() {
                 <ReactMarkdown>{parsedDigest.summary}</ReactMarkdown>
               </div>
             ) : (
-              <div className="text-sm text-gray-700 whitespace-pre-wrap">{selectedDigest.content}</div>
+              <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                {selectedDigest.content}
+              </div>
             )}
 
             {parsedDigest?.key_themes?.length ? (
@@ -235,8 +252,18 @@ function SummariesPage() {
                             score {Math.round(((parsedAsk.scores?.[nid] ?? 0) as number) * 100)}%
                           </div>
                         </div>
-                        <svg className="h-5 w-5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        <svg
+                          className="h-5 w-5 text-gray-400 flex-shrink-0"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
                         </svg>
                       </div>
                     </button>
@@ -300,9 +327,16 @@ function DigestList(props: {
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-sm font-semibold text-gray-900 truncate">Digest</div>
-              <div className="text-xs text-gray-500 mt-1">{new Date(d.created_at).toLocaleString()}</div>
+              <div className="text-xs text-gray-500 mt-1">
+                {new Date(d.created_at).toLocaleString()}
+              </div>
             </div>
-            <svg className="h-5 w-5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg
+              className="h-5 w-5 text-gray-400 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </div>
@@ -339,9 +373,16 @@ function AskHistoryList(props: {
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-sm font-semibold text-gray-900 truncate">{d.query}</div>
-              <div className="text-xs text-gray-500 mt-1">{new Date(d.created_at).toLocaleString()}</div>
+              <div className="text-xs text-gray-500 mt-1">
+                {new Date(d.created_at).toLocaleString()}
+              </div>
             </div>
-            <svg className="h-5 w-5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg
+              className="h-5 w-5 text-gray-400 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </div>
@@ -350,5 +391,3 @@ function AskHistoryList(props: {
     </div>
   )
 }
-
-

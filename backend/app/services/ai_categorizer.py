@@ -5,10 +5,10 @@ This module provides an abstraction layer for AI-powered note categorization.
 Uses structured outputs with Pydantic models for reliable JSON responses.
 """
 
-from typing import List, Optional
 from enum import Enum
-from pydantic import BaseModel, Field
+
 from openai import OpenAI, OpenAIError
+from pydantic import BaseModel, Field
 
 from .openai_provider import chat_model, get_openai_client
 
@@ -25,7 +25,7 @@ class ExtractedTodo(BaseModel):
     title: str = Field(
         description="Imperative verb form action item (e.g., 'Review the quarterly report')"
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         default=None,
         description="Optional additional context about the todo"
     )
@@ -47,7 +47,7 @@ class CategorySuggestion(BaseModel):
     filename: str = Field(
         description="Descriptive filename with date suffix (e.g., 'optimize-performance-2025-11-17.md')"
     )
-    tags: List[str] = Field(
+    tags: list[str] = Field(
         description="3-7 rich, meaningful tags capturing all aspects of content (lowercase, kebab-case). PRIMARY organization method."
     )
     confidence: float = Field(
@@ -58,7 +58,7 @@ class CategorySuggestion(BaseModel):
     reasoning: str = Field(
         description="Brief explanation focusing on tag selection and folder choice"
     )
-    todos: List[ExtractedTodo] = Field(
+    todos: list[ExtractedTodo] = Field(
         default_factory=list,
         description="Action items extracted from the transcription (0-5 items)"
     )
@@ -77,9 +77,9 @@ class AICategorizationService:
     
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
-        client: Optional[OpenAI] = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        client: OpenAI | None = None,
     ):
         """
         Initialize the AI categorization service.
@@ -94,8 +94,8 @@ class AICategorizationService:
     def categorize(
         self,
         transcription: str,
-        existing_folders: List[str],
-        timestamp: Optional[str] = None
+        existing_folders: list[str],
+        timestamp: str | None = None
     ) -> CategorySuggestion:
         """
         Categorize a transcription and suggest folder organization.
@@ -153,7 +153,7 @@ class AICategorizationService:
             print(f"Unexpected error during categorization: {e}")
             raise
     
-    def _build_prompt(self, transcription: str, existing_folders: List[str]) -> str:
+    def _build_prompt(self, transcription: str, existing_folders: list[str]) -> str:
         """
         Build the categorization prompt with context.
         
@@ -237,9 +237,9 @@ Return your analysis as structured JSON matching the CategorySuggestion schema."
     
     def categorize_batch(
         self,
-        transcriptions: List[str],
-        existing_folders: List[str]
-    ) -> List[CategorySuggestion]:
+        transcriptions: list[str],
+        existing_folders: list[str]
+    ) -> list[CategorySuggestion]:
         """
         Categorize multiple transcriptions in batch.
         

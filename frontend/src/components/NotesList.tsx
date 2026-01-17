@@ -16,29 +16,28 @@ interface NotesListProps {
   selectedNoteId?: string | null
 }
 
-export default function NotesList({ 
-  folder, 
-  searchQuery, 
-  tag, 
+export default function NotesList({
+  folder,
+  searchQuery,
+  tag,
   onTagClick,
   onNoteSelect,
-  selectedNoteId
+  selectedNoteId,
 }: NotesListProps) {
-  
   // Use either notes query, search query, or tag query
   const notesQuery = useNotes(folder)
   const searchQueryHook = useSearchNotes(searchQuery || '')
   const tagQueryHook = useNotesByTag(tag || null)
-  
+
   const isSearchMode = !!searchQuery
   const isTagMode = !!tag && !searchQuery
   const { data: notesData, isLoading: notesLoading, error: notesError } = notesQuery
   const { data: searchResults, isLoading: searchLoading, error: searchError } = searchQueryHook
   const { data: tagResults, isLoading: tagLoading, error: tagError } = tagQueryHook
-  
+
   const isLoading = isSearchMode ? searchLoading : isTagMode ? tagLoading : notesLoading
   const error = isSearchMode ? searchError : isTagMode ? tagError : notesError
-  
+
   if (isLoading) {
     return (
       <div className="space-y-3" role="status" aria-label="Loading notes">
@@ -62,18 +61,22 @@ export default function NotesList({
     return (
       <div className="rounded-lg bg-red-50 p-4 border border-red-200">
         <p className="text-sm text-red-800">
-          {isSearchMode ? 'Search failed' : isTagMode ? 'Failed to load notes by tag' : 'Failed to load notes'}
+          {isSearchMode
+            ? 'Search failed'
+            : isTagMode
+              ? 'Failed to load notes by tag'
+              : 'Failed to load notes'}
         </p>
       </div>
     )
   }
 
   // Normalize all data sources to unified format
-  const notes: NoteItemData[] = isSearchMode 
-    ? (searchResults || []).map(sr => ({ ...sr.note, snippet: sr.snippet, rank: sr.rank }))
-    : isTagMode 
-    ? (tagResults || [])
-    : (notesData?.notes || [])
+  const notes: NoteItemData[] = isSearchMode
+    ? (searchResults || []).map((sr) => ({ ...sr.note, snippet: sr.snippet, rank: sr.rank }))
+    : isTagMode
+      ? tagResults || []
+      : notesData?.notes || []
 
   if (notes.length === 0) {
     return (
@@ -92,23 +95,24 @@ export default function NotesList({
           />
         </svg>
         <h3 className="mt-4 text-lg font-semibold text-gray-900">
-          {isSearchMode 
-            ? 'No results found' 
-            : isTagMode 
-            ? 'No notes with this tag yet' 
-            : 'No notes yet'}
+          {isSearchMode
+            ? 'No results found'
+            : isTagMode
+              ? 'No notes with this tag yet'
+              : 'No notes yet'}
         </h3>
         <p className="mt-2 text-sm text-gray-600 max-w-sm mx-auto">
-          {isSearchMode 
+          {isSearchMode
             ? 'Try adjusting your search terms or browse all notes'
-            : isTagMode 
-            ? 'Create notes with this tag by recording new audio notes'
-            : 'Start recording your first voice note to get organized with AI-powered tagging'}
+            : isTagMode
+              ? 'Create notes with this tag by recording new audio notes'
+              : 'Start recording your first voice note to get organized with AI-powered tagging'}
         </p>
         {!isSearchMode && !isTagMode && (
           <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
             <p className="text-xs text-gray-500">
-              Use the <span className="font-semibold text-gray-700">Start Recording</span> button in the left panel to create your first note.
+              Use the <span className="font-semibold text-gray-700">Start Recording</span> button in
+              the left panel to create your first note.
             </p>
           </div>
         )}
@@ -117,7 +121,11 @@ export default function NotesList({
   }
 
   return (
-    <div role="list" aria-label={isSearchMode ? 'Search results' : 'Notes list'} className="space-y-2">
+    <div
+      role="list"
+      aria-label={isSearchMode ? 'Search results' : 'Notes list'}
+      className="space-y-2"
+    >
       {notes.map((note) => (
         <NoteItem
           key={note.id}
@@ -140,7 +148,7 @@ interface NoteItemProps {
 
 function NoteItem({ note, isSelected, onClick, onTagClick }: NoteItemProps) {
   const hasSnippet = !!note.snippet
-  const contentPreview = note.content 
+  const contentPreview = note.content
     ? note.content.substring(0, 150)
     : note.snippet?.replace(/<[^>]*>/g, '').substring(0, 150) || ''
 
@@ -149,9 +157,10 @@ function NoteItem({ note, isSelected, onClick, onTagClick }: NoteItemProps) {
       onClick={onClick}
       className={`
         group relative rounded-lg border p-4 cursor-pointer transition-all
-        ${isSelected 
-          ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 shadow-sm' 
-          : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm'
+        ${
+          isSelected
+            ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 shadow-sm'
+            : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm'
         }
       `}
       role="listitem"
@@ -159,7 +168,9 @@ function NoteItem({ note, isSelected, onClick, onTagClick }: NoteItemProps) {
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h4 className={`text-sm font-semibold truncate ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
+            <h4
+              className={`text-sm font-semibold truncate ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}
+            >
               {note.title}
             </h4>
             {hasSnippet && note.rank && (
@@ -168,19 +179,28 @@ function NoteItem({ note, isSelected, onClick, onTagClick }: NoteItemProps) {
               </span>
             )}
           </div>
-          
-          <p className={`text-sm line-clamp-2 mb-2 ${isSelected ? 'text-blue-800' : 'text-gray-600'}`}>
+
+          <p
+            className={`text-sm line-clamp-2 mb-2 ${isSelected ? 'text-blue-800' : 'text-gray-600'}`}
+          >
             {contentPreview}
           </p>
-          
+
           <div className="flex items-center gap-3 text-xs text-gray-500">
             <span>{new Date(note.updated_at || note.created_at).toLocaleDateString()}</span>
             {note.word_count > 0 && <span>{note.word_count} words</span>}
           </div>
         </div>
 
-        <div className={`opacity-0 group-hover:opacity-100 transition-opacity ${isSelected ? 'opacity-100' : ''}`}>
-          <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div
+          className={`opacity-0 group-hover:opacity-100 transition-opacity ${isSelected ? 'opacity-100' : ''}`}
+        >
+          <svg
+            className="h-5 w-5 text-gray-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </div>

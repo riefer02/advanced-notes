@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, QueryClient } from '@tanstack/react-query'
 import {
   fetchTodos,
   fetchTodo,
@@ -18,6 +18,30 @@ interface TodosParams {
   note_id?: string
   limit?: number
   offset?: number
+}
+
+// ============================================================================
+// Mutation Factory Helpers
+// ============================================================================
+
+/**
+ * Shared invalidation logic for todo mutations that return an updated todo.
+ */
+function invalidateTodoQueries(queryClient: QueryClient, updatedTodo: Todo) {
+  queryClient.setQueryData(['todo', updatedTodo.id], updatedTodo)
+  queryClient.invalidateQueries({ queryKey: ['todos'] })
+  if (updatedTodo.note_id) {
+    queryClient.invalidateQueries({ queryKey: ['noteTodos', updatedTodo.note_id] })
+  }
+}
+
+/**
+ * Shared invalidation logic for todo delete mutations.
+ */
+function invalidateDeletedTodoQueries(queryClient: QueryClient, todoId: string) {
+  queryClient.removeQueries({ queryKey: ['todo', todoId] })
+  queryClient.invalidateQueries({ queryKey: ['todos'] })
+  queryClient.invalidateQueries({ queryKey: ['noteTodos'] })
 }
 
 export function useTodos(params?: TodosParams) {
@@ -59,15 +83,14 @@ export function useUpdateTodo() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ todoId, data }: { todoId: string; data: { title?: string; description?: string } }) =>
-      updateTodo(todoId, data),
-    onSuccess: (updatedTodo: Todo) => {
-      queryClient.setQueryData(['todo', updatedTodo.id], updatedTodo)
-      queryClient.invalidateQueries({ queryKey: ['todos'] })
-      if (updatedTodo.note_id) {
-        queryClient.invalidateQueries({ queryKey: ['noteTodos', updatedTodo.note_id] })
-      }
-    },
+    mutationFn: ({
+      todoId,
+      data,
+    }: {
+      todoId: string
+      data: { title?: string; description?: string }
+    }) => updateTodo(todoId, data),
+    onSuccess: (updatedTodo: Todo) => invalidateTodoQueries(queryClient, updatedTodo),
   })
 }
 
@@ -76,11 +99,7 @@ export function useDeleteTodo() {
 
   return useMutation({
     mutationFn: (todoId: string) => deleteTodo(todoId),
-    onSuccess: (_data, todoId) => {
-      queryClient.removeQueries({ queryKey: ['todo', todoId] })
-      queryClient.invalidateQueries({ queryKey: ['todos'] })
-      queryClient.invalidateQueries({ queryKey: ['noteTodos'] })
-    },
+    onSuccess: (_data, todoId) => invalidateDeletedTodoQueries(queryClient, todoId),
   })
 }
 
@@ -89,13 +108,7 @@ export function useAcceptTodo() {
 
   return useMutation({
     mutationFn: (todoId: string) => acceptTodo(todoId),
-    onSuccess: (updatedTodo: Todo) => {
-      queryClient.setQueryData(['todo', updatedTodo.id], updatedTodo)
-      queryClient.invalidateQueries({ queryKey: ['todos'] })
-      if (updatedTodo.note_id) {
-        queryClient.invalidateQueries({ queryKey: ['noteTodos', updatedTodo.note_id] })
-      }
-    },
+    onSuccess: (updatedTodo: Todo) => invalidateTodoQueries(queryClient, updatedTodo),
   })
 }
 
@@ -104,13 +117,7 @@ export function useCompleteTodo() {
 
   return useMutation({
     mutationFn: (todoId: string) => completeTodo(todoId),
-    onSuccess: (updatedTodo: Todo) => {
-      queryClient.setQueryData(['todo', updatedTodo.id], updatedTodo)
-      queryClient.invalidateQueries({ queryKey: ['todos'] })
-      if (updatedTodo.note_id) {
-        queryClient.invalidateQueries({ queryKey: ['noteTodos', updatedTodo.note_id] })
-      }
-    },
+    onSuccess: (updatedTodo: Todo) => invalidateTodoQueries(queryClient, updatedTodo),
   })
 }
 
@@ -119,11 +126,7 @@ export function useDismissTodo() {
 
   return useMutation({
     mutationFn: (todoId: string) => dismissTodo(todoId),
-    onSuccess: (_data, todoId) => {
-      queryClient.removeQueries({ queryKey: ['todo', todoId] })
-      queryClient.invalidateQueries({ queryKey: ['todos'] })
-      queryClient.invalidateQueries({ queryKey: ['noteTodos'] })
-    },
+    onSuccess: (_data, todoId) => invalidateDeletedTodoQueries(queryClient, todoId),
   })
 }
 

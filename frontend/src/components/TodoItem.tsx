@@ -36,8 +36,8 @@ export default function TodoItem({ todo, showNoteLink = true }: TodoItemProps) {
         isSuggested
           ? 'border-amber-200 bg-amber-50'
           : isCompleted
-          ? 'border-gray-200 bg-gray-50'
-          : 'border-gray-200'
+            ? 'border-gray-200 bg-gray-50'
+            : 'border-gray-200'
       }`}
     >
       {/* Checkbox */}
@@ -48,8 +48,8 @@ export default function TodoItem({ todo, showNoteLink = true }: TodoItemProps) {
           isCompleted
             ? 'bg-green-500 border-green-500 text-white cursor-default'
             : isSuggested
-            ? 'border-amber-400 hover:border-amber-500 hover:bg-amber-50'
-            : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'
+              ? 'border-amber-400 hover:border-amber-500 hover:bg-amber-50'
+              : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'
         }`}
       >
         {isCompleted && (
@@ -61,16 +61,10 @@ export default function TodoItem({ todo, showNoteLink = true }: TodoItemProps) {
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <p
-          className={`text-sm ${
-            isCompleted ? 'text-gray-500 line-through' : 'text-gray-900'
-          }`}
-        >
+        <p className={`text-sm ${isCompleted ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
           {todo.title}
         </p>
-        {todo.description && (
-          <p className="text-xs text-gray-500 mt-1">{todo.description}</p>
-        )}
+        {todo.description && <p className="text-xs text-gray-500 mt-1">{todo.description}</p>}
         <div className="flex items-center gap-2 mt-2 text-xs">
           {isSuggested && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
@@ -89,9 +83,7 @@ export default function TodoItem({ todo, showNoteLink = true }: TodoItemProps) {
             <span className="text-gray-400">Manual</span>
           ) : null}
           {todo.confidence !== null && (
-            <span className="text-gray-400">
-              {Math.round(todo.confidence * 100)}% confidence
-            </span>
+            <span className="text-gray-400">{Math.round(todo.confidence * 100)}% confidence</span>
           )}
         </div>
       </div>
@@ -114,7 +106,12 @@ export default function TodoItem({ todo, showNoteLink = true }: TodoItemProps) {
           title="Delete todo"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+            />
           </svg>
         </button>
       </div>

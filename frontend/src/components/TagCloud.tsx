@@ -11,9 +11,7 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   if (loading) {
-    return (
-      <div className="h-12 bg-gray-50 rounded-lg animate-pulse"></div>
-    )
+    return <div className="h-12 bg-gray-50 rounded-lg animate-pulse"></div>
   }
 
   if (error || !tags || tags.length === 0) {
@@ -22,10 +20,10 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
 
   return (
     <div className="relative group">
-      <div 
+      <div
         className={`flex items-center gap-2 ${
-          isExpanded 
-            ? 'flex-wrap p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg border border-blue-100' 
+          isExpanded
+            ? 'flex-wrap p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg border border-blue-100'
             : 'overflow-x-auto pb-2 scrollbar-hide'
         }`}
       >
@@ -62,19 +60,19 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
             flex-shrink-0 p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors
             ${!isExpanded && 'sticky right-0 bg-gradient-to-l from-white pl-4'}
           `}
-          title={isExpanded ? "Show less" : "Show all tags"}
+          title={isExpanded ? 'Show less' : 'Show all tags'}
         >
-          <svg 
-            className={`h-5 w-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-            fill="none" 
-            viewBox="0 0 24 24" 
+          <svg
+            className={`h-5 w-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
             stroke="currentColor"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
       </div>
-      
+
       {/* Scroll indicator hint for collapsed view */}
       {!isExpanded && (
         <div className="absolute right-8 top-0 bottom-2 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none" />

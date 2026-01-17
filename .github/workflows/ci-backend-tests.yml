@@ -1,8 +1,16 @@
-name: CI - Backend unit tests
+name: CI - Backend Tests
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci-backend-tests.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci-backend-tests.yml'
 
 jobs:
   backend-tests:
@@ -31,8 +39,20 @@ jobs:
             uv sync
           fi
 
-      - name: Run pytest
+      - name: Run linting (ruff)
         working-directory: backend
-        run: uv run python -m pytest tests/
+        run: uv run ruff check app/ --output-format=github
+
+      - name: Run pytest with coverage
+        working-directory: backend
+        run: uv run python -m pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=50
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage-report
+          path: backend/htmlcov/
+          retention-days: 7
 
 

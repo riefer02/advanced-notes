@@ -9,46 +9,71 @@ and PostgreSQL (including full-text search helpers).
 from __future__ import annotations
 
 import json
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Mapping, Optional
+from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import Text, cast, desc, func, or_, text
-from sqlalchemy import bindparam
+from sqlalchemy import Text, bindparam, cast, desc, func, or_, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.dialects.postgresql import JSONB
 
 from ..database import (
-    Base,
-    Digest as DigestORM,
     AskHistory as AskHistoryORM,
-    Note as NoteORM,
-    NoteEmbedding as NoteEmbeddingORM,
+)
+from ..database import (
     AudioClip as AudioClipORM,
-    UserSettings as UserSettingsORM,
-    Todo as TodoORM,
+)
+from ..database import (
+    Base,
     create_engine_for_url,
     get_engine,
     get_session_factory,
 )
+from ..database import (
+    Digest as DigestORM,
+)
+from ..database import (
+    Note as NoteORM,
+)
+from ..database import (
+    NoteEmbedding as NoteEmbeddingORM,
+)
+from ..database import (
+    Todo as TodoORM,
+)
+from ..database import (
+    UserSettings as UserSettingsORM,
+)
+from .embeddings import vector_from_json
+from .models import (
+    AskHistory as AskHistoryDTO,
+)
+from .models import (
+    AudioClip as AudioClipDTO,
+)
 from .models import (
     Digest as DigestDTO,
-    AskHistory as AskHistoryDTO,
+)
+from .models import (
     FolderNode,
     FolderStats,
-    Note as NoteDTO,
     NoteMetadata,
     SearchResult,
-    AudioClip as AudioClipDTO,
-    UserSettings as UserSettingsDTO,
+)
+from .models import (
+    Note as NoteDTO,
+)
+from .models import (
     Todo as TodoDTO,
 )
-
-from .embeddings import vector_from_json, vector_to_json
+from .models import (
+    UserSettings as UserSettingsDTO,
+)
 
 SQLITE_FTS_STATEMENTS = [
     """
@@ -83,16 +108,16 @@ SQLITE_FTS_STATEMENTS = [
     """,
 ]
 
-_SQLITE_SCHEMA_CACHE: Dict[str, str] = {}
+_SQLITE_SCHEMA_CACHE: dict[str, str] = {}
 
 
-def _serialize_tags(tags: List[str]) -> Optional[str]:
+def _serialize_tags(tags: list[str]) -> str | None:
     if not tags:
         return None
     return json.dumps(tags)
 
 
-def _deserialize_tags(value: Any) -> List[str]:
+def _deserialize_tags(value: Any) -> list[str]:
     if not value:
         return []
     if isinstance(value, list):
@@ -105,7 +130,7 @@ def _deserialize_tags(value: Any) -> List[str]:
         return []
 
 
-def _coerce_datetime(value: Any) -> Optional[datetime]:
+def _coerce_datetime(value: Any) -> datetime | None:
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -198,9 +223,9 @@ def _todo_to_dto(todo: TodoORM) -> TodoDTO:
     )
 
 
-def _build_folder_tree(rows: List[Mapping[str, Any]]) -> FolderNode:
+def _build_folder_tree(rows: list[Mapping[str, Any]]) -> FolderNode:
     root = FolderNode(name="", path="", note_count=0)
-    folder_map: Dict[str, FolderNode] = {"": root}
+    folder_map: dict[str, FolderNode] = {"": root}
 
     for row in rows:
         path = row[0]
@@ -223,7 +248,7 @@ def _build_folder_tree(rows: List[Mapping[str, Any]]) -> FolderNode:
     return root
 
 
-def _sqlite_fts_statements(table_name: str) -> List[str]:
+def _sqlite_fts_statements(table_name: str) -> list[str]:
     return [
         f"""
         CREATE VIRTUAL TABLE IF NOT EXISTS {table_name} USING fts5(
@@ -355,11 +380,32 @@ def _ensure_sqlite_schema(engine: Engine) -> str:
 class NoteStorage:
     """
     SQLAlchemy-based storage facade used by Flask routes and services.
-    
-    The public API remains equivalent to the previous adapter-based design.
+
+    This is the primary data access layer for the application. All methods
+    enforce user isolation by requiring `user_id` as the first parameter.
+
+    Features:
+    - Multi-tenancy via user_id filtering on all queries
+    - Full-text search (SQLite FTS5 or PostgreSQL tsvector)
+    - Semantic search via note embeddings
+    - Transaction management via session scopes
+
+    Usage:
+        svc = get_services()
+        notes = svc.storage.list_notes(user_id, folder="work")
     """
 
-    def __init__(self, db_path: Optional[Path] = None, database_url: Optional[str] = None):
+    def __init__(self, db_path: Path | None = None, database_url: str | None = None):
+        """
+        Initialize the storage service.
+
+        Args:
+            db_path: Path to SQLite database file (dev mode).
+            database_url: Full database URL (production mode, e.g., PostgreSQL).
+
+        Note:
+            If neither is provided, uses default from database.py.
+        """
         self.engine, self.session_factory = self._configure_engine(db_path, database_url)
         self.dialect = self.engine.dialect.name
         self.sqlite_fts_table = "notes_fts"
@@ -368,6 +414,17 @@ class NoteStorage:
             self.sqlite_fts_table = _ensure_sqlite_schema(self.engine)
 
     def save_note(self, user_id: str, content: str, metadata: NoteMetadata) -> str:
+        """
+        Create a new note in the database.
+
+        Args:
+            user_id: The user ID who owns the note.
+            content: The note content (transcription text).
+            metadata: NoteMetadata with title, folder_path, tags, etc.
+
+        Returns:
+            The ID of the newly created note.
+        """
         note_id = str(uuid4())
         now = datetime.utcnow()
         db_note = NoteORM(
@@ -394,13 +451,13 @@ class NoteStorage:
         self,
         user_id: str,
         *,
-        clip_id: Optional[str] = None,
-        note_id: Optional[str],
+        clip_id: str | None = None,
+        note_id: str | None,
         mime_type: str,
         bytes: int,
-        duration_ms: Optional[int],
+        duration_ms: int | None,
         storage_key: str,
-        bucket: Optional[str] = None,
+        bucket: str | None = None,
     ) -> AudioClipDTO:
         clip_id = clip_id or str(uuid4())
         now = datetime.utcnow()
@@ -437,11 +494,11 @@ class NoteStorage:
         user_id: str,
         clip_id: str,
         *,
-        bucket: Optional[str] = None,
-        storage_key: Optional[str] = None,
-        note_id: Optional[str] = None,
-        duration_ms: Optional[int] = None,
-    ) -> Optional[AudioClipDTO]:
+        bucket: str | None = None,
+        storage_key: str | None = None,
+        note_id: str | None = None,
+        duration_ms: int | None = None,
+    ) -> AudioClipDTO | None:
         with self._session_scope() as session:
             clip = (
                 session.query(AudioClipORM)
@@ -462,7 +519,7 @@ class NoteStorage:
             session.add(clip)
             return _audio_clip_to_dto(clip)
 
-    def mark_audio_clip_failed(self, user_id: str, clip_id: str) -> Optional[AudioClipDTO]:
+    def mark_audio_clip_failed(self, user_id: str, clip_id: str) -> AudioClipDTO | None:
         with self._session_scope() as session:
             clip = (
                 session.query(AudioClipORM)
@@ -475,7 +532,7 @@ class NoteStorage:
             session.add(clip)
             return _audio_clip_to_dto(clip)
 
-    def get_audio_clip(self, user_id: str, clip_id: str) -> Optional[AudioClipDTO]:
+    def get_audio_clip(self, user_id: str, clip_id: str) -> AudioClipDTO | None:
         with self._session_scope() as session:
             clip = (
                 session.query(AudioClipORM)
@@ -486,7 +543,7 @@ class NoteStorage:
 
     def get_primary_audio_clip_for_note(
         self, user_id: str, note_id: str
-    ) -> Optional[AudioClipDTO]:
+    ) -> AudioClipDTO | None:
         with self._session_scope() as session:
             clip = (
                 session.query(AudioClipORM)
@@ -501,7 +558,7 @@ class NoteStorage:
             )
             return _audio_clip_to_dto(clip) if clip else None
 
-    def list_audio_clips_for_note(self, user_id: str, note_id: str) -> List[AudioClipDTO]:
+    def list_audio_clips_for_note(self, user_id: str, note_id: str) -> list[AudioClipDTO]:
         if not note_id:
             return []
         with self._session_scope() as session:
@@ -539,7 +596,7 @@ class NoteStorage:
         *,
         older_than_minutes: int = 60,
         limit: int = 100,
-    ) -> List[AudioClipDTO]:
+    ) -> list[AudioClipDTO]:
         """
         Return stale pending clips for a user (used by opportunistic cleanup).
         """
@@ -562,7 +619,7 @@ class NoteStorage:
             )
             return [_audio_clip_to_dto(r) for r in rows]
 
-    def delete_audio_clips(self, user_id: str, clip_ids: List[str]) -> int:
+    def delete_audio_clips(self, user_id: str, clip_ids: list[str]) -> int:
         if not clip_ids:
             return 0
         with self._session_scope() as session:
@@ -621,7 +678,7 @@ class NoteStorage:
 
     def get_note_embedding(
         self, user_id: str, note_id: str, embedding_model: str
-    ) -> Optional[Mapping[str, Any]]:
+    ) -> Mapping[str, Any] | None:
         with self._session_scope() as session:
             row = (
                 session.query(NoteEmbeddingORM)
@@ -641,7 +698,7 @@ class NoteStorage:
                 "embedding": row.embedding,
             }
 
-    def _parse_embedding(self, value: Any) -> List[float]:
+    def _parse_embedding(self, value: Any) -> list[float]:
         if value is None:
             return []
         if isinstance(value, list):
@@ -671,9 +728,9 @@ class NoteStorage:
         user_id: str,
         query_embedding_literal: str,
         limit: int = 50,
-        candidate_note_ids: Optional[List[str]] = None,
+        candidate_note_ids: list[str] | None = None,
         embedding_model: str = "text-embedding-3-small",
-    ) -> List[Mapping[str, Any]]:
+    ) -> list[Mapping[str, Any]]:
         """
         Semantic search over embeddings table.
 
@@ -685,7 +742,7 @@ class NoteStorage:
         limit = max(1, limit)
         if self.dialect == "postgresql":
             where_extra = ""
-            params: Dict[str, Any] = {
+            params: dict[str, Any] = {
                 "user_id": user_id,
                 "embedding_model": embedding_model,
                 "qvec": query_embedding_literal,
@@ -746,7 +803,7 @@ class NoteStorage:
         scored.sort(key=lambda x: x["score"], reverse=True)
         return scored[:limit]
 
-    def get_notes_by_ids(self, user_id: str, note_ids: List[str]) -> List[NoteDTO]:
+    def get_notes_by_ids(self, user_id: str, note_ids: list[str]) -> list[NoteDTO]:
         if not note_ids:
             return []
         with self._session_scope() as session:
@@ -758,17 +815,17 @@ class NoteStorage:
             dto_by_id = {n.id: _note_to_dto(n) for n in notes}
         return [dto_by_id[nid] for nid in note_ids if nid in dto_by_id]
 
-    def _date_range_to_datetimes(self, start_date: Optional[str], end_date: Optional[str]) -> tuple[Optional[datetime], Optional[datetime]]:
+    def _date_range_to_datetimes(self, start_date: str | None, end_date: str | None) -> tuple[datetime | None, datetime | None]:
         if not start_date and not end_date:
             return None, None
 
-        def to_start(d: str) -> Optional[datetime]:
+        def to_start(d: str) -> datetime | None:
             try:
                 return datetime.fromisoformat(d).replace(hour=0, minute=0, second=0, microsecond=0)
             except Exception:
                 return None
 
-        def to_end(d: str) -> Optional[datetime]:
+        def to_end(d: str) -> datetime | None:
             try:
                 return datetime.fromisoformat(d).replace(hour=23, minute=59, second=59, microsecond=999999)
             except Exception:
@@ -779,13 +836,13 @@ class NoteStorage:
     def _filter_candidate_note_ids(
         self,
         user_id: str,
-        folder_paths: Optional[List[str]] = None,
-        include_tags: Optional[List[str]] = None,
-        exclude_tags: Optional[List[str]] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        folder_paths: list[str] | None = None,
+        include_tags: list[str] | None = None,
+        exclude_tags: list[str] | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         max_candidates: int = 5000,
-    ) -> Optional[List[str]]:
+    ) -> list[str] | None:
         """
         Returns a list of candidate note IDs, or None if no filters were applied.
 
@@ -845,14 +902,14 @@ class NoteStorage:
         *,
         fts_query: str,
         query_embedding_literal: str,
-        folder_paths: Optional[List[str]] = None,
-        include_tags: Optional[List[str]] = None,
-        exclude_tags: Optional[List[str]] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        folder_paths: list[str] | None = None,
+        include_tags: list[str] | None = None,
+        exclude_tags: list[str] | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         limit: int = 12,
         embedding_model: str = "text-embedding-3-small",
-    ) -> List[Mapping[str, Any]]:
+    ) -> list[Mapping[str, Any]]:
         """
         Hybrid retrieval: metadata filters + FTS + semantic embeddings.
 
@@ -882,7 +939,7 @@ class NoteStorage:
         fts_results = self.search_notes(user_id, fts_query, limit=fts_k)
 
         # Normalize FTS scores into [0, 1]
-        fts_scores: Dict[str, float] = {}
+        fts_scores: dict[str, float] = {}
         if fts_results:
             if self.dialect == "sqlite":
                 # SQLite rank: lower is better, convert via 1/(1+rank)
@@ -893,7 +950,7 @@ class NoteStorage:
                 for r in fts_results:
                     fts_scores[r.note.id] = float(r.rank or 0.0) / max_rank
 
-        semantic_scores: Dict[str, float] = {
+        semantic_scores: dict[str, float] = {
             h["note_id"]: float(h.get("score") or 0.0) for h in semantic_hits
         }
 
@@ -915,7 +972,7 @@ class NoteStorage:
         # Snippets: use FTS snippet when available, otherwise a small content preview.
         fts_snippets = {r.note.id: r.snippet for r in fts_results}
 
-        results: List[Mapping[str, Any]] = []
+        results: list[Mapping[str, Any]] = []
         for nid in ranked_ids:
             note = note_by_id.get(nid)
             if not note:
@@ -934,7 +991,7 @@ class NoteStorage:
             )
         return results
 
-    def get_note(self, user_id: str, note_id: str) -> Optional[NoteDTO]:
+    def get_note(self, user_id: str, note_id: str) -> NoteDTO | None:
         with self._session_scope() as session:
             note = (
                 session.query(NoteORM)
@@ -947,8 +1004,8 @@ class NoteStorage:
         self,
         user_id: str,
         note_id: str,
-        content: Optional[str] = None,
-        metadata: Optional[NoteMetadata] = None,
+        content: str | None = None,
+        metadata: NoteMetadata | None = None,
     ) -> bool:
         with self._session_scope() as session:
             note = (
@@ -999,7 +1056,7 @@ class NoteStorage:
             )
             return result > 0
 
-    def get_recent_notes(self, user_id: str, limit: int = 10) -> List[NoteDTO]:
+    def get_recent_notes(self, user_id: str, limit: int = 10) -> list[NoteDTO]:
         """
         Fetch the most recently updated notes for a user.
         
@@ -1045,7 +1102,7 @@ class NoteStorage:
 
         return digest_id
 
-    def list_digests(self, user_id: str, limit: int = 50, offset: int = 0) -> List[DigestDTO]:
+    def list_digests(self, user_id: str, limit: int = 50, offset: int = 0) -> list[DigestDTO]:
         with self._session_scope() as session:
             digests = (
                 session.query(DigestORM)
@@ -1065,7 +1122,7 @@ class NoteStorage:
                 for d in digests
             ]
 
-    def get_digest(self, user_id: str, digest_id: str) -> Optional[DigestDTO]:
+    def get_digest(self, user_id: str, digest_id: str) -> DigestDTO | None:
         with self._session_scope() as session:
             d = (
                 session.query(DigestORM)
@@ -1092,7 +1149,7 @@ class NoteStorage:
         query_plan_json: str,
         answer_markdown: str,
         cited_note_ids_json: str,
-        source_scores_json: Optional[str] = None,
+        source_scores_json: str | None = None,
     ) -> str:
         ask_id = str(uuid4())
         now = datetime.utcnow()
@@ -1115,7 +1172,7 @@ class NoteStorage:
         user_id: str,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[AskHistoryDTO]:
+    ) -> list[AskHistoryDTO]:
         with self._session_scope() as session:
             rows = (
                 session.query(AskHistoryORM)
@@ -1139,7 +1196,7 @@ class NoteStorage:
                 for r in rows
             ]
 
-    def get_ask_history(self, user_id: str, ask_id: str) -> Optional[AskHistoryDTO]:
+    def get_ask_history(self, user_id: str, ask_id: str) -> AskHistoryDTO | None:
         with self._session_scope() as session:
             r = (
                 session.query(AskHistoryORM)
@@ -1171,11 +1228,11 @@ class NoteStorage:
     def list_notes(
         self,
         user_id: str,
-        folder: Optional[str] = None,
+        folder: str | None = None,
         limit: int = 50,
         offset: int = 0,
         order_by: str = "updated_at",
-    ) -> List[NoteDTO]:
+    ) -> list[NoteDTO]:
         order_map = {
             "created_at": NoteORM.created_at,
             "updated_at": NoteORM.updated_at,
@@ -1198,7 +1255,7 @@ class NoteStorage:
 
             return [_note_to_dto(note) for note in notes]
 
-    def search_notes(self, user_id: str, query: str, limit: int = 50) -> List[SearchResult]:
+    def search_notes(self, user_id: str, query: str, limit: int = 50) -> list[SearchResult]:
         if not query or not query.strip():
             return []
 
@@ -1217,7 +1274,7 @@ class NoteStorage:
             )
         return _build_folder_tree(rows)
 
-    def get_all_tags(self, user_id: str) -> List[str]:
+    def get_all_tags(self, user_id: str) -> list[str]:
         with self._session_scope() as session:
             rows = (
                 session.query(NoteORM.tags)
@@ -1231,7 +1288,7 @@ class NoteStorage:
 
         return sorted(tags)
 
-    def get_notes_by_tag(self, user_id: str, tag: str, limit: int = 50) -> List[NoteDTO]:
+    def get_notes_by_tag(self, user_id: str, tag: str, limit: int = 50) -> list[NoteDTO]:
         with self._session_scope() as session:
             query = session.query(NoteORM).filter(NoteORM.user_id == user_id)
 
@@ -1244,14 +1301,14 @@ class NoteStorage:
             notes = query.order_by(NoteORM.updated_at.desc()).limit(limit).all()
             return [_note_to_dto(note) for note in notes]
 
-    def get_note_count(self, user_id: str, folder: Optional[str] = None) -> int:
+    def get_note_count(self, user_id: str, folder: str | None = None) -> int:
         with self._session_scope() as session:
             query = session.query(func.count(NoteORM.id)).filter(NoteORM.user_id == user_id)
             if folder:
                 query = query.filter(self._folder_filter_clause(folder))
             return int(query.scalar() or 0)
 
-    def get_folder_stats(self, user_id: str, folder: str) -> Optional[FolderStats]:
+    def get_folder_stats(self, user_id: str, folder: str) -> FolderStats | None:
         with self._session_scope() as session:
             base_query = session.query(
                 func.count(NoteORM.id),
@@ -1274,7 +1331,7 @@ class NoteStorage:
                 .all()
             )
 
-        tag_counts: Dict[str, int] = {}
+        tag_counts: dict[str, int] = {}
         for (value,) in tag_rows:
             for tag in _deserialize_tags(value):
                 tag_counts[tag] = tag_counts.get(tag, 0) + 1
@@ -1290,7 +1347,7 @@ class NoteStorage:
             most_common_tags=top_tags,
         )
 
-    def _search_notes_sqlite(self, user_id: str, query: str, limit: int) -> List[SearchResult]:
+    def _search_notes_sqlite(self, user_id: str, query: str, limit: int) -> list[SearchResult]:
         fts_table = getattr(self, "sqlite_fts_table", "notes_fts")
         sql = text(
             f"""
@@ -1331,7 +1388,7 @@ class NoteStorage:
                 .all()
             )
 
-        results: List[SearchResult] = []
+        results: list[SearchResult] = []
         for row in rows:
             note = _mapping_to_note(row)
             rank_value = abs(row.get("rank", 0.0)) if row.get("rank") is not None else 0.0
@@ -1344,7 +1401,7 @@ class NoteStorage:
             )
         return results
 
-    def _search_notes_postgres(self, user_id: str, query: str, limit: int) -> List[SearchResult]:
+    def _search_notes_postgres(self, user_id: str, query: str, limit: int) -> list[SearchResult]:
         ts_query = func.plainto_tsquery("english", query)
 
         title_vector = func.setweight(func.to_tsvector("english", func.coalesce(NoteORM.title, "")), "A")
@@ -1372,7 +1429,7 @@ class NoteStorage:
                 .all()
             )
 
-        results: List[SearchResult] = []
+        results: list[SearchResult] = []
         for note, rank_value, snippet in rows:
             results.append(
                 SearchResult(
@@ -1421,7 +1478,7 @@ class NoteStorage:
         self,
         user_id: str,
         *,
-        auto_accept_todos: Optional[bool] = None,
+        auto_accept_todos: bool | None = None,
     ) -> UserSettingsDTO:
         """
         Update user settings, creating if not found.
@@ -1461,11 +1518,11 @@ class NoteStorage:
         user_id: str,
         title: str,
         *,
-        note_id: Optional[str] = None,
-        description: Optional[str] = None,
+        note_id: str | None = None,
+        description: str | None = None,
         status: str = "suggested",
-        confidence: Optional[float] = None,
-        extraction_context: Optional[str] = None,
+        confidence: float | None = None,
+        extraction_context: str | None = None,
     ) -> TodoDTO:
         """
         Create a new todo.
@@ -1504,7 +1561,7 @@ class NoteStorage:
             completed_at=None,
         )
 
-    def get_todo(self, user_id: str, todo_id: str) -> Optional[TodoDTO]:
+    def get_todo(self, user_id: str, todo_id: str) -> TodoDTO | None:
         """
         Get a single todo by ID.
         """
@@ -1520,11 +1577,11 @@ class NoteStorage:
         self,
         user_id: str,
         *,
-        status: Optional[str] = None,
-        note_id: Optional[str] = None,
+        status: str | None = None,
+        note_id: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[TodoDTO]:
+    ) -> list[TodoDTO]:
         """
         List todos with optional filters.
         """
@@ -1544,7 +1601,7 @@ class NoteStorage:
             )
             return [_todo_to_dto(t) for t in todos]
 
-    def list_todos_for_note(self, user_id: str, note_id: str) -> List[TodoDTO]:
+    def list_todos_for_note(self, user_id: str, note_id: str) -> list[TodoDTO]:
         """
         List all todos for a specific note.
         """
@@ -1562,9 +1619,9 @@ class NoteStorage:
         user_id: str,
         todo_id: str,
         *,
-        title: Optional[str] = None,
-        description: Optional[str] = None,
-    ) -> Optional[TodoDTO]:
+        title: str | None = None,
+        description: str | None = None,
+    ) -> TodoDTO | None:
         """
         Update a todo's title or description.
         """
@@ -1597,7 +1654,7 @@ class NoteStorage:
             )
             return result > 0
 
-    def accept_todo(self, user_id: str, todo_id: str) -> Optional[TodoDTO]:
+    def accept_todo(self, user_id: str, todo_id: str) -> TodoDTO | None:
         """
         Accept a suggested todo (change status from suggested to accepted).
         """
@@ -1615,7 +1672,7 @@ class NoteStorage:
             session.add(todo)
             return _todo_to_dto(todo)
 
-    def complete_todo(self, user_id: str, todo_id: str) -> Optional[TodoDTO]:
+    def complete_todo(self, user_id: str, todo_id: str) -> TodoDTO | None:
         """
         Mark a todo as completed.
         """
@@ -1635,7 +1692,7 @@ class NoteStorage:
             session.add(todo)
             return _todo_to_dto(todo)
 
-    def accept_todos_bulk(self, user_id: str, todo_ids: List[str]) -> int:
+    def accept_todos_bulk(self, user_id: str, todo_ids: list[str]) -> int:
         """
         Accept multiple todos at once.
         Returns the number of todos accepted.
@@ -1667,8 +1724,8 @@ class NoteStorage:
 
     def _configure_engine(
         self,
-        db_path: Optional[Path],
-        database_url: Optional[str],
+        db_path: Path | None,
+        database_url: str | None,
     ) -> tuple[Engine, sessionmaker]:
         if database_url:
             engine = create_engine_for_url(database_url)

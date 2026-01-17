@@ -33,6 +33,12 @@ class _FakeSummarizer:
 class _FakeEmbeddings:
     model = "test-embedding-model"
 
+    def embed_text(self, text):
+        return [0.0]
+
+    def upsert_for_note(self, storage, user_id, note_id, title, content, tags=None):
+        return True
+
 
 class _FakePlanner:
     def plan(self, *args, **kwargs):  # noqa: ANN001 - test fake
@@ -430,5 +436,160 @@ def test_ask_requires_query_field(client):  # noqa: ANN001 - pytest fixtures
     resp = client.post("/api/ask", json={}, headers={"X-Test-User-Id": "user-a"})
     assert resp.status_code == 400
     assert resp.get_json()["error"]
+
+
+def test_audio_clips_disabled_returns_501(tmp_path, monkeypatch):  # noqa: ANN001
+    """When AUDIO_CLIPS_ENABLED is false, audio endpoints return 501."""
+    # Explicitly disable audio clips
+    monkeypatch.setenv("AUDIO_CLIPS_ENABLED", "false")
+
+    storage = NoteStorage(db_path=tmp_path / "disabled_test.db")
+    services = Services(
+        storage=storage,
+        embeddings=_FakeEmbeddings(),
+        planner=_FakePlanner(),
+        asker=_FakeAsker(),
+        categorizer=_FakeCategorizer(),
+        summarizer=_FakeSummarizer(),
+    )
+
+    app = create_app(testing=True, services=services)
+    client = app.test_client()
+
+    # POST /api/audio-clips should return 501
+    resp = client.post(
+        "/api/audio-clips",
+        json={"mime_type": "audio/mp4", "bytes": 1234},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 501
+    assert "disabled" in resp.get_json()["error"].lower()
+
+    # POST /api/transcribe should return 501
+    resp = client.post(
+        "/api/transcribe",
+        data=b"x" * 2000,
+        headers={"X-Test-User-Id": "user-a", "Content-Type": "audio/mp4"},
+    )
+    assert resp.status_code == 501
+
+
+def test_audio_clip_complete_mime_type_mismatch(client, app, monkeypatch):  # noqa: ANN001
+    """MIME type mismatch on complete returns 409."""
+    monkeypatch.setattr(
+        _s3_audio,
+        "presign_put_object",
+        lambda **kwargs: _stub_presign("https://example.com/put", "PUT"),
+    )
+    monkeypatch.setattr(
+        _s3_audio,
+        "object_key_for_clip",
+        lambda **kwargs: f"{kwargs['user_id']}/{kwargs['clip_id']}.mp4",
+    )
+
+    # Create upload session with audio/mp4
+    resp = client.post(
+        "/api/audio-clips",
+        json={"mime_type": "audio/mp4", "bytes": 1234},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 200
+    clip_id = resp.get_json()["clip"]["id"]
+
+    # HEAD returns different content-type (audio/webm instead of audio/mp4)
+    monkeypatch.setattr(
+        _s3_audio,
+        "head_object",
+        lambda **kwargs: _s3_audio.ObjectHead(content_length=1234, content_type="audio/webm"),
+    )
+
+    resp = client.post(
+        f"/api/audio-clips/{clip_id}/complete",
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 409
+    assert "content-type" in resp.get_json()["error"].lower()
+
+
+def test_audio_clip_playback_not_ready_returns_409(client, app, monkeypatch):  # noqa: ANN001
+    """Playback of clip that's not ready returns 409."""
+    monkeypatch.setattr(
+        _s3_audio,
+        "presign_put_object",
+        lambda **kwargs: _stub_presign("https://example.com/put", "PUT"),
+    )
+    monkeypatch.setattr(
+        _s3_audio,
+        "object_key_for_clip",
+        lambda **kwargs: f"{kwargs['user_id']}/{kwargs['clip_id']}.mp4",
+    )
+
+    # Create upload session (status = pending)
+    resp = client.post(
+        "/api/audio-clips",
+        json={"mime_type": "audio/mp4", "bytes": 1234},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 200
+    clip_id = resp.get_json()["clip"]["id"]
+
+    # Try to playback without completing
+    resp = client.get(
+        f"/api/audio-clips/{clip_id}/playback",
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 409
+    assert "not ready" in resp.get_json()["error"].lower()
+
+
+def test_transcribe_returns_400_for_empty_audio(client, app, monkeypatch):  # noqa: ANN001
+    """POST /api/transcribe with empty body returns 400."""
+    resp = client.post(
+        "/api/transcribe",
+        data=b"",
+        headers={"X-Test-User-Id": "user-a", "Content-Type": "audio/mp4"},
+    )
+    assert resp.status_code == 400
+    assert "no audio" in resp.get_json()["error"].lower()
+
+
+def test_create_audio_clip_requires_mime_type(client):  # noqa: ANN001
+    """POST /api/audio-clips without mime_type returns 400."""
+    resp = client.post(
+        "/api/audio-clips",
+        json={"bytes": 1234},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 400
+    assert "mime_type" in resp.get_json()["error"]
+
+
+def test_create_audio_clip_requires_positive_bytes(client):  # noqa: ANN001
+    """POST /api/audio-clips with bytes <= 0 returns 400."""
+    resp = client.post(
+        "/api/audio-clips",
+        json={"mime_type": "audio/mp4", "bytes": 0},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 400
+    assert "bytes" in resp.get_json()["error"]
+
+    resp = client.post(
+        "/api/audio-clips",
+        json={"mime_type": "audio/mp4", "bytes": -100},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 400
+
+
+def test_create_audio_clip_bytes_must_be_integer(client):  # noqa: ANN001
+    """POST /api/audio-clips with non-integer bytes returns 400."""
+    resp = client.post(
+        "/api/audio-clips",
+        json={"mime_type": "audio/mp4", "bytes": "not a number"},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 400
+    assert "integer" in resp.get_json()["error"]
 
 

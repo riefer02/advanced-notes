@@ -6,11 +6,43 @@ Loads environment variables and provides centralized config access.
 
 import os
 from pathlib import Path
-from typing import Optional
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
+
+
+# ============================================================================
+# CONSTANTS - Magic numbers extracted for clarity
+# ============================================================================
+
+
+class SearchConfig:
+    """Configuration constants for search operations."""
+    MAX_SEMANTIC_CANDIDATES = 200
+    MAX_FTS_CANDIDATES = 200
+    MAX_ASK_RESULTS = 50
+    DEFAULT_ASK_RESULTS = 12
+    STALE_CLIP_MINUTES = 60
+    STALE_CLIP_BATCH_SIZE = 100
+
+
+class PaginationConfig:
+    """Configuration constants for pagination."""
+    DEFAULT_LIMIT = 50
+    MAX_LIMIT = 100
+    TODO_DEFAULT_LIMIT = 100
+    TODO_MAX_LIMIT = 200
+
+
+class ContentConfig:
+    """Configuration constants for content processing."""
+    MAX_TITLE_LENGTH = 500
+    MAX_DESCRIPTION_LENGTH = 2000
+    MAX_QUERY_LENGTH = 2000
+    CONTENT_EXCERPT_LENGTH = 2000
+    SNIPPET_LENGTH = 220
 
 
 class Config:
@@ -21,10 +53,10 @@ class Config:
     DEBUG: bool = FLASK_ENV == "development"
     # Generic environment name (preferred for non-Flask deployments).
     # Use APP_ENV (recommended) or ENV; falls back to FLASK_ENV.
-    APP_ENV: Optional[str] = os.getenv("APP_ENV") or os.getenv("ENV")
+    APP_ENV: str | None = os.getenv("APP_ENV") or os.getenv("ENV")
 
     # OpenAI settings (used for both transcription and GPT categorization)
-    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
+    OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     OPENAI_EMBEDDING_MODEL: str = os.getenv(
         "OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"
@@ -45,15 +77,15 @@ class Config:
     MAX_NOTES_PER_FOLDER: int = 50
 
     # Object storage (S3) settings for audio clips
-    S3_BUCKET: Optional[str] = os.getenv("S3_BUCKET")
-    AWS_REGION: Optional[str] = os.getenv("AWS_REGION")
-    AWS_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID")
-    AWS_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY")
+    S3_BUCKET: str | None = os.getenv("S3_BUCKET")
+    AWS_REGION: str | None = os.getenv("AWS_REGION")
+    AWS_ACCESS_KEY_ID: str | None = os.getenv("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY: str | None = os.getenv("AWS_SECRET_ACCESS_KEY")
     # Optional override (useful for S3-compatible endpoints like MinIO/R2)
-    S3_ENDPOINT_URL: Optional[str] = os.getenv("S3_ENDPOINT_URL")
+    S3_ENDPOINT_URL: str | None = os.getenv("S3_ENDPOINT_URL")
     # Optional prefix to isolate objects by environment within a single bucket.
     # If unset, we default to APP_ENV/ENV, then FLASK_ENV (e.g. 'development', 'production').
-    S3_KEY_PREFIX: Optional[str] = os.getenv("S3_KEY_PREFIX")
+    S3_KEY_PREFIX: str | None = os.getenv("S3_KEY_PREFIX")
     # Signed URL expirations (seconds)
     S3_PRESIGN_PUT_EXPIRES_SECONDS: int = int(
         os.getenv("S3_PRESIGN_PUT_EXPIRES_SECONDS", "900")

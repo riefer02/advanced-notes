@@ -14,15 +14,16 @@ export default function FolderTree({ selectedFolder, onSelectFolder }: FolderTre
   // Auto-expand folder if it was just updated
   useEffect(() => {
     if (selectedFolder && root) {
-      // Expand all parent folders of selected
-      const parts = selectedFolder.split('/')
-      const newExpanded = new Set(expandedFolders)
-      let path = ''
-      for (const part of parts.slice(0, -1)) {
-        path = path ? `${path}/${part}` : part
-        newExpanded.add(path)
-      }
-      setExpandedFolders(newExpanded)
+      setExpandedFolders((currentExpanded) => {
+        const parts = selectedFolder.split('/')
+        const newExpanded = new Set(currentExpanded)
+        let path = ''
+        for (const part of parts.slice(0, -1)) {
+          path = path ? `${path}/${part}` : part
+          newExpanded.add(path)
+        }
+        return newExpanded
+      })
     }
   }, [selectedFolder, root])
 
@@ -41,8 +42,19 @@ export default function FolderTree({ selectedFolder, onSelectFolder }: FolderTre
       <div className="flex items-center justify-center py-8">
         <div className="flex items-center gap-2 text-gray-500">
           <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
           </svg>
           <span className="text-sm">Loading folders...</span>
         </div>
@@ -175,9 +187,7 @@ function FolderTreeNode({
           onClick={() => onSelect(node.path)}
           onKeyDown={handleKeyDown}
           className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors text-left ${
-            isSelected
-              ? 'bg-blue-50 text-blue-900 font-medium'
-              : 'hover:bg-gray-50 text-gray-700'
+            isSelected ? 'bg-blue-50 text-blue-900 font-medium' : 'hover:bg-gray-50 text-gray-700'
           }`}
           style={{ paddingLeft: `${(level + (hasChildren ? 0 : 1)) * 0.75 + 0.5}rem` }}
           aria-current={isSelected ? 'true' : undefined}
@@ -199,9 +209,7 @@ function FolderTreeNode({
           {node.note_count > 0 && (
             <span
               className={`ml-auto flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                isSelected
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-gray-100 text-gray-600'
+                isSelected ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
               }`}
             >
               {node.note_count}
@@ -227,4 +235,3 @@ function FolderTreeNode({
     </li>
   )
 }
-

@@ -5,10 +5,11 @@ These definitions power both Alembic migrations and runtime ORM queries.
 """
 
 import os
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator, Optional
 
 from sqlalchemy import (
+    TIMESTAMP,
     Boolean,
     Column,
     Float,
@@ -17,20 +18,19 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    TIMESTAMP,
     create_engine,
     event,
 )
-from sqlalchemy.types import TypeDecorator, UserDefinedType
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.sql import func
+from sqlalchemy.types import TypeDecorator, UserDefinedType
 
 Base = declarative_base()
 
-_engine: Optional[Engine] = None
-_SessionFactory: Optional[sessionmaker] = None
+_engine: Engine | None = None
+_SessionFactory: sessionmaker | None = None
 
 
 class Note(Base):
@@ -330,7 +330,7 @@ def get_session() -> Generator[Session, None, None]:
         session.close()
 
 
-def create_engine_for_url(database_url: Optional[str] = None) -> Engine:
+def create_engine_for_url(database_url: str | None = None) -> Engine:
     """Build a SQLAlchemy engine for the given URL (or default environment)."""
     url = database_url or get_database_url()
     engine = create_engine(

@@ -11,33 +11,107 @@ Organized into logical groups:
 All routes require authentication and are user-scoped.
 """
 
-from flask import Blueprint, request, jsonify, g
+from contextlib import suppress
+from functools import wraps
+
+from flask import Blueprint, g, jsonify, request
 
 from .asr import transcribe_bytes
 from .auth import require_auth
 from .config import Config
-from .services.ask_service import RetrievedNote
 from .services import s3_audio
-from .services.embeddings import (
-    build_note_embedding_text,
-    content_hash,
-    vector_to_json,
-    vector_to_pg_literal,
-)
-from .services.models import NoteMetadata
+from .services.ask_service import RetrievedNote
 from .services.container import get_services
+from .services.embeddings import vector_to_json, vector_to_pg_literal
 from .services.folder_utils import extract_folder_paths
+from .services.models import NoteMetadata
 
 bp = Blueprint("api", __name__)
 
-def _json_error(message: str, status: int = 400):
+
+# ============================================================================
+# ROUTE UTILITIES
+# ============================================================================
+
+
+def api_error(message: str, status: int = 400) -> tuple[dict, int]:
+    """
+    Return a standardized JSON error response.
+
+    Args:
+        message: Error message to include in response
+        status: HTTP status code (default: 400)
+
+    Returns:
+        Tuple of (JSON response, status code)
+    """
     return jsonify({"error": message}), status
 
 
-def _require_audio_clips_enabled():
-    if not Config.audio_clips_enabled():
-        return _json_error("Audio clips are disabled. Set AUDIO_CLIPS_ENABLED=true to enable.", 501)
-    return None
+def parse_pagination(default_limit: int = 50, max_limit: int = 100) -> tuple[int, int]:
+    """
+    Parse limit and offset from query parameters with bounds checking.
+
+    Args:
+        default_limit: Default limit if not provided (default: 50)
+        max_limit: Maximum allowed limit (default: 100)
+
+    Returns:
+        Tuple of (limit, offset)
+    """
+    try:
+        limit = int(request.args.get("limit", default_limit))
+    except (ValueError, TypeError):
+        limit = default_limit
+    try:
+        offset = int(request.args.get("offset", 0))
+    except (ValueError, TypeError):
+        offset = 0
+
+    limit = max(1, min(limit, max_limit))
+    offset = max(0, offset)
+    return limit, offset
+
+
+def require_audio_clips(f):
+    """
+    Decorator that ensures audio clips feature is enabled.
+
+    Returns 501 error if AUDIO_CLIPS_ENABLED is not true.
+    """
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not Config.audio_clips_enabled():
+            return api_error(
+                "Audio clips are disabled. Set AUDIO_CLIPS_ENABLED=true to enable.", 501
+            )
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+def validate_uuid(value: str, name: str = "id") -> bool:
+    """
+    Validate that a string is a valid UUID format.
+
+    Args:
+        value: The string to validate
+        name: Name of the parameter for error messages
+
+    Returns:
+        True if valid UUID format
+
+    Raises:
+        ValueError: If the value is not a valid UUID
+    """
+    from uuid import UUID
+
+    try:
+        UUID(value)
+        return True
+    except ValueError as exc:
+        raise ValueError(f"Invalid {name} format: must be a valid UUID") from exc
 
 
 def _cleanup_stale_pending_audio_clips(user_id: str, svc) -> None:  # noqa: ANN001 - small route helper
@@ -61,14 +135,10 @@ def _cleanup_stale_pending_audio_clips(user_id: str, svc) -> None:  # noqa: ANN0
 
     # Best-effort: delete objects first, then delete DB rows.
     for clip in stale:
-        try:
+        with suppress(Exception):
             s3_audio.delete_object(storage_key=clip.storage_key)
-        except Exception:
-            pass
-    try:
+    with suppress(Exception):
         svc.storage.delete_audio_clips(user_id, [c.id for c in stale])
-    except Exception:
-        pass
 
 
 # ============================================================================
@@ -108,9 +178,7 @@ def summarize_notes():
             )
 
         # 2. Extract content
-        notes_content = [
-            f"Title: {n.title}\nContent: {n.content}" for n in recent_notes
-        ]
+        notes_content = [f"Title: {n.title}\nContent: {n.content}" for n in recent_notes]
 
         # 3. Generate summary
         digest_result = svc.summarizer.summarize(notes_content)
@@ -127,6 +195,7 @@ def summarize_notes():
 
 @bp.post("/transcribe")
 @require_auth
+@require_audio_clips
 def transcribe():
     """
     Transcribe audio and automatically categorize/save to database (user-scoped).
@@ -150,10 +219,6 @@ def transcribe():
     """
     user_id = g.user_id  # Get authenticated user ID
     svc = get_services()
-
-    disabled = _require_audio_clips_enabled()
-    if disabled is not None:
-        return disabled
 
     # Check for file upload
     content_type = None
@@ -211,30 +276,24 @@ def transcribe():
             text, meta = transcribe_bytes(data, content_type)
         except ValueError as e:
             # Validation errors (empty audio, too small, etc.)
-            try:
+            with suppress(Exception):
                 s3_audio.delete_object(storage_key=audio_storage_key)
-            except Exception:
-                pass
             svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
             return jsonify({"error": str(e)}), 400
         except Exception as e:
             # OpenAI API errors
             error_msg = str(e)
             if "corrupted" in error_msg.lower() or "unsupported" in error_msg.lower():
-                try:
+                with suppress(Exception):
                     s3_audio.delete_object(storage_key=audio_storage_key)
-                except Exception:
-                    pass
                 svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
                 return jsonify(
                     {
                         "error": "Audio format not supported or corrupted. Please try recording again."
                     }
                 ), 400
-            try:
+            with suppress(Exception):
                 s3_audio.delete_object(storage_key=audio_storage_key)
-            except Exception:
-                pass
             svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
             raise
 
@@ -246,9 +305,7 @@ def transcribe():
 
         # Step 3: Save to database (user-scoped)
         note_metadata = NoteMetadata(
-            title=categorization_result.filename.replace(".md", "")
-            .replace("-", " ")
-            .title(),
+            title=categorization_result.filename.replace(".md", "").replace("-", " ").title(),
             folder_path=categorization_result.folder_path,
             tags=categorization_result.tags,
             confidence=categorization_result.confidence,
@@ -256,9 +313,7 @@ def transcribe():
             model_version=meta.get("model"),
         )
 
-        note_id = svc.storage.save_note(
-            user_id=user_id, content=text, metadata=note_metadata
-        )
+        note_id = svc.storage.save_note(user_id=user_id, content=text, metadata=note_metadata)
 
         # Persist audio clip metadata linked to the new note + mark ready.
         duration_ms = None
@@ -277,29 +332,14 @@ def transcribe():
         )
 
         # Step 3.5: Upsert embedding for semantic search (best-effort)
-        try:
-            embedding_text = build_note_embedding_text(
-                title=note_metadata.title,
-                content=text,
-                tags=note_metadata.tags,
-            )
-            h = content_hash(embedding_text)
-            vec = svc.embeddings.embed_text(embedding_text)
-            emb_value = (
-                vector_to_pg_literal(vec)
-                if svc.storage.dialect == "postgresql"
-                else vector_to_json(vec)
-            )
-            svc.storage.upsert_note_embedding(
-                user_id=user_id,
-                note_id=note_id,
-                embedding_model=svc.embeddings.model,
-                content_hash=h,
-                embedding_value=emb_value,
-            )
-        except Exception as e:
-            # Do not fail the transcription flow if embeddings fail.
-            print(f"Embedding upsert failed for note {note_id}: {e}")
+        svc.embeddings.upsert_for_note(
+            storage=svc.storage,
+            user_id=user_id,
+            note_id=note_id,
+            title=note_metadata.title,
+            content=text,
+            tags=note_metadata.tags,
+        )
 
         # Step 3.6: Create todos from AI extraction (best-effort)
         created_todos = []
@@ -369,6 +409,7 @@ def transcribe():
 
 @bp.post("/audio-clips")
 @require_auth
+@require_audio_clips
 def create_audio_clip_upload():
     """
     Create a pending audio clip row and return a presigned S3 PUT URL for direct upload.
@@ -380,22 +421,18 @@ def create_audio_clip_upload():
     svc = get_services()
     data = request.get_json(silent=True) or {}
 
-    disabled = _require_audio_clips_enabled()
-    if disabled is not None:
-        return disabled
-
     _cleanup_stale_pending_audio_clips(user_id, svc)
 
     mime_type = (data.get("mime_type") or "").strip()
     if not mime_type:
-        return _json_error("Body field 'mime_type' is required")
+        return api_error("Body field 'mime_type' is required")
 
     try:
         bytes_value = int(data.get("bytes") or 0)
     except Exception:
-        return _json_error("Body field 'bytes' must be an integer")
+        return api_error("Body field 'bytes' must be an integer")
     if bytes_value <= 0:
-        return _json_error("Body field 'bytes' must be > 0")
+        return api_error("Body field 'bytes' must be > 0")
 
     note_id = data.get("note_id")
     duration_ms = data.get("duration_ms")
@@ -403,7 +440,7 @@ def create_audio_clip_upload():
         try:
             duration_ms = int(duration_ms)
         except Exception:
-            return _json_error("Body field 'duration_ms' must be an integer")
+            return api_error("Body field 'duration_ms' must be an integer")
 
     # Create DB row first so clip_id is stable for key generation.
     # We'll fill storage_key deterministically as {user_id}/{clip_id}{ext}.
@@ -442,6 +479,7 @@ def create_audio_clip_upload():
 
 @bp.post("/audio-clips/<clip_id>/complete")
 @require_auth
+@require_audio_clips
 def complete_audio_clip_upload(clip_id: str):
     """
     Mark a pending clip as ready after the client successfully PUTs to S3.
@@ -449,13 +487,9 @@ def complete_audio_clip_upload(clip_id: str):
     user_id = g.user_id
     svc = get_services()
 
-    disabled = _require_audio_clips_enabled()
-    if disabled is not None:
-        return disabled
-
     clip = svc.storage.get_audio_clip(user_id, clip_id)
     if not clip:
-        return _json_error("Audio clip not found", 404)
+        return api_error("Audio clip not found", 404)
 
     # Idempotent: if already ready, return current state.
     if clip.status == "ready":
@@ -465,24 +499,25 @@ def complete_audio_clip_upload(clip_id: str):
     try:
         head = s3_audio.head_object(storage_key=clip.storage_key)
     except Exception:
-        return _json_error("Audio upload not found", 409)
+        return api_error("Audio upload not found", 409)
 
     if int(head.content_length or 0) != int(clip.bytes or 0):
-        return _json_error("Uploaded audio size does not match expected bytes", 409)
+        return api_error("Uploaded audio size does not match expected bytes", 409)
 
     expected = s3_audio.base_mime(clip.mime_type)
     actual = s3_audio.base_mime(head.content_type or "")
     if expected and actual and expected != actual:
-        return _json_error("Uploaded audio content-type does not match expected mime_type", 409)
+        return api_error("Uploaded audio content-type does not match expected mime_type", 409)
 
     updated = svc.storage.mark_audio_clip_ready(user_id, clip_id)
     if not updated:
-        return _json_error("Audio clip not found", 404)
+        return api_error("Audio clip not found", 404)
     return jsonify({"clip": updated.model_dump()})
 
 
 @bp.get("/audio-clips/<clip_id>/playback")
 @require_auth
+@require_audio_clips
 def get_audio_clip_playback(clip_id: str):
     """
     Return a presigned GET URL for playback.
@@ -490,15 +525,11 @@ def get_audio_clip_playback(clip_id: str):
     user_id = g.user_id
     svc = get_services()
 
-    disabled = _require_audio_clips_enabled()
-    if disabled is not None:
-        return disabled
-
     clip = svc.storage.get_audio_clip(user_id, clip_id)
     if not clip:
-        return _json_error("Audio clip not found", 404)
+        return api_error("Audio clip not found", 404)
     if clip.status != "ready":
-        return _json_error("Audio clip is not ready", 409)
+        return api_error("Audio clip is not ready", 409)
 
     dl = s3_audio.presign_get_object(storage_key=clip.storage_key)
     return jsonify({"url": dl.url, "expires_at": dl.expires_at})
@@ -506,6 +537,7 @@ def get_audio_clip_playback(clip_id: str):
 
 @bp.delete("/audio-clips/<clip_id>")
 @require_auth
+@require_audio_clips
 def delete_audio_clip(clip_id: str):
     """
     Delete audio clip metadata row + best-effort delete the S3 object.
@@ -513,13 +545,9 @@ def delete_audio_clip(clip_id: str):
     user_id = g.user_id
     svc = get_services()
 
-    disabled = _require_audio_clips_enabled()
-    if disabled is not None:
-        return disabled
-
     clip = svc.storage.get_audio_clip(user_id, clip_id)
     if not clip:
-        return _json_error("Audio clip not found", 404)
+        return api_error("Audio clip not found", 404)
 
     warning = None
     try:
@@ -531,7 +559,7 @@ def delete_audio_clip(clip_id: str):
 
     success = svc.storage.delete_audio_clip(user_id, clip_id)
     if not success:
-        return _json_error("Audio clip not found", 404)
+        return api_error("Audio clip not found", 404)
     payload = {"success": True}
     if warning:
         payload["warning"] = warning
@@ -540,6 +568,7 @@ def delete_audio_clip(clip_id: str):
 
 @bp.get("/notes/<note_id>/audio")
 @require_auth
+@require_audio_clips
 def get_primary_audio_clip_for_note(note_id: str):
     """
     Convenience endpoint: return the note's primary (most recent ready) audio clip + playback URL.
@@ -547,16 +576,14 @@ def get_primary_audio_clip_for_note(note_id: str):
     user_id = g.user_id
     svc = get_services()
 
-    disabled = _require_audio_clips_enabled()
-    if disabled is not None:
-        return disabled
-
     clip = svc.storage.get_primary_audio_clip_for_note(user_id, note_id)
     if not clip:
-        return _json_error("Audio clip not found", 404)
+        return api_error("Audio clip not found", 404)
 
     dl = s3_audio.presign_get_object(storage_key=clip.storage_key)
-    return jsonify({"clip": clip.model_dump(), "playback": {"url": dl.url, "expires_at": dl.expires_at}})
+    return jsonify(
+        {"clip": clip.model_dump(), "playback": {"url": dl.url, "expires_at": dl.expires_at}}
+    )
 
 
 # ============================================================================
@@ -583,12 +610,9 @@ def list_notes():
 
     try:
         folder = request.args.get("folder")
-        limit = int(request.args.get("limit", 50))
-        offset = int(request.args.get("offset", 0))
+        limit, offset = parse_pagination(default_limit=50, max_limit=100)
 
-        notes = svc.storage.list_notes(
-            user_id=user_id, folder=folder, limit=limit, offset=offset
-        )
+        notes = svc.storage.list_notes(user_id=user_id, folder=folder, limit=limit, offset=offset)
 
         return jsonify(
             {
@@ -679,29 +703,15 @@ def update_note(note_id: str):
         updated_note = svc.storage.get_note(user_id, note_id)
 
         # Best-effort embedding refresh
-        try:
-            if updated_note:
-                embedding_text = build_note_embedding_text(
-                    title=updated_note.title,
-                    content=updated_note.content,
-                    tags=updated_note.tags,
-                )
-                h = content_hash(embedding_text)
-                vec = svc.embeddings.embed_text(embedding_text)
-                emb_value = (
-                    vector_to_pg_literal(vec)
-                    if svc.storage.dialect == "postgresql"
-                    else vector_to_json(vec)
-                )
-                svc.storage.upsert_note_embedding(
-                    user_id=user_id,
-                    note_id=updated_note.id,
-                    embedding_model=svc.embeddings.model,
-                    content_hash=h,
-                    embedding_value=emb_value,
-                )
-        except Exception as e:
-            print(f"Embedding upsert failed for note {note_id}: {e}")
+        if updated_note:
+            svc.embeddings.upsert_for_note(
+                storage=svc.storage,
+                user_id=user_id,
+                note_id=updated_note.id,
+                title=updated_note.title,
+                content=updated_note.content,
+                tags=updated_note.tags,
+            )
 
         return jsonify(updated_note.model_dump())
 
@@ -878,9 +888,7 @@ def search_notes():
 
         results = svc.storage.search_notes(user_id, query)
 
-        return jsonify(
-            {"query": query, "results": [result.model_dump() for result in results]}
-        )
+        return jsonify({"query": query, "results": [result.model_dump() for result in results]})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -941,9 +949,7 @@ def ask_notes():
             else vector_to_json(q_vec)
         )
 
-        fts_query = (
-            " ".join(plan.keywords).strip() if plan.keywords else plan.semantic_query
-        )
+        fts_query = " ".join(plan.keywords).strip() if plan.keywords else plan.semantic_query
 
         retrieval = svc.storage.retrieve_for_question(
             user_id=user_id,
@@ -985,9 +991,7 @@ def ask_notes():
         # Persist ask history (compact)
         import json as _json
 
-        source_scores = {
-            item["note"].id: float(item.get("score") or 0.0) for item in retrieval
-        }
+        source_scores = {item["note"].id: float(item.get("score") or 0.0) for item in retrieval}
         ask_id = svc.storage.save_ask_history(
             user_id=user_id,
             query=query,
@@ -1042,8 +1046,7 @@ def list_digests():
     user_id = g.user_id
     svc = get_services()
     try:
-        limit = int(request.args.get("limit", 50))
-        offset = int(request.args.get("offset", 0))
+        limit, offset = parse_pagination(default_limit=50, max_limit=100)
         digests = svc.storage.list_digests(user_id, limit=limit, offset=offset)
         return jsonify(
             {
@@ -1096,8 +1099,7 @@ def list_ask_history():
     user_id = g.user_id
     svc = get_services()
     try:
-        limit = int(request.args.get("limit", 50))
-        offset = int(request.args.get("offset", 0))
+        limit, offset = parse_pagination(default_limit=50, max_limit=100)
         items = svc.storage.list_ask_history(user_id, limit=limit, offset=offset)
         return jsonify(
             {
@@ -1218,8 +1220,7 @@ def list_todos():
     try:
         status = request.args.get("status")
         note_id = request.args.get("note_id")
-        limit = int(request.args.get("limit", 100))
-        offset = int(request.args.get("offset", 0))
+        limit, offset = parse_pagination(default_limit=100, max_limit=200)
 
         todos = svc.storage.list_todos(
             user_id,

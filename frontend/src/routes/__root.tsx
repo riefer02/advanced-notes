@@ -18,7 +18,8 @@ function RootComponent() {
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/summaries') ||
     pathname.startsWith('/notes') ||
-    pathname.startsWith('/settings')
+    pathname.startsWith('/settings') ||
+    pathname.startsWith('/todos')
 
   return (
     <>
@@ -38,4 +39,3 @@ function RootComponent() {
     </>
   )
 }
-

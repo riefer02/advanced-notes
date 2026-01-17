@@ -12,10 +12,10 @@ export default function NotesPanel() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [showFolders, setShowFolders] = useState(false)
-  
+
   // Selection State
   const [selectedNote, setSelectedNote] = useState<NoteItemData | null>(null)
-  
+
   const searchInputRef = useRef<HTMLInputElement>(null)
   const deleteNoteMutation = useDeleteNote()
 
@@ -23,20 +23,23 @@ export default function NotesPanel() {
   const { data: allNotes } = useNotes()
   const { data: searchResults } = useSearchNotes(searchQuery)
   const { data: tagNotes } = useNotesByTag(selectedTag)
-  
-  const noteCount = searchQuery 
+
+  const noteCount = searchQuery
     ? searchResults?.length || 0
-    : selectedTag 
-    ? tagNotes?.length || 0
-    : selectedFolder
-    ? 0 // Will be calculated by NotesList (we don't have this easily here without filtering)
-    : allNotes?.notes?.length || 0
+    : selectedTag
+      ? tagNotes?.length || 0
+      : selectedFolder
+        ? 0 // Will be calculated by NotesList (we don't have this easily here without filtering)
+        : allNotes?.notes?.length || 0
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // "/" to focus search (unless already in an input)
-      if (e.key === '/' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+      if (
+        e.key === '/' &&
+        !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
+      ) {
         e.preventDefault()
         searchInputRef.current?.focus()
       }
@@ -48,7 +51,7 @@ export default function NotesPanel() {
 
   const handleDeleteNote = async () => {
     if (!selectedNote) return
-    
+
     if (!confirm('Are you sure you want to delete this note?')) {
       return
     }
@@ -74,9 +77,7 @@ export default function NotesPanel() {
               </span>
             )}
           </div>
-          <p className="text-sm text-gray-600 mt-1">
-            🏷️ Tag-first organization powered by AI
-          </p>
+          <p className="text-sm text-gray-600 mt-1">🏷️ Tag-first organization powered by AI</p>
         </div>
 
         {/* Search Bar */}
@@ -110,7 +111,11 @@ export default function NotesPanel() {
               {searchQuery ? (
                 <>
                   <svg className="h-4 w-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                    <path
+                      fillRule="evenodd"
+                      d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                   <span className="font-medium text-blue-900">
                     Found {noteCount} result{noteCount !== 1 ? 's' : ''} for "{searchQuery}"
@@ -118,8 +123,18 @@ export default function NotesPanel() {
                 </>
               ) : selectedTag ? (
                 <>
-                  <svg className="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  <svg
+                    className="h-4 w-4 text-blue-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                    />
                   </svg>
                   <span className="font-medium text-blue-900">
                     Showing {noteCount} note{noteCount !== 1 ? 's' : ''} tagged with "{selectedTag}"
@@ -127,8 +142,18 @@ export default function NotesPanel() {
                 </>
               ) : selectedFolder ? (
                 <>
-                  <svg className="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                  <svg
+                    className="h-4 w-4 text-blue-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                    />
                   </svg>
                   <span className="font-medium text-blue-900">
                     Viewing folder: {selectedFolder}
@@ -146,7 +171,12 @@ export default function NotesPanel() {
             >
               Clear
               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -156,8 +186,8 @@ export default function NotesPanel() {
         <div className="space-y-4">
           {searchQuery ? (
             /* Show search results when searching */
-            <NotesList 
-              searchQuery={searchQuery} 
+            <NotesList
+              searchQuery={searchQuery}
               onTagClick={(tag) => {
                 setSelectedTag(tag)
                 setSearchQuery('')
@@ -167,8 +197,8 @@ export default function NotesPanel() {
             />
           ) : selectedTag ? (
             /* Show notes filtered by tag */
-            <NotesList 
-              tag={selectedTag} 
+            <NotesList
+              tag={selectedTag}
               onTagClick={(tag) => setSelectedTag(tag)}
               onNoteSelect={setSelectedNote}
               selectedNoteId={selectedNote?.id}
@@ -186,11 +216,16 @@ export default function NotesPanel() {
                   viewBox="0 0 24 24"
                   stroke="currentColor"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
                 </svg>
                 {showFolders ? 'Hide' : 'Show'} folder view
               </button>
-              
+
               {showFolders && (
                 <>
                   <FolderTree
@@ -205,7 +240,7 @@ export default function NotesPanel() {
                       <h3 className="text-lg font-semibold text-gray-900 mb-3">
                         Notes in {selectedFolder}
                       </h3>
-                      <NotesList 
+                      <NotesList
                         folder={selectedFolder}
                         onTagClick={(tag) => {
                           setSelectedTag(tag)
@@ -218,13 +253,13 @@ export default function NotesPanel() {
                   )}
                 </>
               )}
-              
+
               {!showFolders && !selectedFolder && (
-                 <NotesList 
-                   onTagClick={(tag) => setSelectedTag(tag)}
-                   onNoteSelect={setSelectedNote}
-                   selectedNoteId={selectedNote?.id}
-                 />
+                <NotesList
+                  onTagClick={(tag) => setSelectedTag(tag)}
+                  onNoteSelect={setSelectedNote}
+                  selectedNoteId={selectedNote?.id}
+                />
               )}
             </>
           )}
@@ -238,12 +273,7 @@ export default function NotesPanel() {
         title={selectedNote?.title || 'Note Details'}
         width="max-w-xl"
       >
-        {selectedNote && (
-          <NoteDetail 
-            note={selectedNote} 
-            onDelete={handleDeleteNote}
-          />
-        )}
+        {selectedNote && <NoteDetail note={selectedNote} onDelete={handleDeleteNote} />}
       </SlideOver>
     </div>
   )

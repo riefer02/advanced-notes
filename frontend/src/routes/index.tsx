@@ -1,14 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  SignedIn,
-  SignedOut,
-  SignInButton,
-  UserButton,
-} from "@clerk/clerk-react";
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react'
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute('/')({
   component: LandingPage,
-});
+})
 
 function LandingPage() {
   return (
@@ -60,8 +55,8 @@ function LandingPage() {
           </h2>
 
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Advanced AI-powered transcription with automatic categorization.
-            Turn your voice notes into a searchable, organized knowledge base.
+            Advanced AI-powered transcription with automatic categorization. Turn your voice notes
+            into a searchable, organized knowledge base.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-8">
@@ -91,38 +86,30 @@ function LandingPage() {
         <div className="grid md:grid-cols-3 gap-8 mt-24">
           <div className="bg-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-shadow">
             <div className="text-4xl mb-4">🎤</div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              AI Transcription
-            </h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">AI Transcription</h3>
             <p className="text-gray-600">
-              State-of-the-art speech recognition powered by OpenAI Whisper for
-              accurate transcriptions
+              State-of-the-art speech recognition powered by OpenAI Whisper for accurate
+              transcriptions
             </p>
           </div>
 
           <div className="bg-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-shadow">
             <div className="text-4xl mb-4">🏷️</div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              Smart Categorization
-            </h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Smart Categorization</h3>
             <p className="text-gray-600">
-              Automatic organization with AI-powered categories and tags for
-              easy retrieval
+              Automatic organization with AI-powered categories and tags for easy retrieval
             </p>
           </div>
 
           <div className="bg-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-shadow">
             <div className="text-4xl mb-4">🔍</div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              Semantic Search
-            </h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Semantic Search</h3>
             <p className="text-gray-600">
-              Find your notes instantly with powerful search across all your
-              transcriptions
+              Find your notes instantly with powerful search across all your transcriptions
             </p>
           </div>
         </div>
       </main>
     </div>
-  );
+  )
 }

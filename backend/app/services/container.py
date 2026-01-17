@@ -9,7 +9,6 @@ to inject fakes without importing/initializing global singletons.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from flask import current_app
 
@@ -31,7 +30,7 @@ class Services:
     summarizer: AISummarizerService
 
 
-def create_services(*, database_url: Optional[str] = None) -> Services:
+def create_services(*, database_url: str | None = None) -> Services:
     """
     Build the production Services container.
 

@@ -57,9 +57,9 @@ function SettingsPage() {
                     Auto-accept extracted todos
                   </label>
                   <p className="mt-1 text-sm text-gray-500">
-                    When enabled, todos extracted from your voice notes will be automatically
-                    added to your todo list. When disabled, they will appear as suggestions
-                    that you can review and accept individually.
+                    When enabled, todos extracted from your voice notes will be automatically added
+                    to your todo list. When disabled, they will appear as suggestions that you can
+                    review and accept individually.
                   </p>
                 </div>
                 <button
@@ -92,4 +92,3 @@ function SettingsPage() {
     </div>
   )
 }
-

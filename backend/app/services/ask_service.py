@@ -6,24 +6,22 @@ The answer is a markdown response with citations referencing note IDs.
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
 
-from .query_planner import QueryPlan
 from .openai_provider import chat_model, get_openai_client
+from .query_planner import QueryPlan
 
 
 class AskAnswer(BaseModel):
     answer_markdown: str = Field(
         description="A helpful, well-structured answer in markdown."
     )
-    cited_note_ids: List[str] = Field(
+    cited_note_ids: list[str] = Field(
         default_factory=list,
         description="List of note IDs that support the answer. Use only IDs from the provided notes.",
     )
-    followups: List[str] = Field(
+    followups: list[str] = Field(
         default_factory=list,
         description="Suggested follow-up questions the user might ask next.",
     )
@@ -33,7 +31,7 @@ class RetrievedNote(BaseModel):
     note_id: str
     title: str
     updated_at: str
-    tags: List[str]
+    tags: list[str]
     snippet: str
     score: float
     content_excerpt: str
@@ -42,14 +40,14 @@ class RetrievedNote(BaseModel):
 class AskService:
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
-        client: Optional[OpenAI] = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        client: OpenAI | None = None,
     ):
         self.client = client or (OpenAI(api_key=api_key) if api_key else get_openai_client())
         self.model = model or chat_model()
 
-    def answer(self, question: str, plan: QueryPlan, notes: List[RetrievedNote]) -> AskAnswer:
+    def answer(self, question: str, plan: QueryPlan, notes: list[RetrievedNote]) -> AskAnswer:
         prompt = self._build_prompt(question=question, plan=plan, notes=notes)
         try:
             completion = self.client.beta.chat.completions.parse(
@@ -76,7 +74,7 @@ class AskService:
             print(f"OpenAI API error during ask answer: {e}")
             raise
 
-    def _build_prompt(self, question: str, plan: QueryPlan, notes: List[RetrievedNote]) -> str:
+    def _build_prompt(self, question: str, plan: QueryPlan, notes: list[RetrievedNote]) -> str:
         notes_blocks = []
         for n in notes:
             notes_blocks.append(
