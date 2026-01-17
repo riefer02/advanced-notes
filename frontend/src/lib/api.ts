@@ -55,10 +55,25 @@ export interface CategoryResult {
   reasoning: string
 }
 
+export interface ExtractedTodo {
+  id: string
+  user_id: string
+  note_id: string | null
+  title: string
+  description: string | null
+  status: 'suggested' | 'accepted' | 'completed'
+  confidence: number | null
+  extraction_context: string | null
+  created_at: string
+  updated_at: string
+  completed_at: string | null
+}
+
 export interface TranscriptionResponse {
   text: string
   meta: TranscriptionMeta
   categorization: CategoryResult
+  todos: ExtractedTodo[]
 }
 
 export interface Note {
@@ -173,6 +188,43 @@ export interface AskHistoryItem {
 
 export interface AskHistoryResponse {
   items: AskHistoryItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+// ============================================================================
+// User Settings Types
+// ============================================================================
+
+export interface UserSettings {
+  id: string
+  user_id: string
+  auto_accept_todos: boolean
+  created_at: string
+  updated_at: string
+}
+
+// ============================================================================
+// Todo Types
+// ============================================================================
+
+export interface Todo {
+  id: string
+  user_id: string
+  note_id: string | null
+  title: string
+  description: string | null
+  status: 'suggested' | 'accepted' | 'completed'
+  confidence: number | null
+  extraction_context: string | null
+  created_at: string
+  updated_at: string
+  completed_at: string | null
+}
+
+export interface TodosResponse {
+  todos: Todo[]
   total: number
   limit: number
   offset: number
@@ -446,5 +498,174 @@ export async function deleteAskHistoryItem(askId: string): Promise<void> {
   if (!response.ok) {
     throw new Error('Failed to delete ask history item')
   }
+}
+
+// ============================================================================
+// User Settings API Functions
+// ============================================================================
+
+export async function fetchUserSettings(): Promise<UserSettings> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/settings`, { headers })
+  if (!response.ok) {
+    throw new Error('Failed to fetch settings')
+  }
+  return response.json()
+}
+
+export async function updateUserSettings(settings: { auto_accept_todos?: boolean }): Promise<UserSettings> {
+  const headers = new Headers(await getAuthHeaders())
+  headers.set('Content-Type', 'application/json')
+
+  const response = await fetch(`${API_BASE_URL}/api/settings`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(settings),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to update settings')
+  }
+  return response.json()
+}
+
+// ============================================================================
+// Todo API Functions
+// ============================================================================
+
+export async function fetchTodos(params?: {
+  status?: 'suggested' | 'accepted' | 'completed'
+  note_id?: string
+  limit?: number
+  offset?: number
+}): Promise<TodosResponse> {
+  const searchParams = new URLSearchParams()
+  if (params?.status) searchParams.set('status', params.status)
+  if (params?.note_id) searchParams.set('note_id', params.note_id)
+  if (params?.limit !== undefined) searchParams.set('limit', params.limit.toString())
+  if (params?.offset !== undefined) searchParams.set('offset', params.offset.toString())
+
+  const headers = await getAuthHeaders()
+  const url = `${API_BASE_URL}/api/todos${searchParams.toString() ? '?' + searchParams.toString() : ''}`
+  const response = await fetch(url, { headers })
+  if (!response.ok) {
+    throw new Error('Failed to fetch todos')
+  }
+  return response.json()
+}
+
+export async function fetchTodo(todoId: string): Promise<Todo> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/todos/${todoId}`, { headers })
+  if (!response.ok) {
+    throw new Error('Todo not found')
+  }
+  return response.json()
+}
+
+export async function createTodo(data: {
+  title: string
+  description?: string
+  note_id?: string
+}): Promise<Todo> {
+  const headers = new Headers(await getAuthHeaders())
+  headers.set('Content-Type', 'application/json')
+
+  const response = await fetch(`${API_BASE_URL}/api/todos`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to create todo')
+  }
+  return response.json()
+}
+
+export async function updateTodo(todoId: string, data: {
+  title?: string
+  description?: string
+}): Promise<Todo> {
+  const headers = new Headers(await getAuthHeaders())
+  headers.set('Content-Type', 'application/json')
+
+  const response = await fetch(`${API_BASE_URL}/api/todos/${todoId}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to update todo')
+  }
+  return response.json()
+}
+
+export async function deleteTodo(todoId: string): Promise<void> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/todos/${todoId}`, {
+    method: 'DELETE',
+    headers,
+  })
+  if (!response.ok) {
+    throw new Error('Failed to delete todo')
+  }
+}
+
+export async function acceptTodo(todoId: string): Promise<Todo> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/todos/${todoId}/accept`, {
+    method: 'POST',
+    headers,
+  })
+  if (!response.ok) {
+    throw new Error('Failed to accept todo')
+  }
+  return response.json()
+}
+
+export async function completeTodo(todoId: string): Promise<Todo> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/todos/${todoId}/complete`, {
+    method: 'POST',
+    headers,
+  })
+  if (!response.ok) {
+    throw new Error('Failed to complete todo')
+  }
+  return response.json()
+}
+
+export async function dismissTodo(todoId: string): Promise<void> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/todos/${todoId}/dismiss`, {
+    method: 'POST',
+    headers,
+  })
+  if (!response.ok) {
+    throw new Error('Failed to dismiss todo')
+  }
+}
+
+export async function fetchNoteTodos(noteId: string): Promise<{ todos: Todo[] }> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE_URL}/api/notes/${noteId}/todos`, { headers })
+  if (!response.ok) {
+    throw new Error('Failed to fetch note todos')
+  }
+  return response.json()
+}
+
+export async function acceptNoteTodos(noteId: string, todoIds: string[]): Promise<{ accepted: number }> {
+  const headers = new Headers(await getAuthHeaders())
+  headers.set('Content-Type', 'application/json')
+
+  const response = await fetch(`${API_BASE_URL}/api/notes/${noteId}/todos/accept`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ todo_ids: todoIds }),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to accept todos')
+  }
+  return response.json()
 }
 

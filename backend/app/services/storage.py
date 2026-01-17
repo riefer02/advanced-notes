@@ -29,6 +29,8 @@ from ..database import (
     Note as NoteORM,
     NoteEmbedding as NoteEmbeddingORM,
     AudioClip as AudioClipORM,
+    UserSettings as UserSettingsORM,
+    Todo as TodoORM,
     create_engine_for_url,
     get_engine,
     get_session_factory,
@@ -42,6 +44,8 @@ from .models import (
     NoteMetadata,
     SearchResult,
     AudioClip as AudioClipDTO,
+    UserSettings as UserSettingsDTO,
+    Todo as TodoDTO,
 )
 
 from .embeddings import vector_from_json, vector_to_json
@@ -165,6 +169,32 @@ def _audio_clip_to_dto(clip: AudioClipORM) -> AudioClipDTO:
         duration_ms=clip.duration_ms,
         status=clip.status,
         created_at=clip.created_at,
+    )
+
+
+def _user_settings_to_dto(settings: UserSettingsORM) -> UserSettingsDTO:
+    return UserSettingsDTO(
+        id=settings.id,
+        user_id=settings.user_id,
+        auto_accept_todos=settings.auto_accept_todos,
+        created_at=settings.created_at,
+        updated_at=settings.updated_at,
+    )
+
+
+def _todo_to_dto(todo: TodoORM) -> TodoDTO:
+    return TodoDTO(
+        id=todo.id,
+        user_id=todo.user_id,
+        note_id=todo.note_id,
+        title=todo.title,
+        description=todo.description,
+        status=todo.status,
+        confidence=todo.confidence,
+        extraction_context=todo.extraction_context,
+        created_at=todo.created_at,
+        updated_at=todo.updated_at,
+        completed_at=todo.completed_at,
     )
 
 
@@ -1356,6 +1386,284 @@ class NoteStorage:
     def _folder_filter_clause(self, folder: str):
         like_pattern = f"{folder}/%"
         return or_(NoteORM.folder_path == folder, NoteORM.folder_path.like(like_pattern))
+
+    # =========================================================================
+    # USER SETTINGS METHODS
+    # =========================================================================
+
+    def get_user_settings(self, user_id: str) -> UserSettingsDTO:
+        """
+        Get user settings, creating defaults if not found.
+        """
+        with self._session_scope() as session:
+            settings = (
+                session.query(UserSettingsORM)
+                .filter(UserSettingsORM.user_id == user_id)
+                .one_or_none()
+            )
+            if settings:
+                return _user_settings_to_dto(settings)
+
+            # Create default settings
+            settings_id = str(uuid4())
+            now = datetime.utcnow()
+            new_settings = UserSettingsORM(
+                id=settings_id,
+                user_id=user_id,
+                auto_accept_todos=False,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(new_settings)
+            return _user_settings_to_dto(new_settings)
+
+    def update_user_settings(
+        self,
+        user_id: str,
+        *,
+        auto_accept_todos: Optional[bool] = None,
+    ) -> UserSettingsDTO:
+        """
+        Update user settings, creating if not found.
+        """
+        with self._session_scope() as session:
+            settings = (
+                session.query(UserSettingsORM)
+                .filter(UserSettingsORM.user_id == user_id)
+                .one_or_none()
+            )
+            now = datetime.utcnow()
+
+            if not settings:
+                # Create with the provided values
+                settings = UserSettingsORM(
+                    id=str(uuid4()),
+                    user_id=user_id,
+                    auto_accept_todos=auto_accept_todos if auto_accept_todos is not None else False,
+                    created_at=now,
+                    updated_at=now,
+                )
+                session.add(settings)
+            else:
+                if auto_accept_todos is not None:
+                    settings.auto_accept_todos = auto_accept_todos
+                settings.updated_at = now
+                session.add(settings)
+
+            return _user_settings_to_dto(settings)
+
+    # =========================================================================
+    # TODO METHODS
+    # =========================================================================
+
+    def create_todo(
+        self,
+        user_id: str,
+        title: str,
+        *,
+        note_id: Optional[str] = None,
+        description: Optional[str] = None,
+        status: str = "suggested",
+        confidence: Optional[float] = None,
+        extraction_context: Optional[str] = None,
+    ) -> TodoDTO:
+        """
+        Create a new todo.
+        """
+        todo_id = str(uuid4())
+        now = datetime.utcnow()
+
+        todo = TodoORM(
+            id=todo_id,
+            user_id=user_id,
+            note_id=note_id,
+            title=title,
+            description=description,
+            status=status,
+            confidence=confidence,
+            extraction_context=extraction_context,
+            created_at=now,
+            updated_at=now,
+            completed_at=None,
+        )
+
+        with self._session_scope() as session:
+            session.add(todo)
+
+        return TodoDTO(
+            id=todo_id,
+            user_id=user_id,
+            note_id=note_id,
+            title=title,
+            description=description,
+            status=status,
+            confidence=confidence,
+            extraction_context=extraction_context,
+            created_at=now,
+            updated_at=now,
+            completed_at=None,
+        )
+
+    def get_todo(self, user_id: str, todo_id: str) -> Optional[TodoDTO]:
+        """
+        Get a single todo by ID.
+        """
+        with self._session_scope() as session:
+            todo = (
+                session.query(TodoORM)
+                .filter(TodoORM.user_id == user_id, TodoORM.id == todo_id)
+                .one_or_none()
+            )
+            return _todo_to_dto(todo) if todo else None
+
+    def list_todos(
+        self,
+        user_id: str,
+        *,
+        status: Optional[str] = None,
+        note_id: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> List[TodoDTO]:
+        """
+        List todos with optional filters.
+        """
+        with self._session_scope() as session:
+            query = session.query(TodoORM).filter(TodoORM.user_id == user_id)
+
+            if status:
+                query = query.filter(TodoORM.status == status)
+            if note_id:
+                query = query.filter(TodoORM.note_id == note_id)
+
+            todos = (
+                query.order_by(desc(TodoORM.created_at))
+                .offset(max(offset, 0))
+                .limit(max(limit, 1))
+                .all()
+            )
+            return [_todo_to_dto(t) for t in todos]
+
+    def list_todos_for_note(self, user_id: str, note_id: str) -> List[TodoDTO]:
+        """
+        List all todos for a specific note.
+        """
+        with self._session_scope() as session:
+            todos = (
+                session.query(TodoORM)
+                .filter(TodoORM.user_id == user_id, TodoORM.note_id == note_id)
+                .order_by(desc(TodoORM.created_at))
+                .all()
+            )
+            return [_todo_to_dto(t) for t in todos]
+
+    def update_todo(
+        self,
+        user_id: str,
+        todo_id: str,
+        *,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> Optional[TodoDTO]:
+        """
+        Update a todo's title or description.
+        """
+        with self._session_scope() as session:
+            todo = (
+                session.query(TodoORM)
+                .filter(TodoORM.user_id == user_id, TodoORM.id == todo_id)
+                .one_or_none()
+            )
+            if not todo:
+                return None
+
+            if title is not None:
+                todo.title = title
+            if description is not None:
+                todo.description = description
+            todo.updated_at = datetime.utcnow()
+            session.add(todo)
+            return _todo_to_dto(todo)
+
+    def delete_todo(self, user_id: str, todo_id: str) -> bool:
+        """
+        Delete a todo.
+        """
+        with self._session_scope() as session:
+            result = (
+                session.query(TodoORM)
+                .filter(TodoORM.user_id == user_id, TodoORM.id == todo_id)
+                .delete(synchronize_session=False)
+            )
+            return result > 0
+
+    def accept_todo(self, user_id: str, todo_id: str) -> Optional[TodoDTO]:
+        """
+        Accept a suggested todo (change status from suggested to accepted).
+        """
+        with self._session_scope() as session:
+            todo = (
+                session.query(TodoORM)
+                .filter(TodoORM.user_id == user_id, TodoORM.id == todo_id)
+                .one_or_none()
+            )
+            if not todo:
+                return None
+
+            todo.status = "accepted"
+            todo.updated_at = datetime.utcnow()
+            session.add(todo)
+            return _todo_to_dto(todo)
+
+    def complete_todo(self, user_id: str, todo_id: str) -> Optional[TodoDTO]:
+        """
+        Mark a todo as completed.
+        """
+        with self._session_scope() as session:
+            todo = (
+                session.query(TodoORM)
+                .filter(TodoORM.user_id == user_id, TodoORM.id == todo_id)
+                .one_or_none()
+            )
+            if not todo:
+                return None
+
+            now = datetime.utcnow()
+            todo.status = "completed"
+            todo.completed_at = now
+            todo.updated_at = now
+            session.add(todo)
+            return _todo_to_dto(todo)
+
+    def accept_todos_bulk(self, user_id: str, todo_ids: List[str]) -> int:
+        """
+        Accept multiple todos at once.
+        Returns the number of todos accepted.
+        """
+        if not todo_ids:
+            return 0
+
+        with self._session_scope() as session:
+            now = datetime.utcnow()
+            result = (
+                session.query(TodoORM)
+                .filter(
+                    TodoORM.user_id == user_id,
+                    TodoORM.id.in_(todo_ids),
+                    TodoORM.status == "suggested",
+                )
+                .update(
+                    {"status": "accepted", "updated_at": now},
+                    synchronize_session=False,
+                )
+            )
+            return int(result or 0)
+
+    def dismiss_todo(self, user_id: str, todo_id: str) -> bool:
+        """
+        Dismiss (delete) a suggested todo.
+        """
+        return self.delete_todo(user_id, todo_id)
 
     def _configure_engine(
         self,

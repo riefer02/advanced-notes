@@ -20,6 +20,22 @@ class CategoryAction(str, Enum):
     CREATE_SUBFOLDER = "create_subfolder"  # Create subfolder in existing folder
 
 
+class ExtractedTodo(BaseModel):
+    """A todo item extracted from a transcription"""
+    title: str = Field(
+        description="Imperative verb form action item (e.g., 'Review the quarterly report')"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="Optional additional context about the todo"
+    )
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Confidence that this is a clear, actionable todo (0.0-1.0)"
+    )
+
+
 class CategorySuggestion(BaseModel):
     """Structured output for note categorization with tag-first approach"""
     action: CategoryAction = Field(
@@ -41,6 +57,10 @@ class CategorySuggestion(BaseModel):
     )
     reasoning: str = Field(
         description="Brief explanation focusing on tag selection and folder choice"
+    )
+    todos: List[ExtractedTodo] = Field(
+        default_factory=list,
+        description="Action items extracted from the transcription (0-5 items)"
     )
 
 
@@ -146,7 +166,7 @@ class AICategorizationService:
         """
         folders_str = "\n".join(f"- {folder}" for folder in existing_folders) if existing_folders else "- (none)"
         
-        prompt = f"""Analyze this transcription and organize it using a TAG-FIRST approach.
+        prompt = f"""Analyze this transcription and organize it using a TAG-FIRST approach. Also extract any actionable TODO items.
 
 TRANSCRIPTION:
 \"\"\"
@@ -166,6 +186,7 @@ TASK:
 3. Create a descriptive filename (lowercase, kebab-case, with date suffix)
 4. Provide confidence score (0.0-1.0)
 5. Brief reasoning
+6. Extract 0-5 TODO items (action items mentioned in the transcription)
 
 TAG GUIDELINES (MOST IMPORTANT):
 - Extract specific topics, concepts, technologies, people, projects
@@ -186,6 +207,24 @@ FILENAME RULES:
 - Descriptive, lowercase, kebab-case
 - Use date suffix: YYYY-MM-DD format
 - Example: "react-performance-tips-2025-11-17.md"
+
+TODO EXTRACTION GUIDELINES:
+- Look for explicit action items: "I need to...", "I should...", "Don't forget to...", "Remind me to..."
+- Look for implied tasks: deadlines, commitments, follow-ups
+- Use IMPERATIVE verb form: "Review the report" not "Need to review the report"
+- Each todo should be a single, clear action (not vague or compound)
+- Only extract clear, actionable items - skip vague statements
+- Set confidence high (0.8-1.0) for explicit "I need to" statements
+- Set confidence medium (0.5-0.7) for implied tasks
+- Set confidence low (0.3-0.5) for things that might be tasks
+- Return empty array if no clear action items are found
+- Maximum 5 todos per note
+
+TODO EXAMPLES:
+- Good: "Schedule dentist appointment" (clear, actionable)
+- Good: "Review Q4 budget report by Friday" (specific deadline)
+- Bad: "Think about life" (too vague)
+- Bad: "Maybe consider updating the website" (uncertain, not a commitment)
 
 CONFIDENCE:
 - Higher (0.8-1.0): Clear topic, obvious tags
