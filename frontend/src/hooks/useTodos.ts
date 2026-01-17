@@ -83,8 +83,13 @@ export function useUpdateTodo() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ todoId, data }: { todoId: string; data: { title?: string; description?: string } }) =>
-      updateTodo(todoId, data),
+    mutationFn: ({
+      todoId,
+      data,
+    }: {
+      todoId: string
+      data: { title?: string; description?: string }
+    }) => updateTodo(todoId, data),
     onSuccess: (updatedTodo: Todo) => invalidateTodoQueries(queryClient, updatedTodo),
   })
 }

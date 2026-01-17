@@ -10,13 +10,13 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from typing import Iterable, List, Optional
 
 from openai import OpenAI, OpenAIError
 
 from .openai_provider import embedding_model, get_openai_client
 
-def build_note_embedding_text(title: str, content: str, tags: List[str]) -> str:
+
+def build_note_embedding_text(title: str, content: str, tags: list[str]) -> str:
     tags_part = ", ".join(tags or [])
     return f"Title: {title}\nTags: {tags_part}\n\nContent:\n{content}"
 
@@ -25,10 +25,10 @@ def content_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def cosine_similarity(a: List[float], b: List[float]) -> float:
+def cosine_similarity(a: list[float], b: list[float]) -> float:
     if not a or not b or len(a) != len(b):
         return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(y * y for y in b))
     if na == 0.0 or nb == 0.0:
@@ -41,16 +41,16 @@ def normalize_similarity(sim: float) -> float:
     return max(0.0, min((sim + 1.0) / 2.0, 1.0))
 
 
-def vector_to_pg_literal(vec: List[float]) -> str:
+def vector_to_pg_literal(vec: list[float]) -> str:
     # pgvector accepts '[1,2,3]' style literals
     return "[" + ",".join(f"{v:.8f}" for v in vec) + "]"
 
 
-def vector_to_json(vec: List[float]) -> str:
+def vector_to_json(vec: list[float]) -> str:
     return json.dumps(vec)
 
 
-def vector_from_json(value: str) -> List[float]:
+def vector_from_json(value: str) -> list[float]:
     try:
         parsed = json.loads(value)
         if isinstance(parsed, list):
@@ -70,9 +70,9 @@ class EmbeddingsService:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
-        client: Optional[OpenAI] = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        client: OpenAI | None = None,
     ):
         """
         Initialize the embeddings service.
@@ -85,7 +85,7 @@ class EmbeddingsService:
         self.client = client or (OpenAI(api_key=api_key) if api_key else get_openai_client())
         self.model = model or embedding_model()
 
-    def embed_text(self, text: str) -> List[float]:
+    def embed_text(self, text: str) -> list[float]:
         """
         Generate embedding vector for the given text.
 
@@ -107,7 +107,7 @@ class EmbeddingsService:
             print(f"OpenAI API error during embeddings: {e}")
             raise
 
-    def embed_query(self, question: str) -> List[float]:
+    def embed_query(self, question: str) -> list[float]:
         """
         Generate embedding vector for a search query.
 
@@ -126,7 +126,7 @@ class EmbeddingsService:
         note_id: str,
         title: str,
         content: str,
-        tags: Optional[List[str]] = None,
+        tags: list[str] | None = None,
     ) -> bool:
         """
         Generate and upsert embedding for a note.
@@ -174,5 +174,3 @@ class EmbeddingsService:
         except Exception as e:
             print(f"Embedding upsert failed for note {note_id}: {e}")
             return False
-
-

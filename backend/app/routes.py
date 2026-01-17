@@ -11,20 +11,20 @@ Organized into logical groups:
 All routes require authentication and are user-scoped.
 """
 
+from contextlib import suppress
 from functools import wraps
-from typing import Tuple
 
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, g, jsonify, request
 
 from .asr import transcribe_bytes
 from .auth import require_auth
 from .config import Config
-from .services.ask_service import RetrievedNote
 from .services import s3_audio
-from .services.embeddings import vector_to_json, vector_to_pg_literal
-from .services.models import NoteMetadata
+from .services.ask_service import RetrievedNote
 from .services.container import get_services
+from .services.embeddings import vector_to_json, vector_to_pg_literal
 from .services.folder_utils import extract_folder_paths
+from .services.models import NoteMetadata
 
 bp = Blueprint("api", __name__)
 
@@ -34,7 +34,7 @@ bp = Blueprint("api", __name__)
 # ============================================================================
 
 
-def api_error(message: str, status: int = 400) -> Tuple[dict, int]:
+def api_error(message: str, status: int = 400) -> tuple[dict, int]:
     """
     Return a standardized JSON error response.
 
@@ -48,7 +48,7 @@ def api_error(message: str, status: int = 400) -> Tuple[dict, int]:
     return jsonify({"error": message}), status
 
 
-def parse_pagination(default_limit: int = 50, max_limit: int = 100) -> Tuple[int, int]:
+def parse_pagination(default_limit: int = 50, max_limit: int = 100) -> tuple[int, int]:
     """
     Parse limit and offset from query parameters with bounds checking.
 
@@ -79,14 +79,15 @@ def require_audio_clips(f):
 
     Returns 501 error if AUDIO_CLIPS_ENABLED is not true.
     """
+
     @wraps(f)
     def decorated(*args, **kwargs):
         if not Config.audio_clips_enabled():
             return api_error(
-                "Audio clips are disabled. Set AUDIO_CLIPS_ENABLED=true to enable.",
-                501
+                "Audio clips are disabled. Set AUDIO_CLIPS_ENABLED=true to enable.", 501
             )
         return f(*args, **kwargs)
+
     return decorated
 
 
@@ -105,11 +106,12 @@ def validate_uuid(value: str, name: str = "id") -> bool:
         ValueError: If the value is not a valid UUID
     """
     from uuid import UUID
+
     try:
         UUID(value)
         return True
-    except ValueError:
-        raise ValueError(f"Invalid {name} format: must be a valid UUID")
+    except ValueError as exc:
+        raise ValueError(f"Invalid {name} format: must be a valid UUID") from exc
 
 
 def _cleanup_stale_pending_audio_clips(user_id: str, svc) -> None:  # noqa: ANN001 - small route helper
@@ -133,14 +135,10 @@ def _cleanup_stale_pending_audio_clips(user_id: str, svc) -> None:  # noqa: ANN0
 
     # Best-effort: delete objects first, then delete DB rows.
     for clip in stale:
-        try:
+        with suppress(Exception):
             s3_audio.delete_object(storage_key=clip.storage_key)
-        except Exception:
-            pass
-    try:
+    with suppress(Exception):
         svc.storage.delete_audio_clips(user_id, [c.id for c in stale])
-    except Exception:
-        pass
 
 
 # ============================================================================
@@ -180,9 +178,7 @@ def summarize_notes():
             )
 
         # 2. Extract content
-        notes_content = [
-            f"Title: {n.title}\nContent: {n.content}" for n in recent_notes
-        ]
+        notes_content = [f"Title: {n.title}\nContent: {n.content}" for n in recent_notes]
 
         # 3. Generate summary
         digest_result = svc.summarizer.summarize(notes_content)
@@ -280,30 +276,24 @@ def transcribe():
             text, meta = transcribe_bytes(data, content_type)
         except ValueError as e:
             # Validation errors (empty audio, too small, etc.)
-            try:
+            with suppress(Exception):
                 s3_audio.delete_object(storage_key=audio_storage_key)
-            except Exception:
-                pass
             svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
             return jsonify({"error": str(e)}), 400
         except Exception as e:
             # OpenAI API errors
             error_msg = str(e)
             if "corrupted" in error_msg.lower() or "unsupported" in error_msg.lower():
-                try:
+                with suppress(Exception):
                     s3_audio.delete_object(storage_key=audio_storage_key)
-                except Exception:
-                    pass
                 svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
                 return jsonify(
                     {
                         "error": "Audio format not supported or corrupted. Please try recording again."
                     }
                 ), 400
-            try:
+            with suppress(Exception):
                 s3_audio.delete_object(storage_key=audio_storage_key)
-            except Exception:
-                pass
             svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
             raise
 
@@ -315,9 +305,7 @@ def transcribe():
 
         # Step 3: Save to database (user-scoped)
         note_metadata = NoteMetadata(
-            title=categorization_result.filename.replace(".md", "")
-            .replace("-", " ")
-            .title(),
+            title=categorization_result.filename.replace(".md", "").replace("-", " ").title(),
             folder_path=categorization_result.folder_path,
             tags=categorization_result.tags,
             confidence=categorization_result.confidence,
@@ -325,9 +313,7 @@ def transcribe():
             model_version=meta.get("model"),
         )
 
-        note_id = svc.storage.save_note(
-            user_id=user_id, content=text, metadata=note_metadata
-        )
+        note_id = svc.storage.save_note(user_id=user_id, content=text, metadata=note_metadata)
 
         # Persist audio clip metadata linked to the new note + mark ready.
         duration_ms = None
@@ -595,7 +581,9 @@ def get_primary_audio_clip_for_note(note_id: str):
         return api_error("Audio clip not found", 404)
 
     dl = s3_audio.presign_get_object(storage_key=clip.storage_key)
-    return jsonify({"clip": clip.model_dump(), "playback": {"url": dl.url, "expires_at": dl.expires_at}})
+    return jsonify(
+        {"clip": clip.model_dump(), "playback": {"url": dl.url, "expires_at": dl.expires_at}}
+    )
 
 
 # ============================================================================
@@ -624,9 +612,7 @@ def list_notes():
         folder = request.args.get("folder")
         limit, offset = parse_pagination(default_limit=50, max_limit=100)
 
-        notes = svc.storage.list_notes(
-            user_id=user_id, folder=folder, limit=limit, offset=offset
-        )
+        notes = svc.storage.list_notes(user_id=user_id, folder=folder, limit=limit, offset=offset)
 
         return jsonify(
             {
@@ -902,9 +888,7 @@ def search_notes():
 
         results = svc.storage.search_notes(user_id, query)
 
-        return jsonify(
-            {"query": query, "results": [result.model_dump() for result in results]}
-        )
+        return jsonify({"query": query, "results": [result.model_dump() for result in results]})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -965,9 +949,7 @@ def ask_notes():
             else vector_to_json(q_vec)
         )
 
-        fts_query = (
-            " ".join(plan.keywords).strip() if plan.keywords else plan.semantic_query
-        )
+        fts_query = " ".join(plan.keywords).strip() if plan.keywords else plan.semantic_query
 
         retrieval = svc.storage.retrieve_for_question(
             user_id=user_id,
@@ -1009,9 +991,7 @@ def ask_notes():
         # Persist ask history (compact)
         import json as _json
 
-        source_scores = {
-            item["note"].id: float(item.get("score") or 0.0) for item in retrieval
-        }
+        source_scores = {item["note"].id: float(item.get("score") or 0.0) for item in retrieval}
         ask_id = svc.storage.save_ask_history(
             user_id=user_id,
             query=query,

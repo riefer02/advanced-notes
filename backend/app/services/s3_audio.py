@@ -11,7 +11,7 @@ Routes and storage code should not talk to boto3 directly; they should call this
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.config import Config
 
@@ -102,7 +102,7 @@ def presign_put_object(*, storage_key: str, content_type: str) -> PresignedReque
         Params={"Bucket": bucket, "Key": storage_key, "ContentType": content_type},
         ExpiresIn=expires,
     )
-    expires_at = (datetime.now(timezone.utc) + timedelta(seconds=expires)).isoformat()
+    expires_at = (datetime.now(UTC) + timedelta(seconds=expires)).isoformat()
     # Many S3 providers require the client to send the same Content-Type that was presigned.
     return PresignedRequest(
         url=url,
@@ -120,7 +120,7 @@ def presign_get_object(*, storage_key: str) -> PresignedRequest:
         Params={"Bucket": bucket, "Key": storage_key},
         ExpiresIn=expires,
     )
-    expires_at = (datetime.now(timezone.utc) + timedelta(seconds=expires)).isoformat()
+    expires_at = (datetime.now(UTC) + timedelta(seconds=expires)).isoformat()
     return PresignedRequest(url=url, method="GET", expires_at=expires_at, headers={})
 
 

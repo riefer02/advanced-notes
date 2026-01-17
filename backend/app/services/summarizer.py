@@ -4,9 +4,9 @@ AI Summarizer Service using OpenAI GPT-4o-mini
 This module provides an abstraction layer for generating digests from multiple notes.
 """
 
-from typing import List, Optional
-from pydantic import BaseModel, Field
+
 from openai import OpenAI, OpenAIError
+from pydantic import BaseModel, Field
 
 from .openai_provider import chat_model, get_openai_client
 
@@ -16,10 +16,10 @@ class DigestResult(BaseModel):
     summary: str = Field(
         description="A comprehensive, engaging summary of the provided notes using markdown formatting."
     )
-    key_themes: List[str] = Field(
+    key_themes: list[str] = Field(
         description="List of 3-5 key themes identified across the notes."
     )
-    action_items: List[str] = Field(
+    action_items: list[str] = Field(
         default_factory=list,
         description="Potential action items or follow-ups extracted from the notes."
     )
@@ -32,9 +32,9 @@ class AISummarizerService:
     
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
-        client: Optional[OpenAI] = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        client: OpenAI | None = None,
     ):
         """
         Initialize the AI summarizer service.
@@ -46,7 +46,7 @@ class AISummarizerService:
         self.client = client or (OpenAI(api_key=api_key) if api_key else get_openai_client())
         self.model = model or chat_model()
         
-    def summarize(self, notes_content: List[str]) -> DigestResult:
+    def summarize(self, notes_content: list[str]) -> DigestResult:
         """
         Generate a summary digest from a list of note contents.
         
@@ -92,7 +92,7 @@ class AISummarizerService:
             print(f"Unexpected error during summarization: {e}")
             raise
 
-    def _build_prompt(self, notes_content: List[str]) -> str:
+    def _build_prompt(self, notes_content: list[str]) -> str:
         """
         Build the summarization prompt.
         """

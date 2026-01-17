@@ -14,12 +14,12 @@ from __future__ import annotations
 
 from datetime import date
 from enum import Enum
-from typing import List, Optional
 
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
 
 from .openai_provider import chat_model, get_openai_client
+
 
 class AskIntent(str, Enum):
     fact_lookup = "fact_lookup"
@@ -30,15 +30,15 @@ class AskIntent(str, Enum):
 
 
 class TimeRange(BaseModel):
-    start_date: Optional[str] = Field(
+    start_date: str | None = Field(
         default=None,
         description="Inclusive start date in ISO format YYYY-MM-DD.",
     )
-    end_date: Optional[str] = Field(
+    end_date: str | None = Field(
         default=None,
         description="Inclusive end date in ISO format YYYY-MM-DD.",
     )
-    timezone: Optional[str] = Field(
+    timezone: str | None = Field(
         default=None,
         description="IANA timezone if known (e.g., 'America/Chicago').",
     )
@@ -50,22 +50,22 @@ class TimeRange(BaseModel):
 
 class QueryPlan(BaseModel):
     intent: AskIntent = Field(description="The dominant intent of the user's question.")
-    time_range: Optional[TimeRange] = Field(
+    time_range: TimeRange | None = Field(
         default=None, description="Time filter derived from the question, if any."
     )
-    include_tags: List[str] = Field(
+    include_tags: list[str] = Field(
         default_factory=list,
         description="Tags to include (OR semantics unless otherwise specified).",
     )
-    exclude_tags: List[str] = Field(
+    exclude_tags: list[str] = Field(
         default_factory=list,
         description="Tags to exclude.",
     )
-    folder_paths: Optional[List[str]] = Field(
+    folder_paths: list[str] | None = Field(
         default=None,
         description="Folders to include. null means all folders.",
     )
-    keywords: List[str] = Field(
+    keywords: list[str] = Field(
         default_factory=list,
         description="Keywords/phrases for full-text search (FTS).",
     )
@@ -81,9 +81,9 @@ class QueryPlan(BaseModel):
 class QueryPlanner:
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
-        client: Optional[OpenAI] = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        client: OpenAI | None = None,
     ):
         self.client = client or (OpenAI(api_key=api_key) if api_key else get_openai_client())
         self.model = model or chat_model()
@@ -91,9 +91,9 @@ class QueryPlanner:
     def plan(
         self,
         question: str,
-        known_tags: List[str],
-        known_folders: List[str],
-        today: Optional[date] = None,
+        known_tags: list[str],
+        known_folders: list[str],
+        today: date | None = None,
         result_limit: int = 12,
     ) -> QueryPlan:
         if not question or not question.strip():
@@ -139,8 +139,8 @@ class QueryPlanner:
     def _build_prompt(
         self,
         question: str,
-        known_tags: List[str],
-        known_folders: List[str],
+        known_tags: list[str],
+        known_folders: list[str],
         today: date,
         result_limit: int,
     ) -> str:

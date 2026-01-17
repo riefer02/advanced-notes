@@ -62,13 +62,20 @@ function TodosPage() {
   // Filter todos for display
   const todos = data?.todos || []
   const suggestedTodos = todos.filter((t: Todo) => t.status === 'suggested')
-  const activeTodos = activeTab === 'all'
-    ? todos.filter((t: Todo) => t.status !== 'suggested')
-    : todos
+  const activeTodos =
+    activeTab === 'all' ? todos.filter((t: Todo) => t.status !== 'suggested') : todos
 
   const tabs: { key: TabType; label: string; count?: number }[] = [
-    { key: 'all', label: 'Active', count: todos.filter((t: Todo) => t.status !== 'suggested' && t.status !== 'completed').length },
-    { key: 'completed', label: 'Completed', count: todos.filter((t: Todo) => t.status === 'completed').length },
+    {
+      key: 'all',
+      label: 'Active',
+      count: todos.filter((t: Todo) => t.status !== 'suggested' && t.status !== 'completed').length,
+    },
+    {
+      key: 'completed',
+      label: 'Completed',
+      count: todos.filter((t: Todo) => t.status === 'completed').length,
+    },
   ]
 
   return (
@@ -83,7 +90,12 @@ function TodosPage() {
               className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
               </svg>
               New Todo
             </button>
@@ -127,8 +139,18 @@ function TodosPage() {
         {suggestedTodos.length > 0 && activeTab === 'all' && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
-              <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <svg
+                className="h-5 w-5 text-amber-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
               </svg>
               <h3 className="text-sm font-semibold text-amber-900">
                 Suggested Todos ({suggestedTodos.length})

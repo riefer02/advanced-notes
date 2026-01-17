@@ -52,7 +52,6 @@ if (!rootElement.innerHTML) {
           <RouterProvider router={router} />
         </QueryClientProvider>
       </ClerkProvider>
-    </React.StrictMode>,
+    </React.StrictMode>
   )
 }
-

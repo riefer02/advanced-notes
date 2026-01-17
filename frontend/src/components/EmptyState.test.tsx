@@ -21,10 +21,7 @@ describe('EmptyState', () => {
 
   it('renders action button', () => {
     render(
-      <EmptyState
-        title="No items"
-        action={<button data-testid="action-btn">Add Item</button>}
-      />
+      <EmptyState title="No items" action={<button data-testid="action-btn">Add Item</button>} />
     )
     expect(screen.getByTestId('action-btn')).toBeInTheDocument()
     expect(screen.getByText('Add Item')).toBeInTheDocument()
@@ -58,9 +55,7 @@ describe('NoNotesState', () => {
   it('renders no notes message', () => {
     render(<NoNotesState />)
     expect(screen.getByText('No notes yet')).toBeInTheDocument()
-    expect(
-      screen.getByText(/Start recording your first voice note/)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Start recording your first voice note/)).toBeInTheDocument()
   })
 })
 
@@ -68,9 +63,7 @@ describe('NoTodosState', () => {
   it('renders generic no todos message', () => {
     render(<NoTodosState />)
     expect(screen.getByText('No todos yet')).toBeInTheDocument()
-    expect(
-      screen.getByText(/Create todos manually or let AI extract them/)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Create todos manually or let AI extract them/)).toBeInTheDocument()
   })
 
   it('renders suggested todos empty state', () => {

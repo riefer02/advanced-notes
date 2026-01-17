@@ -5,19 +5,19 @@ Uses Pydantic for validation and serialization.
 """
 
 from datetime import datetime
-from typing import List, Optional
-from pydantic import BaseModel, Field
 from uuid import uuid4
+
+from pydantic import BaseModel, Field
 
 
 class NoteMetadata(BaseModel):
     """Metadata for creating/updating a note"""
     title: str = Field(..., min_length=1, max_length=500)
     folder_path: str = Field(..., description="Folder path (e.g., 'blog-ideas/react')")
-    tags: List[str] = Field(default_factory=list, description="List of tags")
-    confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="AI categorization confidence")
-    transcription_duration: Optional[float] = Field(None, ge=0.0, description="Audio duration in seconds")
-    model_version: Optional[str] = Field(None, description="ASR model version")
+    tags: list[str] = Field(default_factory=list, description="List of tags")
+    confidence: float | None = Field(None, ge=0.0, le=1.0, description="AI categorization confidence")
+    transcription_duration: float | None = Field(None, ge=0.0, description="Audio duration in seconds")
+    model_version: str | None = Field(None, description="ASR model version")
 
 
 class Note(BaseModel):
@@ -27,13 +27,13 @@ class Note(BaseModel):
     title: str
     content: str
     folder_path: str
-    tags: List[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     word_count: int = Field(default=0, ge=0)
-    confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
-    transcription_duration: Optional[float] = Field(None, ge=0.0)
-    model_version: Optional[str] = None
+    confidence: float | None = Field(None, ge=0.0, le=1.0)
+    transcription_duration: float | None = Field(None, ge=0.0)
+    model_version: str | None = None
     
     class Config:
         json_encoders = {
@@ -63,7 +63,7 @@ class AskHistory(BaseModel):
     query_plan_json: str
     answer_markdown: str
     cited_note_ids_json: str
-    source_scores_json: Optional[str] = None
+    source_scores_json: str | None = None
     created_at: datetime = Field(default_factory=datetime.now)
 
     class Config:
@@ -75,7 +75,7 @@ class FolderNode(BaseModel):
     name: str
     path: str
     note_count: int
-    subfolders: List['FolderNode'] = Field(default_factory=list)
+    subfolders: list['FolderNode'] = Field(default_factory=list)
 
 
 class FolderStats(BaseModel):
@@ -83,8 +83,8 @@ class FolderStats(BaseModel):
     path: str
     note_count: int
     total_duration: float
-    avg_confidence: Optional[float]
-    most_common_tags: List[str]
+    avg_confidence: float | None
+    most_common_tags: list[str]
 
 
 class SearchResult(BaseModel):
@@ -99,14 +99,14 @@ class AudioClip(BaseModel):
 
     id: str = Field(default_factory=lambda: str(uuid4()))
     user_id: str = Field(..., description="Clerk user ID")
-    note_id: Optional[str] = Field(None, description="Associated note ID (optional)")
+    note_id: str | None = Field(None, description="Associated note ID (optional)")
 
-    bucket: Optional[str] = None
+    bucket: str | None = None
     storage_key: str
 
     mime_type: str
     bytes: int = Field(..., ge=1)
-    duration_ms: Optional[int] = Field(None, ge=0)
+    duration_ms: int | None = Field(None, ge=0)
 
     status: str = Field(default="pending")
     created_at: datetime = Field(default_factory=datetime.now)
@@ -131,15 +131,15 @@ class Todo(BaseModel):
     """Todo item extracted from notes or created manually."""
     id: str = Field(default_factory=lambda: str(uuid4()))
     user_id: str = Field(..., description="Clerk user ID")
-    note_id: Optional[str] = Field(None, description="Source note ID (nullable)")
+    note_id: str | None = Field(None, description="Source note ID (nullable)")
     title: str = Field(..., min_length=1, max_length=500)
-    description: Optional[str] = Field(None, description="Optional longer description")
+    description: str | None = Field(None, description="Optional longer description")
     status: str = Field(default="suggested", description="suggested | accepted | completed")
-    confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="AI extraction confidence")
-    extraction_context: Optional[str] = Field(None, description="Context from note where todo was extracted")
+    confidence: float | None = Field(None, ge=0.0, le=1.0, description="AI extraction confidence")
+    extraction_context: str | None = Field(None, description="Context from note where todo was extracted")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
-    completed_at: Optional[datetime] = Field(None, description="When the todo was completed")
+    completed_at: datetime | None = Field(None, description="When the todo was completed")
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}
@@ -157,27 +157,27 @@ FolderNode.model_rebuild()
 class CreateTodoRequest(BaseModel):
     """Request body for creating a new todo."""
     title: str = Field(..., min_length=1, max_length=500, description="Todo title")
-    description: Optional[str] = Field(None, max_length=2000, description="Optional description")
-    note_id: Optional[str] = Field(None, description="Associated note ID")
+    description: str | None = Field(None, max_length=2000, description="Optional description")
+    note_id: str | None = Field(None, description="Associated note ID")
 
 
 class UpdateTodoRequest(BaseModel):
     """Request body for updating an existing todo."""
-    title: Optional[str] = Field(None, min_length=1, max_length=500, description="New title")
-    description: Optional[str] = Field(None, max_length=2000, description="New description")
+    title: str | None = Field(None, min_length=1, max_length=500, description="New title")
+    description: str | None = Field(None, max_length=2000, description="New description")
 
 
 class UpdateNoteRequest(BaseModel):
     """Request body for updating an existing note."""
-    content: Optional[str] = Field(None, min_length=1, description="Note content")
-    title: Optional[str] = Field(None, min_length=1, max_length=500, description="Note title")
-    folder_path: Optional[str] = Field(None, description="Folder path")
-    tags: Optional[List[str]] = Field(None, description="List of tags")
+    content: str | None = Field(None, min_length=1, description="Note content")
+    title: str | None = Field(None, min_length=1, max_length=500, description="Note title")
+    folder_path: str | None = Field(None, description="Folder path")
+    tags: list[str] | None = Field(None, description="List of tags")
 
 
 class UpdateSettingsRequest(BaseModel):
     """Request body for updating user settings."""
-    auto_accept_todos: Optional[bool] = Field(None, description="Auto-accept extracted todos")
+    auto_accept_todos: bool | None = Field(None, description="Auto-accept extracted todos")
 
 
 class AskRequest(BaseModel):
@@ -191,5 +191,5 @@ class AudioClipUploadRequest(BaseModel):
     """Request body for creating a pending audio clip upload."""
     mime_type: str = Field(..., min_length=1, description="MIME type of the audio")
     bytes: int = Field(..., ge=1, description="Size in bytes")
-    note_id: Optional[str] = Field(None, description="Associated note ID")
-    duration_ms: Optional[int] = Field(None, ge=0, description="Duration in milliseconds")
+    note_id: str | None = Field(None, description="Associated note ID")
+    duration_ms: int | None = Field(None, ge=0, description="Duration in milliseconds")

@@ -8,7 +8,13 @@ interface SlideOverProps {
   width?: string
 }
 
-export default function SlideOver({ isOpen, onClose, title, children, width = 'max-w-md' }: SlideOverProps) {
+export default function SlideOver({
+  isOpen,
+  onClose,
+  title,
+  children,
+  width = 'max-w-md',
+}: SlideOverProps) {
   // Prevent body scroll when open
   useEffect(() => {
     if (isOpen) {
@@ -35,14 +41,16 @@ export default function SlideOver({ isOpen, onClose, title, children, width = 'm
   return (
     <div
       className={`fixed inset-0 z-50 overflow-hidden transition-all duration-500 ease-in-out ${
-        isOpen ? 'visible pointer-events-auto opacity-100' : 'invisible pointer-events-none opacity-0'
+        isOpen
+          ? 'visible pointer-events-auto opacity-100'
+          : 'invisible pointer-events-none opacity-0'
       }`}
       role="dialog"
       aria-modal="true"
     >
       {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+      <div
+        className="absolute inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -65,7 +73,14 @@ export default function SlideOver({ isOpen, onClose, title, children, width = 'm
                   onClick={onClose}
                 >
                   <span className="sr-only">Close panel</span>
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" aria-hidden="true">
+                  <svg
+                    className="h-6 w-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth="1.5"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                  >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -73,13 +88,10 @@ export default function SlideOver({ isOpen, onClose, title, children, width = 'm
             </div>
 
             {/* Content */}
-            <div className="relative mt-6 flex-1 px-4 sm:px-6 overflow-y-auto">
-              {children}
-            </div>
+            <div className="relative mt-6 flex-1 px-4 sm:px-6 overflow-y-auto">{children}</div>
           </div>
         </div>
       </div>
     </div>
   )
 }
-

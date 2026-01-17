@@ -36,9 +36,7 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
         </svg>
       )}
       <h3 className="mt-4 text-lg font-semibold text-gray-900">{title}</h3>
-      {description && (
-        <p className="mt-2 text-sm text-gray-600 max-w-sm mx-auto">{description}</p>
-      )}
+      {description && <p className="mt-2 text-sm text-gray-600 max-w-sm mx-auto">{description}</p>}
       {action && <div className="mt-6">{action}</div>}
     </div>
   )
@@ -85,8 +83,8 @@ export function NoNotesState() {
       description="Start recording your first voice note to get organized with AI-powered tagging."
       action={
         <p className="text-xs text-gray-500">
-          Use the <span className="font-semibold text-gray-700">Start Recording</span> button in
-          the left panel to create your first note.
+          Use the <span className="font-semibold text-gray-700">Start Recording</span> button in the
+          left panel to create your first note.
         </p>
       }
     />
@@ -121,7 +119,11 @@ export function NoTodosState({ status }: { status?: string }) {
         </svg>
       }
       title={status ? `No ${status} todos` : 'No todos yet'}
-      description={status ? descriptions[status] : 'Create todos manually or let AI extract them from your voice notes.'}
+      description={
+        status
+          ? descriptions[status]
+          : 'Create todos manually or let AI extract them from your voice notes.'
+      }
     />
   )
 }

@@ -5,24 +5,23 @@ This module provides JWT verification for Clerk authentication tokens.
 """
 
 import os
-import json
 from functools import wraps
-from typing import Optional, Dict, Any
-from flask import request, jsonify, current_app
-import requests
-from jose import jwt, jwk
-from jose.exceptions import JWTError
+from typing import Any
 
+import requests
+from flask import current_app, jsonify, request
+from jose import jwt
+from jose.exceptions import JWTError
 
 # Clerk configuration from environment
 CLERK_DOMAIN = os.getenv('CLERK_DOMAIN', 'clerk.your-domain.com')
 CLERK_SECRET_KEY = os.getenv('CLERK_SECRET_KEY')
 
 # Cache for JWKS
-_jwks_cache: Optional[Dict[str, Any]] = None
+_jwks_cache: dict[str, Any] | None = None
 
 
-def get_jwks() -> Dict[str, Any]:
+def get_jwks() -> dict[str, Any]:
     """
     Fetch Clerk's JSON Web Key Set (JWKS) for JWT verification.
     
@@ -46,7 +45,7 @@ def get_jwks() -> Dict[str, Any]:
         raise
 
 
-def verify_clerk_token(token: str) -> Optional[Dict[str, Any]]:
+def verify_clerk_token(token: str) -> dict[str, Any] | None:
     """
     Verify a Clerk JWT token.
     
@@ -100,7 +99,7 @@ def verify_clerk_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def get_auth_token() -> Optional[str]:
+def get_auth_token() -> str | None:
     """
     Extract bearer token from Authorization header.
     
