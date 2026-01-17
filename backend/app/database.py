@@ -9,8 +9,10 @@ from contextlib import contextmanager
 from typing import Generator, Optional
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Float,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -197,6 +199,65 @@ class AudioClip(Base):
         Index("idx_audio_clips_user_id", "user_id"),
         Index("idx_audio_clips_user_note", "user_id", "note_id"),
         Index("idx_audio_clips_user_created", "user_id", "created_at"),
+    )
+
+
+class UserSettings(Base):
+    """
+    User settings for preferences like auto-accept todos.
+    """
+
+    __tablename__ = "user_settings"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, unique=True, index=True)
+
+    # Todo extraction behavior
+    auto_accept_todos = Column(Boolean, nullable=False, server_default="0")
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (Index("idx_user_settings_user_id", "user_id"),)
+
+
+class Todo(Base):
+    """
+    Todos extracted from notes or created manually.
+    Status: suggested (needs user review), accepted (active todo), completed (done).
+    """
+
+    __tablename__ = "todos"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+
+    # Optional FK to source note. Nullable for manual todos or if note was deleted.
+    note_id = Column(String(36), ForeignKey("notes.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    title = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+
+    # Status: suggested | accepted | completed
+    status = Column(String(20), nullable=False, server_default="suggested")
+
+    # AI extraction metadata
+    confidence = Column(Float, nullable=True)
+    extraction_context = Column(Text, nullable=True)
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+    completed_at = Column(TIMESTAMP, nullable=True)
+
+    __table_args__ = (
+        Index("idx_todos_user_id", "user_id"),
+        Index("idx_todos_user_status", "user_id", "status"),
+        Index("idx_todos_user_note", "user_id", "note_id"),
+        Index("idx_todos_user_created", "user_id", "created_at"),
     )
 
 

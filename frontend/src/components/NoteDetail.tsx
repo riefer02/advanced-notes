@@ -1,4 +1,5 @@
 import type { Note } from '../lib/api'
+import SuggestedTodos from './SuggestedTodos'
 
 interface NoteDetailProps {
   note: Note & { snippet?: string, rank?: number }
@@ -7,9 +8,12 @@ interface NoteDetailProps {
 
 export default function NoteDetail({ note, onDelete }: NoteDetailProps) {
   const hasSnippet = !!note.snippet
-  
+
   return (
     <div className="space-y-6 pb-6">
+      {/* Suggested Todos */}
+      <SuggestedTodos noteId={note.id} />
+
       {/* Meta Info */}
       <div className="flex flex-col gap-2 text-sm text-gray-500">
         <div className="flex items-center justify-between">

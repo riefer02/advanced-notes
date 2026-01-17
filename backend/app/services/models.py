@@ -115,5 +115,35 @@ class AudioClip(BaseModel):
         json_encoders = {datetime: lambda v: v.isoformat()}
 
 
+class UserSettings(BaseModel):
+    """User settings including todo preferences."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    user_id: str = Field(..., description="Clerk user ID")
+    auto_accept_todos: bool = Field(default=False, description="Auto-accept extracted todos")
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class Todo(BaseModel):
+    """Todo item extracted from notes or created manually."""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    user_id: str = Field(..., description="Clerk user ID")
+    note_id: Optional[str] = Field(None, description="Source note ID (nullable)")
+    title: str = Field(..., min_length=1, max_length=500)
+    description: Optional[str] = Field(None, description="Optional longer description")
+    status: str = Field(default="suggested", description="suggested | accepted | completed")
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="AI extraction confidence")
+    extraction_context: Optional[str] = Field(None, description="Context from note where todo was extracted")
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+    completed_at: Optional[datetime] = Field(None, description="When the todo was completed")
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
 # Update forward references for recursive models
 FolderNode.model_rebuild()
