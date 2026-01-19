@@ -193,3 +193,71 @@ class AudioClipUploadRequest(BaseModel):
     bytes: int = Field(..., ge=1, description="Size in bytes")
     note_id: str | None = Field(None, description="Associated note ID")
     duration_ms: int | None = Field(None, ge=0, description="Duration in milliseconds")
+
+
+# ============================================================================
+# MEAL TRACKING MODELS
+# ============================================================================
+
+
+class MealItem(BaseModel):
+    """A food item within a meal entry"""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    user_id: str = Field(..., description="Clerk user ID")
+    meal_entry_id: str = Field(..., description="Parent meal entry ID")
+    name: str = Field(..., min_length=1, max_length=255, description="Food item name")
+    portion: str | None = Field(None, max_length=100, description="Portion/quantity")
+    confidence: float | None = Field(None, ge=0.0, le=1.0, description="AI extraction confidence")
+    created_at: datetime = Field(default_factory=datetime.now)
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class MealEntry(BaseModel):
+    """Complete meal entry with metadata"""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    user_id: str = Field(..., description="Clerk user ID")
+    meal_type: str = Field(..., description="breakfast, lunch, dinner, or snack")
+    meal_date: str = Field(..., description="Date in ISO format (YYYY-MM-DD)")
+    meal_time: str | None = Field(None, description="Time in HH:MM format")
+    transcription: str = Field(..., description="Original transcription")
+    confidence: float | None = Field(None, ge=0.0, le=1.0, description="AI extraction confidence")
+    transcription_duration: float | None = Field(None, ge=0.0, description="Audio duration in seconds")
+    model_version: str | None = None
+    items: list[MealItem] = Field(default_factory=list, description="Food items in this meal")
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class MealEntryMetadata(BaseModel):
+    """Metadata for creating/updating a meal entry"""
+    meal_type: str = Field(..., description="breakfast, lunch, dinner, or snack")
+    meal_date: str = Field(..., description="Date in ISO format (YYYY-MM-DD)")
+    meal_time: str | None = Field(None, description="Time in HH:MM format")
+    confidence: float | None = Field(None, ge=0.0, le=1.0, description="AI extraction confidence")
+    transcription_duration: float | None = Field(None, ge=0.0, description="Audio duration in seconds")
+    model_version: str | None = None
+
+
+class UpdateMealEntryRequest(BaseModel):
+    """Request body for updating an existing meal entry"""
+    meal_type: str | None = Field(None, description="New meal type")
+    meal_date: str | None = Field(None, description="New date in ISO format")
+    meal_time: str | None = Field(None, description="New time in HH:MM format")
+    transcription: str | None = Field(None, description="Updated transcription")
+
+
+class CreateMealItemRequest(BaseModel):
+    """Request body for adding a food item to a meal"""
+    name: str = Field(..., min_length=1, max_length=255, description="Food item name")
+    portion: str | None = Field(None, max_length=100, description="Portion/quantity")
+
+
+class UpdateMealItemRequest(BaseModel):
+    """Request body for updating a food item"""
+    name: str | None = Field(None, min_length=1, max_length=255, description="New name")
+    portion: str | None = Field(None, max_length=100, description="New portion")

@@ -45,6 +45,11 @@ class _FakePlanner:
         raise AssertionError("planner should not be called in these tests")
 
 
+class _FakeMealExtractor:
+    def extract(self, *args, **kwargs):  # noqa: ANN001 - test fake
+        raise AssertionError("meal extractor should not be called in these tests")
+
+
 def test_transcribe_uploads_audio_to_s3_and_links_clip(client, app, monkeypatch):  # noqa: ANN001
     # Avoid OpenAI dependency + complex downstream services; verify S3 upload + response shape.
     from app import routes as _routes
@@ -157,6 +162,7 @@ def app(tmp_path: Path, monkeypatch):  # noqa: ANN001 - pytest fixture
         asker=_FakeAsker(),
         categorizer=_FakeCategorizer(),
         summarizer=_FakeSummarizer(),
+        meal_extractor=_FakeMealExtractor(),
     )
 
     app = create_app(testing=True, services=services)
@@ -451,6 +457,7 @@ def test_audio_clips_disabled_returns_501(tmp_path, monkeypatch):  # noqa: ANN00
         asker=_FakeAsker(),
         categorizer=_FakeCategorizer(),
         summarizer=_FakeSummarizer(),
+        meal_extractor=_FakeMealExtractor(),
     )
 
     app = create_app(testing=True, services=services)
