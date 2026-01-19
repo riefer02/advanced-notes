@@ -107,13 +107,8 @@ export function useAddMealItem() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({
-      mealId,
-      data,
-    }: {
-      mealId: string
-      data: { name: string; portion?: string }
-    }) => addMealItem(mealId, data),
+    mutationFn: ({ mealId, data }: { mealId: string; data: { name: string; portion?: string } }) =>
+      addMealItem(mealId, data),
     onSuccess: (newItem: MealItem) => {
       // Invalidate the specific meal query to refetch with new item
       queryClient.invalidateQueries({ queryKey: ['meal', newItem.meal_entry_id] })

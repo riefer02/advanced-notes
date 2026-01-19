@@ -162,7 +162,12 @@ export default function MealRecorder({ onMealCreated }: MealRecorderProps) {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg
+          className="w-6 h-6 text-green-600"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -251,9 +256,7 @@ export default function MealRecorder({ onMealCreated }: MealRecorderProps) {
         <div className="rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 p-4 border-2 border-green-200 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <span className="text-xl">
-                {MEAL_TYPE_ICONS[lastResult.meal.meal_type]}
-              </span>
+              <span className="text-xl">{MEAL_TYPE_ICONS[lastResult.meal.meal_type]}</span>
               <h3 className="text-lg font-semibold text-green-900">
                 {MEAL_TYPE_LABELS[lastResult.meal.meal_type]} Logged!
               </h3>

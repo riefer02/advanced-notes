@@ -64,10 +64,32 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 
 **Testing Seam**: When `app.config["TESTING"] == True`, authenticate with `X-Test-User-Id` header instead of Clerk JWT.
 
-## Verification Before Finishing
+## Verification Before Finishing (REQUIRED)
 
-1. **Frontend changes**: Run `cd frontend && npm run build` - fix TypeScript/build errors
-2. **Backend changes**: Run `cd backend && uv run python -m pytest tests/` - ensure tests pass
+**ALWAYS run these checks before committing or pushing code. CI will fail otherwise.**
+
+### Backend changes:
+```bash
+cd backend && uv run ruff check app/ --fix      # Fix lint issues
+cd backend && uv run python -m pytest tests/    # Run all tests
+```
+
+### Frontend changes:
+```bash
+cd frontend && npm run lint                     # ESLint (zero-warning policy)
+cd frontend && npm run format:check             # Prettier formatting
+cd frontend && npm run test:run                 # Run Vitest tests
+cd frontend && npm run build                    # TypeScript + production build
+```
+
+### Full verification (run all):
+```bash
+# Backend
+cd backend && uv run ruff check app/ --fix && uv run python -m pytest tests/
+
+# Frontend
+cd frontend && npm run lint && npm run format:check && npm run test:run && npm run build
+```
 
 ## Testing
 

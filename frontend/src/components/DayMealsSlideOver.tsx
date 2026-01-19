@@ -74,7 +74,12 @@ export default function DayMealsSlideOver({
       onClose={onClose}
       title={
         <div className="flex items-center gap-2">
-          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg
+            className="w-5 h-5 text-gray-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -96,9 +101,7 @@ export default function DayMealsSlideOver({
           <div className="text-center py-12">
             <div className="text-4xl mb-3">🍽️</div>
             <p className="text-gray-600 font-medium">No meals logged</p>
-            <p className="text-sm text-gray-500 mt-1">
-              Record a meal to see it here
-            </p>
+            <p className="text-sm text-gray-500 mt-1">Record a meal to see it here</p>
           </div>
         ) : (
           <div className="space-y-6">
@@ -110,7 +113,9 @@ export default function DayMealsSlideOver({
 
               return (
                 <div key={mealType}>
-                  <h3 className={`text-sm font-semibold ${colors.text} uppercase tracking-wider mb-2`}>
+                  <h3
+                    className={`text-sm font-semibold ${colors.text} uppercase tracking-wider mb-2`}
+                  >
                     {MEAL_TYPE_ICONS[mealType]} {MEAL_TYPE_LABELS[mealType]}
                   </h3>
                   <div className="space-y-2">
@@ -126,10 +131,7 @@ export default function DayMealsSlideOver({
                             {meal.items.length > 0 ? (
                               <div className="flex flex-wrap gap-1.5">
                                 {meal.items.slice(0, 4).map((item) => (
-                                  <span
-                                    key={item.id}
-                                    className="text-sm text-gray-700"
-                                  >
+                                  <span key={item.id} className="text-sm text-gray-700">
                                     {item.name}
                                     {item !== meal.items[Math.min(3, meal.items.length - 1)] && ','}
                                   </span>
@@ -146,9 +148,7 @@ export default function DayMealsSlideOver({
                               </p>
                             )}
                             {meal.meal_time && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                at {meal.meal_time}
-                              </p>
+                              <p className="text-xs text-gray-500 mt-1">at {meal.meal_time}</p>
                             )}
                           </div>
                           <svg
