@@ -12,12 +12,14 @@ from sqlalchemy import (
     TIMESTAMP,
     Boolean,
     Column,
+    Date,
     Float,
     ForeignKey,
     Index,
     Integer,
     String,
     Text,
+    Time,
     create_engine,
     event,
 )
@@ -258,6 +260,98 @@ class Todo(Base):
         Index("idx_todos_user_status", "user_id", "status"),
         Index("idx_todos_user_note", "user_id", "note_id"),
         Index("idx_todos_user_created", "user_id", "created_at"),
+    )
+
+
+class MealEntry(Base):
+    """
+    Meal entries recorded via voice transcription.
+    """
+
+    __tablename__ = "meal_entries"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+
+    # Meal type: breakfast, lunch, dinner, snack
+    meal_type = Column(String(20), nullable=False)
+    meal_date = Column(Date, nullable=False, index=True)
+    meal_time = Column(Time, nullable=True)
+
+    # Transcription data
+    transcription = Column(Text, nullable=False)
+
+    # AI extraction metadata
+    confidence = Column(Float, nullable=True)
+    transcription_duration = Column(Float, nullable=True)
+    model_version = Column(String(50), nullable=True)
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_meal_entries_user_id", "user_id"),
+        Index("idx_meal_entries_user_date", "user_id", "meal_date"),
+        Index("idx_meal_entries_user_type", "user_id", "meal_type"),
+        Index("idx_meal_entries_user_created", "user_id", "created_at"),
+    )
+
+
+class MealItem(Base):
+    """
+    Individual food items within a meal entry.
+    """
+
+    __tablename__ = "meal_items"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    meal_entry_id = Column(
+        String(36),
+        ForeignKey("meal_entries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    name = Column(String(255), nullable=False)
+    portion = Column(String(100), nullable=True)
+
+    # AI extraction confidence
+    confidence = Column(Float, nullable=True)
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_meal_items_user_id", "user_id"),
+        Index("idx_meal_items_meal_entry", "meal_entry_id"),
+    )
+
+
+class MealEmbedding(Base):
+    """
+    Embeddings for meal semantic search and dietary pattern analysis.
+    """
+
+    __tablename__ = "meal_embeddings"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    meal_entry_id = Column(String(36), nullable=False, index=True)
+
+    embedding_model = Column(String(100), nullable=False)
+    content_hash = Column(String(64), nullable=False)
+    embedding = Column(VectorEmbedding(1536), nullable=False)
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_meal_embeddings_user_meal", "user_id", "meal_entry_id"),
+        Index("idx_meal_embeddings_user_model", "user_id", "embedding_model"),
     )
 
 

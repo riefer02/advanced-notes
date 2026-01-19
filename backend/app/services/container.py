@@ -15,6 +15,7 @@ from flask import current_app
 from .ai_categorizer import AICategorizationService
 from .ask_service import AskService
 from .embeddings import EmbeddingsService
+from .meal_extractor import MealExtractorService
 from .query_planner import QueryPlanner
 from .storage import NoteStorage
 from .summarizer import AISummarizerService
@@ -28,6 +29,7 @@ class Services:
     asker: AskService
     categorizer: AICategorizationService
     summarizer: AISummarizerService
+    meal_extractor: MealExtractorService
 
 
 def create_services(*, database_url: str | None = None) -> Services:
@@ -45,6 +47,7 @@ def create_services(*, database_url: str | None = None) -> Services:
         asker=AskService(),
         categorizer=AICategorizationService(),
         summarizer=AISummarizerService(),
+        meal_extractor=MealExtractorService(),
     )
 
 

@@ -117,6 +117,11 @@ class _FakePlanner:
         return _Plan(question, result_limit, safe_keywords)
 
 
+class _FakeMealExtractor:
+    def extract(self, transcription, current_date=None):  # noqa: ANN001
+        raise AssertionError("meal extractor should not be called in these tests")
+
+
 # ============================================================================
 # FIXTURES
 # ============================================================================
@@ -134,6 +139,7 @@ def app(tmp_path: Path, monkeypatch):  # noqa: ANN001
         asker=_FakeAsker(),
         categorizer=_FakeCategorizer(),
         summarizer=_FakeSummarizer(),
+        meal_extractor=_FakeMealExtractor(),
     )
 
     app = create_app(testing=True, services=services)

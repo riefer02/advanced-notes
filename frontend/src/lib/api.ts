@@ -766,3 +766,196 @@ export async function acceptNoteTodos(
   }
   return response.json()
 }
+
+// ============================================================================
+// Meal Tracking Types
+// ============================================================================
+
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
+
+export interface MealItem {
+  id: string
+  user_id: string
+  meal_entry_id: string
+  name: string
+  portion: string | null
+  confidence: number | null
+  created_at: string
+}
+
+export interface MealEntry {
+  id: string
+  user_id: string
+  meal_type: MealType
+  meal_date: string
+  meal_time: string | null
+  transcription: string
+  confidence: number | null
+  transcription_duration: number | null
+  model_version: string | null
+  items: MealItem[]
+  created_at: string
+  updated_at: string
+}
+
+export interface MealTranscriptionMeta {
+  device: string
+  model: string
+  sample_rate?: number
+  duration?: number
+}
+
+export interface MealTranscriptionResponse {
+  text: string
+  meta: MealTranscriptionMeta
+  audio: {
+    clip_id: string
+    storage_key: string
+  }
+  meal: MealEntry | null
+  extraction: {
+    confidence: number
+    reasoning: string
+  }
+}
+
+export interface MealsResponse {
+  meals: MealEntry[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface MealsCalendarEntry {
+  id: string
+  meal_type: MealType
+  item_count: number
+}
+
+export interface MealsCalendarResponse {
+  calendar: Record<string, MealsCalendarEntry[]>
+  year: number
+  month: number
+}
+
+// ============================================================================
+// Meal Tracking API Functions
+// ============================================================================
+
+/**
+ * Transcribe audio and extract meal data
+ */
+export async function transcribeMeal(audioBlob: Blob): Promise<MealTranscriptionResponse> {
+  const mimeToExt: Record<string, string> = {
+    'audio/webm': 'webm',
+    'audio/mp4': 'mp4',
+    'audio/mpeg': 'mp3',
+    'audio/wav': 'wav',
+    'audio/ogg': 'ogg',
+    'audio/m4a': 'm4a',
+  }
+
+  const baseType = audioBlob.type.split(';')[0].trim()
+  const extension = mimeToExt[baseType] || 'webm'
+  const filename = `meal-recording.${extension}`
+
+  const formData = new FormData()
+  formData.append('file', audioBlob, filename)
+
+  const headers = await getAuthHeaders()
+
+  const response = await fetch(`${API_BASE_URL}/api/meals/transcribe`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(error || 'Meal transcription failed')
+  }
+
+  return response.json()
+}
+
+/**
+ * List meals within a date range
+ */
+export async function fetchMeals(params: {
+  start_date: string
+  end_date: string
+  meal_type?: MealType
+  limit?: number
+  offset?: number
+}): Promise<MealsResponse> {
+  return apiRequest<MealsResponse>('GET', '/api/meals', { params })
+}
+
+/**
+ * Get meals for calendar view
+ */
+export async function fetchMealsCalendar(
+  year: number,
+  month: number
+): Promise<MealsCalendarResponse> {
+  return apiRequest<MealsCalendarResponse>('GET', '/api/meals/calendar', {
+    params: { year, month },
+  })
+}
+
+/**
+ * Get a specific meal by ID
+ */
+export async function fetchMeal(mealId: string): Promise<MealEntry> {
+  return apiRequest<MealEntry>('GET', `/api/meals/${mealId}`)
+}
+
+/**
+ * Update a meal entry
+ */
+export async function updateMeal(
+  mealId: string,
+  data: {
+    meal_type?: MealType
+    meal_date?: string
+    meal_time?: string
+    transcription?: string
+  }
+): Promise<MealEntry> {
+  return apiRequest<MealEntry>('PUT', `/api/meals/${mealId}`, { body: data })
+}
+
+/**
+ * Delete a meal entry
+ */
+export async function deleteMeal(mealId: string): Promise<void> {
+  await apiRequest<{ success: boolean }>('DELETE', `/api/meals/${mealId}`)
+}
+
+/**
+ * Add a food item to a meal
+ */
+export async function addMealItem(
+  mealId: string,
+  data: { name: string; portion?: string }
+): Promise<MealItem> {
+  return apiRequest<MealItem>('POST', `/api/meals/${mealId}/items`, { body: data })
+}
+
+/**
+ * Update a food item
+ */
+export async function updateMealItem(
+  mealId: string,
+  itemId: string,
+  data: { name?: string; portion?: string }
+): Promise<MealItem> {
+  return apiRequest<MealItem>('PUT', `/api/meals/${mealId}/items/${itemId}`, { body: data })
+}
+
+/**
+ * Delete a food item
+ */
+export async function deleteMealItem(mealId: string, itemId: string): Promise<void> {
+  await apiRequest<{ success: boolean }>('DELETE', `/api/meals/${mealId}/items/${itemId}`)
+}

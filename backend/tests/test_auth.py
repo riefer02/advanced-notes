@@ -129,6 +129,10 @@ def test_require_auth_with_test_user_header():
             def upsert_for_note(self, *a, **k):
                 return True
 
+        class _FakeMealExtractor:
+            def extract(self, *a, **k):
+                raise AssertionError("not called")
+
         services = Services(
             storage=storage,
             embeddings=_FakeEmbeddings(),
@@ -136,6 +140,7 @@ def test_require_auth_with_test_user_header():
             asker=_FakeAsker(),
             categorizer=_FakeCategorizer(),
             summarizer=_FakeSummarizer(),
+            meal_extractor=_FakeMealExtractor(),
         )
 
         app = create_app(testing=True, services=services)
@@ -185,6 +190,10 @@ def test_require_auth_returns_401_without_token():
             def upsert_for_note(self, *a, **k):
                 return True
 
+        class _FakeMealExtractor:
+            def extract(self, *a, **k):
+                raise AssertionError("not called")
+
         services = Services(
             storage=storage,
             embeddings=_FakeEmbeddings(),
@@ -192,6 +201,7 @@ def test_require_auth_returns_401_without_token():
             asker=_FakeAsker(),
             categorizer=_FakeCategorizer(),
             summarizer=_FakeSummarizer(),
+            meal_extractor=_FakeMealExtractor(),
         )
 
         # NOT in testing mode - X-Test-User-Id header won't work

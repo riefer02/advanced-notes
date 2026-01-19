@@ -1487,6 +1487,500 @@ def accept_note_todos(note_id: str):
 
 
 # ============================================================================
+# MEAL TRACKING ENDPOINTS
+# ============================================================================
+
+
+@bp.post("/meals/transcribe")
+@require_auth
+@require_audio_clips
+def transcribe_meal():
+    """
+    Transcribe audio and extract meal data.
+
+    Accepts:
+        - multipart/form-data with 'file' field
+        - raw audio bytes in request body
+
+    Returns:
+        JSON: {
+            "text": str,
+            "meta": dict,
+            "meal": {
+                "id": str,
+                "meal_type": str,
+                "meal_date": str,
+                "meal_time": str | null,
+                "items": [...]
+            },
+            "extraction": {
+                "confidence": float,
+                "reasoning": str
+            }
+        }
+    """
+    from datetime import date
+
+    user_id = g.user_id
+    svc = get_services()
+
+    # Check for file upload
+    content_type = None
+    if "file" in request.files:
+        file = request.files["file"]
+        data = file.read()
+        content_type = file.content_type
+    else:
+        data = request.get_data()
+        content_type = request.content_type
+
+    if not data:
+        return api_error("No audio data provided", 400)
+
+    try:
+        _cleanup_stale_pending_audio_clips(user_id, svc)
+
+        from uuid import uuid4
+
+        audio_clip_id = str(uuid4())
+        resolved_mime = content_type or "application/octet-stream"
+        audio_storage_key = s3_audio.object_key_for_clip(
+            user_id=user_id,
+            clip_id=audio_clip_id,
+            mime_type=resolved_mime,
+        )
+
+        svc.storage.create_audio_clip_pending(
+            user_id,
+            clip_id=audio_clip_id,
+            note_id=None,
+            mime_type=resolved_mime,
+            bytes=len(data),
+            duration_ms=None,
+            storage_key=audio_storage_key,
+            bucket=None,
+        )
+
+        try:
+            s3_audio.put_object_bytes(
+                storage_key=audio_storage_key,
+                content_type=resolved_mime,
+                data=data,
+            )
+        except Exception:
+            svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
+            raise
+
+        # Step 1: Transcribe audio
+        try:
+            text, meta = transcribe_bytes(data, content_type)
+        except ValueError as e:
+            with suppress(Exception):
+                s3_audio.delete_object(storage_key=audio_storage_key)
+            svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
+            return api_error(str(e), 400)
+        except Exception as e:
+            error_msg = str(e)
+            if "corrupted" in error_msg.lower() or "unsupported" in error_msg.lower():
+                with suppress(Exception):
+                    s3_audio.delete_object(storage_key=audio_storage_key)
+                svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
+                return api_error(
+                    "Audio format not supported or corrupted. Please try recording again.",
+                    400,
+                )
+            with suppress(Exception):
+                s3_audio.delete_object(storage_key=audio_storage_key)
+            svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
+            raise
+
+        # Step 2: Extract meal data using AI
+        current_date = date.today().isoformat()
+        extraction_result = svc.meal_extractor.extract(text, current_date)
+
+        # Resolve meal date
+        meal_date = extraction_result.meal_date or current_date
+
+        # Step 3: Save meal entry to database
+        from .services.models import MealEntryMetadata
+
+        meal_metadata = MealEntryMetadata(
+            meal_type=extraction_result.meal_type.value,
+            meal_date=meal_date,
+            meal_time=extraction_result.meal_time,
+            confidence=extraction_result.confidence,
+            transcription_duration=meta.get("duration"),
+            model_version=meta.get("model"),
+        )
+
+        food_items = [
+            {
+                "name": item.name,
+                "portion": item.portion,
+                "confidence": item.confidence,
+            }
+            for item in extraction_result.food_items
+        ]
+
+        meal_id = svc.storage.save_meal_entry(
+            user_id=user_id,
+            transcription=text,
+            metadata=meal_metadata,
+            food_items=food_items,
+        )
+
+        # Mark audio clip ready
+        duration_ms = None
+        try:
+            dur = meta.get("duration")
+            if dur is not None:
+                duration_ms = int(float(dur) * 1000.0)
+        except Exception:
+            duration_ms = None
+
+        svc.storage.mark_audio_clip_ready(
+            user_id,
+            audio_clip_id,
+            note_id=None,
+            duration_ms=duration_ms,
+        )
+
+        # Step 4: Generate embedding for meal (best-effort)
+        try:
+            import hashlib
+
+            from .services.embeddings import vector_to_json, vector_to_pg_literal
+
+            content_for_embedding = f"{extraction_result.meal_type.value}: {text}"
+            vec = svc.embeddings.embed_query(content_for_embedding)
+            content_hash = hashlib.sha256(content_for_embedding.encode()).hexdigest()
+            embedding_value = (
+                vector_to_pg_literal(vec)
+                if svc.storage.dialect == "postgresql"
+                else vector_to_json(vec)
+            )
+            svc.storage.upsert_meal_embedding(
+                user_id=user_id,
+                meal_entry_id=meal_id,
+                embedding_model=svc.embeddings.model,
+                content_hash=content_hash,
+                embedding_value=embedding_value,
+            )
+        except Exception as e:
+            print(f"Meal embedding failed for {meal_id}: {e}")
+
+        # Get the saved meal to return
+        saved_meal = svc.storage.get_meal_entry(user_id, meal_id)
+
+        return jsonify(
+            {
+                "text": text,
+                "meta": meta,
+                "audio": {
+                    "clip_id": audio_clip_id,
+                    "storage_key": audio_storage_key,
+                },
+                "meal": saved_meal.model_dump() if saved_meal else None,
+                "extraction": {
+                    "confidence": extraction_result.confidence,
+                    "reasoning": extraction_result.reasoning,
+                },
+            }
+        )
+
+    except Exception as e:
+        try:
+            if "audio_storage_key" in locals():
+                s3_audio.delete_object(storage_key=audio_storage_key)
+        except Exception:
+            pass
+        try:
+            if "audio_clip_id" in locals():
+                svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
+        except Exception:
+            pass
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/meals")
+@require_auth
+def list_meals():
+    """
+    List meals with optional filtering.
+
+    Query params:
+        - start_date: Start date in ISO format (required)
+        - end_date: End date in ISO format (required)
+        - meal_type: Filter by type (optional)
+        - limit: Max results (default: 100)
+        - offset: Pagination offset (default: 0)
+
+    Returns:
+        JSON: {"meals": [...], "total": int}
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+
+        if not start_date or not end_date:
+            return api_error("Query params 'start_date' and 'end_date' are required", 400)
+
+        meal_type = request.args.get("meal_type")
+        limit, offset = parse_pagination(default_limit=100, max_limit=500)
+
+        meals = svc.storage.list_meals_by_date_range(
+            user_id,
+            start_date=start_date,
+            end_date=end_date,
+            meal_type=meal_type,
+            limit=limit,
+            offset=offset,
+        )
+
+        return jsonify({
+            "meals": [m.model_dump() for m in meals],
+            "total": len(meals),
+            "limit": limit,
+            "offset": offset,
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/meals/calendar")
+@require_auth
+def get_meals_calendar():
+    """
+    Get meals grouped by date for calendar view.
+
+    Query params:
+        - year: Year (required)
+        - month: Month 1-12 (required)
+
+    Returns:
+        JSON: {"calendar": {"2026-01-15": [{id, meal_type, item_count}], ...}}
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        year = request.args.get("year")
+        month = request.args.get("month")
+
+        if not year or not month:
+            return api_error("Query params 'year' and 'month' are required", 400)
+
+        try:
+            year_int = int(year)
+            month_int = int(month)
+            if month_int < 1 or month_int > 12:
+                raise ValueError("Month must be 1-12")
+        except ValueError as e:
+            return api_error(str(e), 400)
+
+        calendar_data = svc.storage.get_meals_calendar(user_id, year_int, month_int)
+
+        return jsonify({"calendar": calendar_data, "year": year_int, "month": month_int})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/meals/<meal_id>")
+@require_auth
+def get_meal(meal_id: str):
+    """
+    Get a specific meal by ID.
+
+    Returns:
+        JSON: MealEntry object with items
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        meal = svc.storage.get_meal_entry(user_id, meal_id)
+
+        if not meal:
+            return api_error("Meal not found", 404)
+
+        return jsonify(meal.model_dump())
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.put("/meals/<meal_id>")
+@require_auth
+def update_meal(meal_id: str):
+    """
+    Update a meal entry.
+
+    Body:
+        JSON: {
+            "meal_type": str (optional),
+            "meal_date": str (optional),
+            "meal_time": str (optional),
+            "transcription": str (optional)
+        }
+
+    Returns:
+        JSON: Updated MealEntry object
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        data = request.get_json()
+        if not data:
+            return api_error("No data provided", 400)
+
+        success = svc.storage.update_meal_entry(
+            user_id,
+            meal_id,
+            meal_type=data.get("meal_type"),
+            meal_date=data.get("meal_date"),
+            meal_time=data.get("meal_time"),
+            transcription=data.get("transcription"),
+        )
+
+        if not success:
+            return api_error("Meal not found", 404)
+
+        updated_meal = svc.storage.get_meal_entry(user_id, meal_id)
+        return jsonify(updated_meal.model_dump() if updated_meal else {})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.delete("/meals/<meal_id>")
+@require_auth
+def delete_meal(meal_id: str):
+    """
+    Delete a meal entry.
+
+    Returns:
+        JSON: {"success": bool}
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        success = svc.storage.delete_meal_entry(user_id, meal_id)
+
+        if not success:
+            return api_error("Meal not found", 404)
+
+        return jsonify({"success": True})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.post("/meals/<meal_id>/items")
+@require_auth
+def add_meal_item(meal_id: str):
+    """
+    Add a food item to a meal.
+
+    Body:
+        JSON: { "name": str, "portion": str (optional) }
+
+    Returns:
+        JSON: Created MealItem object
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        data = request.get_json()
+        if not data:
+            return api_error("No data provided", 400)
+
+        name = (data.get("name") or "").strip()
+        if not name:
+            return api_error("'name' is required", 400)
+
+        item = svc.storage.add_meal_item(
+            user_id,
+            meal_id,
+            name=name,
+            portion=data.get("portion"),
+        )
+
+        if not item:
+            return api_error("Meal not found", 404)
+
+        return jsonify(item.model_dump()), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.put("/meals/<meal_id>/items/<item_id>")
+@require_auth
+def update_meal_item(meal_id: str, item_id: str):
+    """
+    Update a food item.
+
+    Body:
+        JSON: { "name": str (optional), "portion": str (optional) }
+
+    Returns:
+        JSON: Updated MealItem object
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        data = request.get_json() or {}
+
+        item = svc.storage.update_meal_item(
+            user_id,
+            item_id,
+            name=data.get("name"),
+            portion=data.get("portion"),
+        )
+
+        if not item:
+            return api_error("Item not found", 404)
+
+        return jsonify(item.model_dump())
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.delete("/meals/<meal_id>/items/<item_id>")
+@require_auth
+def delete_meal_item(meal_id: str, item_id: str):
+    """
+    Delete a food item.
+
+    Returns:
+        JSON: {"success": bool}
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        success = svc.storage.delete_meal_item(user_id, item_id)
+
+        if not success:
+            return api_error("Item not found", 404)
+
+        return jsonify({"success": True})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
 # UTILITY ENDPOINTS
 # ============================================================================
 
