@@ -71,14 +71,12 @@ from .models import (
 from .models import (
     FolderNode,
     FolderStats,
+    MealEntryMetadata,
     NoteMetadata,
     SearchResult,
 )
 from .models import (
     MealEntry as MealEntryDTO,
-)
-from .models import (
-    MealEntryMetadata,
 )
 from .models import (
     MealItem as MealItemDTO,
@@ -1792,8 +1790,8 @@ class NoteStorage:
         Returns:
             The ID of the newly created meal entry.
         """
-        from datetime import time as dt_time
         from datetime import date as dt_date
+        from datetime import time as dt_time
 
         meal_id = str(uuid4())
         now = datetime.utcnow()
@@ -1879,8 +1877,8 @@ class NoteStorage:
         Returns:
             True if updated, False if not found.
         """
-        from datetime import time as dt_time
         from datetime import date as dt_date
+        from datetime import time as dt_time
 
         with self._session_scope() as session:
             entry = (

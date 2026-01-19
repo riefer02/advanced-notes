@@ -1647,8 +1647,9 @@ def transcribe_meal():
 
         # Step 4: Generate embedding for meal (best-effort)
         try:
-            from .services.embeddings import vector_to_json, vector_to_pg_literal
             import hashlib
+
+            from .services.embeddings import vector_to_json, vector_to_pg_literal
 
             content_for_embedding = f"{extraction_result.meal_type.value}: {text}"
             vec = svc.embeddings.embed_query(content_for_embedding)

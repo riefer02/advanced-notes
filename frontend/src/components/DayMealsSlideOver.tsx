@@ -55,7 +55,7 @@ export default function DayMealsSlideOver({
       grouped[meal.meal_type]!.push(meal)
     }
     return grouped
-  }, [data?.meals])
+  }, [data])
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return ''
