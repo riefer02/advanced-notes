@@ -5,15 +5,27 @@ Database migration script for Railway deployments.
 This script runs Alembic migrations during the build/deploy process.
 """
 
+import os
 import subprocess
 import sys
-import os
+
+
+def _safe_db_info() -> str:
+    """Return database type without exposing credentials."""
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        return "SQLite (development)"
+    if url.startswith("postgresql"):
+        return "PostgreSQL"
+    if url.startswith("mysql"):
+        return "MySQL"
+    return "Database configured"
 
 
 def run_migrations():
     """Run all pending database migrations"""
     print("🔄 Running database migrations...")
-    print(f"   Database: {os.getenv('DATABASE_URL', 'SQLite (development)')}")
+    print(f"   Database: {_safe_db_info()}")
     
     try:
         # Run alembic upgrade using subprocess
@@ -29,7 +41,7 @@ def run_migrations():
         return 0
         
     except subprocess.CalledProcessError as e:
-        print(f"❌ Migration failed:")
+        print("❌ Migration failed:")
         print(e.stdout)
         print(e.stderr)
         return 1
