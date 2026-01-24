@@ -130,20 +130,20 @@ class EmailService:
             if security == "SSL":
                 context = ssl.create_default_context()
                 with smtplib.SMTP_SSL(
-                    smtp_host, Config.SMTP_PORT, context=context
+                    smtp_host, Config.SMTP_PORT, context=context, timeout=Config.SMTP_TIMEOUT
                 ) as server:
                     server.login(smtp_username, smtp_password)
                     server.sendmail(smtp_username, to_address, msg.as_string())
 
             elif security == "STARTTLS":
                 context = ssl.create_default_context()
-                with smtplib.SMTP(smtp_host, Config.SMTP_PORT) as server:
+                with smtplib.SMTP(smtp_host, Config.SMTP_PORT, timeout=Config.SMTP_TIMEOUT) as server:
                     server.starttls(context=context)
                     server.login(smtp_username, smtp_password)
                     server.sendmail(smtp_username, to_address, msg.as_string())
 
             else:  # NONE
-                with smtplib.SMTP(smtp_host, Config.SMTP_PORT) as server:
+                with smtplib.SMTP(smtp_host, Config.SMTP_PORT, timeout=Config.SMTP_TIMEOUT) as server:
                     server.login(smtp_username, smtp_password)
                     server.sendmail(smtp_username, to_address, msg.as_string())
 

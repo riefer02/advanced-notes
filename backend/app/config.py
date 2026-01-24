@@ -101,6 +101,7 @@ class Config:
     SMTP_USERNAME: str | None = os.getenv("SMTP_USERNAME")
     SMTP_PASSWORD: str | None = os.getenv("SMTP_PASSWORD")
     ADMIN_EMAIL: str | None = os.getenv("ADMIN_EMAIL")
+    SMTP_TIMEOUT: int = int(os.getenv("SMTP_TIMEOUT", "10"))  # seconds
 
     @classmethod
     def email_enabled(cls) -> bool:
