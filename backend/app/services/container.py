@@ -14,6 +14,7 @@ from flask import current_app
 
 from .ai_categorizer import AICategorizationService
 from .ask_service import AskService
+from .email_service import EmailService
 from .embeddings import EmbeddingsService
 from .meal_extractor import MealExtractorService
 from .query_planner import QueryPlanner
@@ -32,6 +33,7 @@ class Services:
     summarizer: AISummarizerService
     meal_extractor: MealExtractorService
     usage_tracking: UsageTrackingService
+    email: EmailService
 
 
 def create_services(*, database_url: str | None = None) -> Services:
@@ -51,6 +53,7 @@ def create_services(*, database_url: str | None = None) -> Services:
         summarizer=AISummarizerService(),
         meal_extractor=MealExtractorService(),
         usage_tracking=UsageTrackingService(),
+        email=EmailService(),
     )
 
 

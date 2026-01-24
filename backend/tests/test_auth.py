@@ -146,6 +146,12 @@ def test_require_auth_with_test_user_header():
             def get_usage_history(self, *a, **k):
                 return []
 
+        class _FakeEmailService:
+            def is_configured(self):
+                return False
+            def send_feedback_notification(self, **kwargs):
+                return False
+
         services = Services(
             storage=storage,
             embeddings=_FakeEmbeddings(),
@@ -155,6 +161,7 @@ def test_require_auth_with_test_user_header():
             summarizer=_FakeSummarizer(),
             meal_extractor=_FakeMealExtractor(),
             usage_tracking=_FakeUsageTracking(),
+            email=_FakeEmailService(),
         )
 
         app = create_app(testing=True, services=services)
@@ -221,6 +228,12 @@ def test_require_auth_returns_401_without_token():
             def get_usage_history(self, *a, **k):
                 return []
 
+        class _FakeEmailService:
+            def is_configured(self):
+                return False
+            def send_feedback_notification(self, **kwargs):
+                return False
+
         services = Services(
             storage=storage,
             embeddings=_FakeEmbeddings(),
@@ -230,6 +243,7 @@ def test_require_auth_returns_401_without_token():
             summarizer=_FakeSummarizer(),
             meal_extractor=_FakeMealExtractor(),
             usage_tracking=_FakeUsageTracking(),
+            email=_FakeEmailService(),
         )
 
         # NOT in testing mode - X-Test-User-Id header won't work

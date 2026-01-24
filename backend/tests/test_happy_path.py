@@ -146,6 +146,30 @@ class _FakeMealExtractor:
         raise AssertionError("meal extractor should not be called in these tests")
 
 
+class _FakeEmailService:
+    """Fake email service for tests."""
+
+    def __init__(self):
+        self.sent_emails = []
+
+    def is_configured(self):
+        return True
+
+    def send_feedback_notification(
+        self, feedback_id=None, user_id=None, feedback_type=None, title=None, description=None, rating=None, **kwargs
+    ):  # noqa: ANN001
+        """Record email send for verification in tests."""
+        self.sent_emails.append({
+            "feedback_id": feedback_id,
+            "user_id": user_id,
+            "feedback_type": feedback_type,
+            "title": title,
+            "description": description,
+            "rating": rating,
+        })
+        return True
+
+
 class _FakeUsageTracking:
     """Fake usage tracking service for tests."""
 
@@ -220,6 +244,7 @@ def app(tmp_path: Path, monkeypatch):  # noqa: ANN001
         summarizer=_FakeSummarizer(),
         meal_extractor=_FakeMealExtractor(),
         usage_tracking=_FakeUsageTracking(),
+        email=_FakeEmailService(),
     )
 
     app = create_app(testing=True, services=services)

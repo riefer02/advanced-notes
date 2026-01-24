@@ -94,6 +94,28 @@ class Config:
         os.getenv("S3_PRESIGN_GET_EXPIRES_SECONDS", "900")
     )
 
+    # SMTP settings for email notifications
+    SMTP_HOST: str | None = os.getenv("SMTP_HOST")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_SECURITY: str = os.getenv("SMTP_SECURITY", "STARTTLS")  # STARTTLS, SSL, or NONE
+    SMTP_USERNAME: str | None = os.getenv("SMTP_USERNAME")
+    SMTP_PASSWORD: str | None = os.getenv("SMTP_PASSWORD")
+    ADMIN_EMAIL: str | None = os.getenv("ADMIN_EMAIL")
+
+    @classmethod
+    def email_enabled(cls) -> bool:
+        """
+        Check if email notifications are properly configured.
+
+        Returns True when all required SMTP vars are set.
+        """
+        return bool(
+            cls.SMTP_HOST
+            and cls.SMTP_USERNAME
+            and cls.SMTP_PASSWORD
+            and cls.ADMIN_EMAIL
+        )
+
     @classmethod
     def audio_clips_enabled(cls) -> bool:
         """

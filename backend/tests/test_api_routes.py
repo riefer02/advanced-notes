@@ -101,6 +101,16 @@ class _FakeUsageTracking:
         return []
 
 
+class _FakeEmailService:
+    """Fake email service for tests."""
+
+    def is_configured(self):
+        return False
+
+    def send_feedback_notification(self, **kwargs):
+        return False
+
+
 def test_transcribe_uploads_audio_to_s3_and_links_clip(client, app, monkeypatch):  # noqa: ANN001
     # Avoid OpenAI dependency + complex downstream services; verify S3 upload + response shape.
     from app import routes as _routes
@@ -225,6 +235,7 @@ def app(tmp_path: Path, monkeypatch):  # noqa: ANN001 - pytest fixture
         summarizer=_FakeSummarizer(),
         meal_extractor=_FakeMealExtractor(),
         usage_tracking=_FakeUsageTracking(),
+        email=_FakeEmailService(),
     )
 
     app = create_app(testing=True, services=services)
@@ -521,6 +532,7 @@ def test_audio_clips_disabled_returns_501(tmp_path, monkeypatch):  # noqa: ANN00
         summarizer=_FakeSummarizer(),
         meal_extractor=_FakeMealExtractor(),
         usage_tracking=_FakeUsageTracking(),
+        email=_FakeEmailService(),
     )
 
     app = create_app(testing=True, services=services)

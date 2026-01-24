@@ -135,6 +135,16 @@ class _FakeUsageTracking:
         return []
 
 
+class _FakeEmailService:
+    """Fake email service for tests."""
+
+    def is_configured(self):
+        return False
+
+    def send_feedback_notification(self, **kwargs):
+        return False
+
+
 # ============================================================================
 # FIXTURES
 # ============================================================================
@@ -154,6 +164,7 @@ def app(tmp_path: Path, monkeypatch):
         summarizer=_FakeSummarizer(),
         meal_extractor=_FakeMealExtractor(),
         usage_tracking=_FakeUsageTracking(),
+        email=_FakeEmailService(),
     )
 
     app = create_app(testing=True, services=services)

@@ -2225,6 +2225,21 @@ def create_feedback():
             rating=rating,
         )
 
+        # Best-effort email notification (don't block on failure)
+        try:
+            email_sent = svc.email.send_feedback_notification(
+                feedback_id=feedback.id,
+                user_id=user_id,
+                feedback_type=feedback_type,
+                title=title,
+                description=description,
+                rating=rating,
+            )
+            if email_sent:
+                svc.storage.mark_feedback_email_sent(feedback.id)
+        except Exception:
+            pass  # Email failures should not block feedback submission
+
         return jsonify(feedback.model_dump()), 201
 
     except Exception as e:

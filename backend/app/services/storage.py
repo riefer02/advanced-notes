@@ -2221,6 +2221,28 @@ class NoteStorage:
                 for f in rows
             ]
 
+    def mark_feedback_email_sent(self, feedback_id: str) -> bool:
+        """
+        Mark a feedback record as having had its email notification sent.
+
+        Args:
+            feedback_id: The feedback record ID.
+
+        Returns:
+            True if updated, False if not found.
+        """
+        with self._session_scope() as session:
+            feedback = (
+                session.query(FeedbackORM)
+                .filter(FeedbackORM.id == feedback_id)
+                .one_or_none()
+            )
+            if not feedback:
+                return False
+            feedback.email_sent = True
+            session.add(feedback)
+            return True
+
     def _configure_engine(
         self,
         db_path: Path | None,
