@@ -1,11 +1,26 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { SignInButton, useAuth } from '@clerk/clerk-react'
+import { useEffect } from 'react'
 
 export const Route = createFileRoute('/')({
   component: LandingPage,
 })
 
 function LandingPage() {
+  const { isSignedIn, isLoaded } = useAuth()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      navigate({ to: '/dashboard' })
+    }
+  }, [isLoaded, isSignedIn, navigate])
+
+  // Show nothing while checking auth to avoid flash
+  if (!isLoaded || isSignedIn) {
+    return null
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Header */}
@@ -18,27 +33,16 @@ function LandingPage() {
               </h1>
             </div>
             <div className="flex items-center gap-4">
-              <SignedOut>
-                <SignInButton mode="modal">
-                  <button className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
-                    Sign In
-                  </button>
-                </SignInButton>
-                <Link to="/sign-up/$">
-                  <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-                    Get Started
-                  </button>
-                </Link>
-              </SignedOut>
-              <SignedIn>
-                <Link
-                  to="/dashboard"
-                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-                >
-                  Dashboard
-                </Link>
-                <UserButton afterSignOutUrl="/" />
-              </SignedIn>
+              <SignInButton mode="modal">
+                <button className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
+                  Sign In
+                </button>
+              </SignInButton>
+              <Link to="/sign-up/$">
+                <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                  Get Started
+                </button>
+              </Link>
             </div>
           </div>
         </div>
@@ -60,25 +64,16 @@ function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-8">
-            <SignedOut>
-              <Link to="/sign-up/$">
-                <button className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
-                  Start Free Trial
-                </button>
-              </Link>
-              <SignInButton mode="modal">
-                <button className="px-8 py-4 text-lg font-semibold text-gray-700 bg-white border-2 border-gray-300 hover:border-gray-400 rounded-lg transition-all">
-                  Sign In
-                </button>
-              </SignInButton>
-            </SignedOut>
-            <SignedIn>
-              <Link to="/dashboard">
-                <button className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
-                  Go to Dashboard
-                </button>
-              </Link>
-            </SignedIn>
+            <Link to="/sign-up/$">
+              <button className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
+                Start Free Trial
+              </button>
+            </Link>
+            <SignInButton mode="modal">
+              <button className="px-8 py-4 text-lg font-semibold text-gray-700 bg-white border-2 border-gray-300 hover:border-gray-400 rounded-lg transition-all">
+                Sign In
+              </button>
+            </SignInButton>
           </div>
         </div>
 
