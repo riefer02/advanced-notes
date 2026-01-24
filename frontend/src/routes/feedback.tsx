@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
-import { submitFeedback, type FeedbackType } from '../lib/api'
+import { useState, useEffect } from 'react'
+import { type FeedbackType } from '../lib/api'
+import { useSubmitFeedback } from '../hooks/useFeedback'
 
 export const Route = createFileRoute('/feedback')({
   component: FeedbackPage,
@@ -11,45 +12,54 @@ function FeedbackPage() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [rating, setRating] = useState<number | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [showSuccess, setShowSuccess] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const submitMutation = useSubmitFeedback()
+
+  // Handle optimistic success - show success immediately when mutation starts
+  useEffect(() => {
+    if (submitMutation.isPending) {
+      setShowSuccess(true)
+    }
+  }, [submitMutation.isPending])
+
+  // Handle error - roll back to form if mutation fails
+  useEffect(() => {
+    if (submitMutation.isError) {
+      setShowSuccess(false)
+    }
+  }, [submitMutation.isError])
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) {
-      setError('Title is required')
       return
     }
 
-    setIsSubmitting(true)
-    setError(null)
-
-    try {
-      await submitFeedback({
-        feedback_type: feedbackType,
-        title: title.trim(),
-        description: description.trim() || undefined,
-        rating: rating ?? undefined,
-      })
-      setSuccess(true)
-      setTitle('')
-      setDescription('')
-      setRating(null)
-      setFeedbackType('general')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit feedback')
-    } finally {
-      setIsSubmitting(false)
+    // Store form values before clearing (for potential rollback)
+    const feedbackData = {
+      feedback_type: feedbackType,
+      title: title.trim(),
+      description: description.trim() || undefined,
+      rating: rating ?? undefined,
     }
+
+    // Clear form immediately (optimistic)
+    setTitle('')
+    setDescription('')
+    setRating(null)
+    setFeedbackType('general')
+
+    // Submit the mutation
+    submitMutation.mutate(feedbackData)
   }
 
   const handleNewFeedback = () => {
-    setSuccess(false)
-    setError(null)
+    setShowSuccess(false)
+    submitMutation.reset()
   }
 
-  if (success) {
+  if (showSuccess) {
     return (
       <div className="p-6 max-w-2xl mx-auto">
         <div className="bg-green-50 border border-green-200 rounded-xl p-8 text-center">
@@ -192,19 +202,23 @@ function FeedbackPage() {
         </div>
 
         {/* Error */}
-        {error && (
+        {submitMutation.isError && (
           <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-800">{error}</p>
+            <p className="text-sm text-red-800">
+              {submitMutation.error instanceof Error
+                ? submitMutation.error.message
+                : 'Failed to submit feedback'}
+            </p>
           </div>
         )}
 
         {/* Submit */}
         <button
           type="submit"
-          disabled={isSubmitting || !title.trim()}
+          disabled={submitMutation.isPending || !title.trim()}
           className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
-          {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+          {submitMutation.isPending ? 'Submitting...' : 'Submit Feedback'}
         </button>
       </form>
     </div>
