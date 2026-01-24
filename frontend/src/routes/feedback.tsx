@@ -68,7 +68,9 @@ function FeedbackPage() {
               />
             </svg>
           </div>
-          <h2 className="text-xl font-semibold text-green-900 mb-2">Thank you for your feedback!</h2>
+          <h2 className="text-xl font-semibold text-green-900 mb-2">
+            Thank you for your feedback!
+          </h2>
           <p className="text-green-700 mb-6">
             We appreciate you taking the time to help us improve Chisos.
           </p>

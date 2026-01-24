@@ -19,7 +19,13 @@ const NAV_ITEMS: NavItem[] = [
     to: '/dashboard',
     label: 'Dashboard',
     icon: ({ className }) => (
-      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <svg
+        className={className}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.5}
+      >
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -32,7 +38,13 @@ const NAV_ITEMS: NavItem[] = [
     to: '/summaries',
     label: 'Summaries',
     icon: ({ className }) => (
-      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <svg
+        className={className}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.5}
+      >
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -45,7 +57,13 @@ const NAV_ITEMS: NavItem[] = [
     to: '/notes',
     label: 'Notes',
     icon: ({ className }) => (
-      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <svg
+        className={className}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.5}
+      >
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -58,7 +76,13 @@ const NAV_ITEMS: NavItem[] = [
     to: '/todos',
     label: 'Todos',
     icon: ({ className }) => (
-      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <svg
+        className={className}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.5}
+      >
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -71,7 +95,13 @@ const NAV_ITEMS: NavItem[] = [
     to: '/meals',
     label: 'Meals',
     icon: ({ className }) => (
-      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <svg
+        className={className}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.5}
+      >
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -84,7 +114,13 @@ const NAV_ITEMS: NavItem[] = [
     to: '/settings',
     label: 'Settings',
     icon: ({ className }) => (
-      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <svg
+        className={className}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.5}
+      >
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -102,7 +138,13 @@ const NAV_ITEMS: NavItem[] = [
     to: '/feedback',
     label: 'Feedback',
     icon: ({ className }) => (
-      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <svg
+        className={className}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.5}
+      >
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
