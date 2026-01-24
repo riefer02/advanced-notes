@@ -21,13 +21,25 @@ from app.services.storage import NoteStorage
 
 
 class _FakeAsker:
-    def answer(self, question, plan, notes):  # noqa: ANN001
-        class _Result:
+    def answer(self, question, plan, notes, return_usage=False):  # noqa: ANN001
+        class _Answer:
             answer_markdown = "test answer"
             cited_note_ids = []
             followups = ["What else?"]
 
-        return _Result()
+        class _UsageInfo:
+            prompt_tokens = 200
+            completion_tokens = 100
+            total_tokens = 300
+
+        class _AskResult:
+            answer = _Answer()
+            usage = _UsageInfo()
+            model = "test-model"
+
+        if return_usage:
+            return _AskResult()
+        return _Answer()
 
 
 class _FakeCategorizer:
@@ -36,7 +48,7 @@ class _FakeCategorizer:
 
 
 class _FakeSummarizer:
-    def summarize(self, notes_content):  # noqa: ANN001
+    def summarize(self, notes_content, return_usage=False):  # noqa: ANN001
         class _DigestResult:
             summary = "Test summary of notes"
             key_themes = ["theme1", "theme2"]
@@ -57,6 +69,18 @@ class _FakeSummarizer:
                     "action_items": self.action_items,
                 }
 
+        class _UsageInfo:
+            prompt_tokens = 100
+            completion_tokens = 50
+            total_tokens = 150
+
+        class _SummarizationResult:
+            digest = _DigestResult()
+            usage = _UsageInfo()
+            model = "test-model"
+
+        if return_usage:
+            return _SummarizationResult()
         return _DigestResult()
 
 
@@ -122,6 +146,61 @@ class _FakeMealExtractor:
         raise AssertionError("meal extractor should not be called in these tests")
 
 
+class _FakeUsageTracking:
+    """Fake usage tracking service for tests."""
+
+    def record_usage(self, **kwargs):  # noqa: ANN001
+        """Record usage (no-op in tests)."""
+        return "test-usage-id"
+
+    def get_current_usage(self, user_id):  # noqa: ANN001
+        """Return fake usage summary."""
+        from datetime import UTC, datetime
+
+        class _UsageSummary:
+            period_start = datetime.now(UTC)
+            period_end = datetime.now(UTC)
+            transcription_minutes_used = 0.0
+            transcription_minutes_limit = 100
+            ai_calls_used = 0
+            ai_calls_limit = 500
+            estimated_cost_usd = 0.0
+            tier = "free"
+
+            def model_dump(self):
+                return {
+                    "user_id": user_id,
+                    "period_start": self.period_start.isoformat(),
+                    "period_end": self.period_end.isoformat(),
+                    "transcription_minutes_used": self.transcription_minutes_used,
+                    "transcription_minutes_limit": self.transcription_minutes_limit,
+                    "ai_calls_used": self.ai_calls_used,
+                    "ai_calls_limit": self.ai_calls_limit,
+                    "estimated_cost_usd": self.estimated_cost_usd,
+                    "tier": self.tier,
+                }
+
+        return _UsageSummary()
+
+    def check_quota(self, user_id, service_type):  # noqa: ANN001
+        """Return fake quota check result (always allowed)."""
+        from datetime import UTC, datetime
+
+        class _QuotaCheck:
+            allowed = True
+            used = 0.0
+            limit = 100.0 if service_type == "transcription" else 500.0
+            unit = "minutes" if service_type == "transcription" else "calls"
+            resets_at = datetime.now(UTC)
+            warning = False
+
+        return _QuotaCheck()
+
+    def get_usage_history(self, user_id, limit=50, offset=0, service_type=None):  # noqa: ANN001
+        """Return empty usage history."""
+        return []
+
+
 # ============================================================================
 # FIXTURES
 # ============================================================================
@@ -140,6 +219,7 @@ def app(tmp_path: Path, monkeypatch):  # noqa: ANN001
         categorizer=_FakeCategorizer(),
         summarizer=_FakeSummarizer(),
         meal_extractor=_FakeMealExtractor(),
+        usage_tracking=_FakeUsageTracking(),
     )
 
     app = create_app(testing=True, services=services)

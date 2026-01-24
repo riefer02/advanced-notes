@@ -19,6 +19,7 @@ from .meal_extractor import MealExtractorService
 from .query_planner import QueryPlanner
 from .storage import NoteStorage
 from .summarizer import AISummarizerService
+from .usage_tracking import UsageTrackingService
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,7 @@ class Services:
     categorizer: AICategorizationService
     summarizer: AISummarizerService
     meal_extractor: MealExtractorService
+    usage_tracking: UsageTrackingService
 
 
 def create_services(*, database_url: str | None = None) -> Services:
@@ -48,6 +50,7 @@ def create_services(*, database_url: str | None = None) -> Services:
         categorizer=AICategorizationService(),
         summarizer=AISummarizerService(),
         meal_extractor=MealExtractorService(),
+        usage_tracking=UsageTrackingService(),
     )
 
 

@@ -261,3 +261,75 @@ class UpdateMealItemRequest(BaseModel):
     """Request body for updating a food item"""
     name: str | None = Field(None, min_length=1, max_length=255, description="New name")
     portion: str | None = Field(None, max_length=100, description="New portion")
+
+
+# ============================================================================
+# USAGE TRACKING MODELS
+# ============================================================================
+
+
+class UsageSummaryResponse(BaseModel):
+    """API response for current usage summary"""
+    user_id: str
+    period_start: datetime
+    period_end: datetime
+    transcription_minutes_used: float
+    transcription_minutes_limit: int
+    ai_calls_used: int
+    ai_calls_limit: int
+    estimated_cost_usd: float
+    tier: str
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class QuotaExceededError(BaseModel):
+    """Error response when quota is exceeded"""
+    error: str = "Monthly quota exceeded"
+    quota: dict = Field(description="Quota details including service, used, limit, unit, and resets_at")
+
+
+class UsageRecordResponse(BaseModel):
+    """API response for a single usage record"""
+    id: str
+    user_id: str
+    service_type: str
+    model: str
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
+    audio_duration_seconds: float | None = None
+    endpoint: str | None = None
+    estimated_cost_usd: float | None = None
+    created_at: datetime
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+# ============================================================================
+# FEEDBACK MODELS
+# ============================================================================
+
+
+class FeedbackResponse(BaseModel):
+    """API response for a feedback submission"""
+    id: str
+    user_id: str
+    feedback_type: str
+    title: str
+    description: str | None = None
+    rating: int | None = None
+    created_at: datetime
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class CreateFeedbackRequest(BaseModel):
+    """Request body for submitting feedback"""
+    feedback_type: str = Field(..., description="bug, feature, or general")
+    title: str = Field(..., min_length=1, max_length=255, description="Feedback title")
+    description: str | None = Field(None, max_length=5000, description="Detailed description")
+    rating: int | None = Field(None, ge=1, le=5, description="Optional 1-5 rating")

@@ -116,6 +116,25 @@ class _FakeMealExtractor:
         )
 
 
+class _FakeUsageTracking:
+    """Fake usage tracking service for tests."""
+
+    def record_usage(self, **kwargs):
+        return "test-usage-id"
+
+    def check_quota(self, user_id, service_type):
+        class _QuotaCheck:
+            allowed = True
+            warning = False
+        return _QuotaCheck()
+
+    def get_current_usage(self, user_id):
+        pass
+
+    def get_usage_history(self, *a, **k):
+        return []
+
+
 # ============================================================================
 # FIXTURES
 # ============================================================================
@@ -134,6 +153,7 @@ def app(tmp_path: Path, monkeypatch):
         categorizer=_FakeCategorizer(),
         summarizer=_FakeSummarizer(),
         meal_extractor=_FakeMealExtractor(),
+        usage_tracking=_FakeUsageTracking(),
     )
 
     app = create_app(testing=True, services=services)

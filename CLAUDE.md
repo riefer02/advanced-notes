@@ -47,8 +47,9 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 - **Package Management**: `uv` (backend), `pnpm` or `npm` (frontend)
 
 ### Key Directories
-- `backend/app/routes.py` - REST API endpoints (11 total)
-- `backend/app/services/` - Business logic (storage, AI categorization, embeddings, S3)
+- `backend/app/routes.py` - REST API endpoints
+- `backend/app/services/` - Business logic (storage, AI categorization, embeddings, S3, usage tracking)
+- `backend/app/services/usage_tracking.py` - Rate limiting and API usage tracking
 - `backend/app/database.py` - SQLAlchemy models (source of truth for schema)
 - `frontend/src/routes/` - TanStack Router file-based routes
 - `frontend/src/components/` - React components
@@ -63,6 +64,32 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 **Dependency Injection**: Services accessed via `get_services()` from `app.extensions["services"]`. Tests can override the container to inject fakes.
 
 **Testing Seam**: When `app.config["TESTING"] == True`, authenticate with `X-Test-User-Id` header instead of Clerk JWT.
+
+**Rate Limiting**: Routes that call OpenAI APIs use `@require_quota(service_type)` decorator. Returns 429 when monthly quota exceeded. Service types: `"transcription"` (100 min/month) and `"ai_calls"` (500 calls/month for chat/categorize/summarize).
+
+### Usage Tracking
+
+All OpenAI API calls are tracked for billing/analytics:
+
+**Database Tables:**
+- `token_usage` - Individual usage records (tokens, audio duration, estimated cost)
+- `usage_quotas` - Per-user limits and tier info
+
+**API Endpoints:**
+- `GET /api/usage` - Current month's usage summary and quota status
+- `GET /api/usage/history` - Paginated usage history
+
+**Rate-Limited Endpoints:**
+- `POST /api/transcribe` - transcription quota
+- `POST /api/meals/transcribe` - transcription quota
+- `POST /api/summarize` - ai_calls quota
+- `POST /api/ask` - ai_calls quota
+
+**Default Limits (Free Tier):**
+| Resource | Monthly Limit |
+|----------|---------------|
+| Transcription | 100 minutes |
+| AI calls | 500 calls |
 
 ## Verification Before Finishing (REQUIRED)
 
@@ -105,7 +132,8 @@ cd backend && uv run python -m pytest tests/ --cov       # With coverage report
 **Writing Backend Tests:**
 - Use pytest fixtures from `conftest.py` or define in test file
 - Use `X-Test-User-Id` header for auth in test client requests
-- Create fake service classes (e.g., `_FakeEmbeddings`) to avoid external API calls
+- Create fake service classes (e.g., `_FakeEmbeddings`, `_FakeUsageTracking`) to avoid external API calls
+- When creating `Services` container in tests, include all required fakes including `usage_tracking`
 - Tests are in `backend/tests/` - see `test_happy_path.py` for comprehensive examples
 
 ### Frontend Tests
@@ -142,10 +170,12 @@ cd frontend && npm run format:check  # Check formatting
 
 ### Adding a New API Endpoint
 1. Add route in `backend/app/routes.py` with `@bp.get/post/put/delete` and `@require_auth`
-2. Add storage method in `backend/app/services/storage.py` (follow user_id pattern)
-3. Add Pydantic models in `backend/app/services/models.py` if needed
-4. Add API function in `frontend/src/lib/api.ts`
-5. Add TanStack Query hook in `frontend/src/hooks/` if needed
+2. If endpoint calls OpenAI, add `@require_quota("transcription")` or `@require_quota("ai_calls")` decorator
+3. Add storage method in `backend/app/services/storage.py` (follow user_id pattern)
+4. Add Pydantic models in `backend/app/services/models.py` if needed
+5. If tracking usage, call `svc.usage_tracking.record_usage(...)` after successful API call
+6. Add API function in `frontend/src/lib/api.ts`
+7. Add TanStack Query hook in `frontend/src/hooks/` if needed
 
 ### Adding a New Service
 1. Create service class in `backend/app/services/`
@@ -194,13 +224,15 @@ GitHub Actions workflows run automatically on PRs and pushes to `main`:
 - Uploads coverage report as artifact
 
 ### Test Coverage Requirements
-- **Backend**: 50% minimum (currently ~73%)
+- **Backend**: 50% minimum (currently ~76%)
 - **Frontend**: No minimum (currently testing key utility components)
 
 ### Test Files
 - `backend/tests/test_api_routes.py` - Audio clip endpoint tests
-- `backend/tests/test_happy_path.py` - Comprehensive API endpoint tests (54 tests)
-- `frontend/src/components/*.test.tsx` - Component unit tests (29 tests)
+- `backend/tests/test_happy_path.py` - Comprehensive API endpoint tests
+- `backend/tests/test_meals.py` - Meal tracking endpoint tests
+- `frontend/src/components/*.test.tsx` - Component unit tests
+- **Total**: 227 backend tests, 29 frontend tests
 
 ## Environment Variables
 

@@ -27,6 +27,20 @@ class AskAnswer(BaseModel):
     )
 
 
+class TokenUsageInfo(BaseModel):
+    """Token usage information from OpenAI API response."""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
+class AskResult(BaseModel):
+    """Result of ask including usage info."""
+    answer: AskAnswer
+    usage: TokenUsageInfo | None = None
+    model: str = ""
+
+
 class RetrievedNote(BaseModel):
     note_id: str
     title: str
@@ -47,7 +61,9 @@ class AskService:
         self.client = client or (OpenAI(api_key=api_key) if api_key else get_openai_client())
         self.model = model or chat_model()
 
-    def answer(self, question: str, plan: QueryPlan, notes: list[RetrievedNote]) -> AskAnswer:
+    def answer(
+        self, question: str, plan: QueryPlan, notes: list[RetrievedNote], return_usage: bool = False
+    ) -> AskAnswer | AskResult:
         prompt = self._build_prompt(question=question, plan=plan, notes=notes)
         try:
             completion = self.client.beta.chat.completions.parse(
@@ -69,6 +85,21 @@ class AskService:
             result = completion.choices[0].message.parsed
             if not result:
                 raise ValueError("OpenAI returned empty answer")
+
+            if return_usage:
+                usage_info = None
+                if completion.usage:
+                    usage_info = TokenUsageInfo(
+                        prompt_tokens=completion.usage.prompt_tokens,
+                        completion_tokens=completion.usage.completion_tokens,
+                        total_tokens=completion.usage.total_tokens,
+                    )
+                return AskResult(
+                    answer=result,
+                    usage=usage_info,
+                    model=self.model,
+                )
+
             return result
         except OpenAIError as e:
             print(f"OpenAI API error during ask answer: {e}")

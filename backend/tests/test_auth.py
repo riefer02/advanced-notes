@@ -133,6 +133,19 @@ def test_require_auth_with_test_user_header():
             def extract(self, *a, **k):
                 raise AssertionError("not called")
 
+        class _FakeUsageTracking:
+            def record_usage(self, **k):
+                return "test-id"
+            def check_quota(self, user_id, service_type):
+                class _R:
+                    allowed = True
+                    warning = False
+                return _R()
+            def get_current_usage(self, user_id):
+                pass
+            def get_usage_history(self, *a, **k):
+                return []
+
         services = Services(
             storage=storage,
             embeddings=_FakeEmbeddings(),
@@ -141,6 +154,7 @@ def test_require_auth_with_test_user_header():
             categorizer=_FakeCategorizer(),
             summarizer=_FakeSummarizer(),
             meal_extractor=_FakeMealExtractor(),
+            usage_tracking=_FakeUsageTracking(),
         )
 
         app = create_app(testing=True, services=services)
@@ -194,6 +208,19 @@ def test_require_auth_returns_401_without_token():
             def extract(self, *a, **k):
                 raise AssertionError("not called")
 
+        class _FakeUsageTracking:
+            def record_usage(self, **k):
+                return "test-id"
+            def check_quota(self, user_id, service_type):
+                class _R:
+                    allowed = True
+                    warning = False
+                return _R()
+            def get_current_usage(self, user_id):
+                pass
+            def get_usage_history(self, *a, **k):
+                return []
+
         services = Services(
             storage=storage,
             embeddings=_FakeEmbeddings(),
@@ -202,6 +229,7 @@ def test_require_auth_returns_401_without_token():
             categorizer=_FakeCategorizer(),
             summarizer=_FakeSummarizer(),
             meal_extractor=_FakeMealExtractor(),
+            usage_tracking=_FakeUsageTracking(),
         )
 
         # NOT in testing mode - X-Test-User-Id header won't work

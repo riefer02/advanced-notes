@@ -19,7 +19,9 @@ function RootComponent() {
     pathname.startsWith('/summaries') ||
     pathname.startsWith('/notes') ||
     pathname.startsWith('/settings') ||
-    pathname.startsWith('/todos')
+    pathname.startsWith('/todos') ||
+    pathname.startsWith('/meals') ||
+    pathname.startsWith('/feedback')
 
   return (
     <>

@@ -25,6 +25,20 @@ class DigestResult(BaseModel):
     )
 
 
+class TokenUsageInfo(BaseModel):
+    """Token usage information from OpenAI API response."""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
+class SummarizationResult(BaseModel):
+    """Result of summarization including usage info."""
+    digest: DigestResult
+    usage: TokenUsageInfo | None = None
+    model: str = ""
+
+
 class AISummarizerService:
     """
     AI-powered note summarization using OpenAI GPT-4o-mini.
@@ -46,21 +60,26 @@ class AISummarizerService:
         self.client = client or (OpenAI(api_key=api_key) if api_key else get_openai_client())
         self.model = model or chat_model()
         
-    def summarize(self, notes_content: list[str]) -> DigestResult:
+    def summarize(self, notes_content: list[str], return_usage: bool = False) -> DigestResult | SummarizationResult:
         """
         Generate a summary digest from a list of note contents.
-        
+
         Args:
             notes_content: List of strings, where each string is the content of a note.
-        
+            return_usage: If True, return SummarizationResult with usage info.
+
         Returns:
             DigestResult with summary, themes, and action items.
+            (or SummarizationResult if return_usage=True)
         """
         if not notes_content:
-            return DigestResult(summary="No notes available to summarize.", key_themes=[], action_items=[])
-            
+            empty_result = DigestResult(summary="No notes available to summarize.", key_themes=[], action_items=[])
+            if return_usage:
+                return SummarizationResult(digest=empty_result, usage=None, model=self.model)
+            return empty_result
+
         prompt = self._build_prompt(notes_content)
-        
+
         try:
             completion = self.client.beta.chat.completions.parse(
                 model=self.model,
@@ -77,14 +96,28 @@ class AISummarizerService:
                 response_format=DigestResult,
                 temperature=0.3,
             )
-            
+
             result = completion.choices[0].message.parsed
-            
+
             if not result:
                 raise ValueError("OpenAI returned empty response")
-            
+
+            if return_usage:
+                usage_info = None
+                if completion.usage:
+                    usage_info = TokenUsageInfo(
+                        prompt_tokens=completion.usage.prompt_tokens,
+                        completion_tokens=completion.usage.completion_tokens,
+                        total_tokens=completion.usage.total_tokens,
+                    )
+                return SummarizationResult(
+                    digest=result,
+                    usage=usage_info,
+                    model=self.model,
+                )
+
             return result
-            
+
         except OpenAIError as e:
             print(f"OpenAI API error: {e}")
             raise

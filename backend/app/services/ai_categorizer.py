@@ -64,6 +64,20 @@ class CategorySuggestion(BaseModel):
     )
 
 
+class TokenUsageInfo(BaseModel):
+    """Token usage information from OpenAI API response."""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
+class CategorizationResult(BaseModel):
+    """Result of categorization including usage info."""
+    suggestion: CategorySuggestion
+    usage: TokenUsageInfo | None = None
+    model: str = ""
+
+
 class AICategorizationService:
     """
     AI-powered note categorization using OpenAI GPT-4o-mini.
@@ -95,29 +109,32 @@ class AICategorizationService:
         self,
         transcription: str,
         existing_folders: list[str],
-        timestamp: str | None = None
-    ) -> CategorySuggestion:
+        timestamp: str | None = None,
+        return_usage: bool = False,
+    ) -> CategorySuggestion | CategorizationResult:
         """
         Categorize a transcription and suggest folder organization.
-        
+
         Args:
             transcription: The transcribed text to categorize
             existing_folders: List of existing folder paths
             timestamp: Optional ISO timestamp (defaults to current time)
-        
+            return_usage: If True, return CategorizationResult with usage info
+
         Returns:
             CategorySuggestion with folder path, filename, tags, and confidence
-            
+            (or CategorizationResult if return_usage=True)
+
         Raises:
             OpenAIError: If API call fails
             ValueError: If response doesn't match expected schema
         """
         if not transcription or not transcription.strip():
             raise ValueError("Transcription cannot be empty")
-        
+
         # Build the categorization prompt
         prompt = self._build_prompt(transcription, existing_folders)
-        
+
         try:
             # Call OpenAI with structured outputs
             completion = self.client.beta.chat.completions.parse(
@@ -135,15 +152,29 @@ class AICategorizationService:
                 response_format=CategorySuggestion,
                 temperature=0.3,  # Lower temperature for more consistent categorization
             )
-            
+
             # Extract the parsed response
             suggestion = completion.choices[0].message.parsed
-            
+
             if not suggestion:
                 raise ValueError("OpenAI returned empty response")
-            
+
+            if return_usage:
+                usage_info = None
+                if completion.usage:
+                    usage_info = TokenUsageInfo(
+                        prompt_tokens=completion.usage.prompt_tokens,
+                        completion_tokens=completion.usage.completion_tokens,
+                        total_tokens=completion.usage.total_tokens,
+                    )
+                return CategorizationResult(
+                    suggestion=suggestion,
+                    usage=usage_info,
+                    model=self.model,
+                )
+
             return suggestion
-            
+
         except OpenAIError as e:
             # Log the error and potentially use fallback strategy
             print(f"OpenAI API error: {e}")

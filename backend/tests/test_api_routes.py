@@ -50,14 +50,65 @@ class _FakeMealExtractor:
         raise AssertionError("meal extractor should not be called in these tests")
 
 
+class _FakeUsageTracking:
+    """Fake usage tracking service for tests."""
+
+    def record_usage(self, **kwargs):  # noqa: ANN001
+        return "test-usage-id"
+
+    def get_current_usage(self, user_id):  # noqa: ANN001
+        from datetime import UTC, datetime
+
+        class _UsageSummary:
+            period_start = datetime.now(UTC)
+            period_end = datetime.now(UTC)
+            transcription_minutes_used = 0.0
+            transcription_minutes_limit = 100
+            ai_calls_used = 0
+            ai_calls_limit = 500
+            estimated_cost_usd = 0.0
+            tier = "free"
+
+            def model_dump(self):
+                return {
+                    "user_id": user_id,
+                    "period_start": self.period_start.isoformat(),
+                    "period_end": self.period_end.isoformat(),
+                    "transcription_minutes_used": self.transcription_minutes_used,
+                    "transcription_minutes_limit": self.transcription_minutes_limit,
+                    "ai_calls_used": self.ai_calls_used,
+                    "ai_calls_limit": self.ai_calls_limit,
+                    "estimated_cost_usd": self.estimated_cost_usd,
+                    "tier": self.tier,
+                }
+
+        return _UsageSummary()
+
+    def check_quota(self, user_id, service_type):  # noqa: ANN001
+        from datetime import UTC, datetime
+
+        class _QuotaCheck:
+            allowed = True
+            used = 0.0
+            limit = 100.0 if service_type == "transcription" else 500.0
+            unit = "minutes" if service_type == "transcription" else "calls"
+            resets_at = datetime.now(UTC)
+            warning = False
+
+        return _QuotaCheck()
+
+    def get_usage_history(self, user_id, limit=50, offset=0, service_type=None):  # noqa: ANN001
+        return []
+
+
 def test_transcribe_uploads_audio_to_s3_and_links_clip(client, app, monkeypatch):  # noqa: ANN001
     # Avoid OpenAI dependency + complex downstream services; verify S3 upload + response shape.
     from app import routes as _routes
     from app.services import s3_audio as _s3_audio
 
-    monkeypatch.setattr(_routes, "transcribe_bytes", lambda *a, **k: ("hello", {"duration": 1.0}))
+    monkeypatch.setattr(_routes, "transcribe_bytes", lambda *a, **k: ("hello", {"duration": 1.0, "model": "test"}))
 
-    class _CatResult:
+    class _CatSuggestion:
         action = "create"
         folder_path = "inbox"
         filename = "test.md"
@@ -65,11 +116,21 @@ def test_transcribe_uploads_audio_to_s3_and_links_clip(client, app, monkeypatch)
         confidence = 0.9
         reasoning = "test"
 
+    class _UsageInfo:
+        prompt_tokens = 100
+        completion_tokens = 50
+        total_tokens = 150
+
+    class _CatResult:
+        suggestion = _CatSuggestion()
+        usage = _UsageInfo()
+        model = "test-model"
+
     # Patch categorizer + embeddings to avoid touching OpenAI
     monkeypatch.setattr(
         app.extensions["services"].categorizer,
         "categorize",
-        lambda *a, **k: _CatResult(),
+        lambda *a, **k: _CatResult() if k.get("return_usage") else _CatSuggestion(),
     )
     monkeypatch.setattr(
         app.extensions["services"].embeddings,
@@ -163,6 +224,7 @@ def app(tmp_path: Path, monkeypatch):  # noqa: ANN001 - pytest fixture
         categorizer=_FakeCategorizer(),
         summarizer=_FakeSummarizer(),
         meal_extractor=_FakeMealExtractor(),
+        usage_tracking=_FakeUsageTracking(),
     )
 
     app = create_app(testing=True, services=services)
@@ -458,6 +520,7 @@ def test_audio_clips_disabled_returns_501(tmp_path, monkeypatch):  # noqa: ANN00
         categorizer=_FakeCategorizer(),
         summarizer=_FakeSummarizer(),
         meal_extractor=_FakeMealExtractor(),
+        usage_tracking=_FakeUsageTracking(),
     )
 
     app = create_app(testing=True, services=services)

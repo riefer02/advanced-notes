@@ -38,6 +38,9 @@ from ..database import (
     Digest as DigestORM,
 )
 from ..database import (
+    Feedback as FeedbackORM,
+)
+from ..database import (
     MealEmbedding as MealEmbeddingORM,
 )
 from ..database import (
@@ -67,6 +70,9 @@ from .models import (
 )
 from .models import (
     Digest as DigestDTO,
+)
+from .models import (
+    FeedbackResponse as FeedbackDTO,
 )
 from .models import (
     FolderNode,
@@ -2141,6 +2147,79 @@ class NoteStorage:
                 updated_at=now,
             )
             session.add(db_emb)
+
+    # =========================================================================
+    # FEEDBACK METHODS
+    # =========================================================================
+
+    def create_feedback(
+        self,
+        user_id: str,
+        feedback_type: str,
+        title: str,
+        description: str | None = None,
+        rating: int | None = None,
+    ) -> FeedbackDTO:
+        """
+        Create a new feedback submission.
+        """
+        feedback_id = str(uuid4())
+        now = datetime.utcnow()
+
+        feedback = FeedbackORM(
+            id=feedback_id,
+            user_id=user_id,
+            feedback_type=feedback_type,
+            title=title,
+            description=description,
+            rating=rating,
+            email_sent=False,
+            created_at=now,
+        )
+
+        with self._session_scope() as session:
+            session.add(feedback)
+
+        return FeedbackDTO(
+            id=feedback_id,
+            user_id=user_id,
+            feedback_type=feedback_type,
+            title=title,
+            description=description,
+            rating=rating,
+            created_at=now,
+        )
+
+    def list_feedback(
+        self,
+        user_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[FeedbackDTO]:
+        """
+        List feedback submissions for a user.
+        """
+        with self._session_scope() as session:
+            rows = (
+                session.query(FeedbackORM)
+                .filter(FeedbackORM.user_id == user_id)
+                .order_by(desc(FeedbackORM.created_at))
+                .offset(max(offset, 0))
+                .limit(max(limit, 1))
+                .all()
+            )
+            return [
+                FeedbackDTO(
+                    id=f.id,
+                    user_id=f.user_id,
+                    feedback_type=f.feedback_type,
+                    title=f.title,
+                    description=f.description,
+                    rating=f.rating,
+                    created_at=f.created_at,
+                )
+                for f in rows
+            ]
 
     def _configure_engine(
         self,

@@ -355,6 +355,92 @@ class MealEmbedding(Base):
     )
 
 
+class TokenUsage(Base):
+    """
+    Individual API usage records for tracking and billing.
+    """
+
+    __tablename__ = "token_usage"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+
+    # Service type: transcription, categorization, embedding, chat, summarization
+    service_type = Column(String(50), nullable=False)
+    model = Column(String(100), nullable=False)
+
+    # Token counts (for chat/completion APIs)
+    prompt_tokens = Column(Integer, nullable=True)
+    completion_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+
+    # Audio-specific (for transcription)
+    audio_duration_seconds = Column(Float, nullable=True)
+
+    # Request context
+    endpoint = Column(String(100), nullable=True)
+
+    # Cost tracking
+    estimated_cost_usd = Column(Float, nullable=True)
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_token_usage_user_id", "user_id"),
+        Index("idx_token_usage_user_created", "user_id", "created_at"),
+        Index("idx_token_usage_user_service", "user_id", "service_type"),
+    )
+
+
+class UsageQuota(Base):
+    """
+    Per-user usage limits (for rate limiting and future billing tiers).
+    """
+
+    __tablename__ = "usage_quotas"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, unique=True, index=True)
+
+    # User tier (free, pro, etc.)
+    tier = Column(String(50), nullable=False, server_default="free")
+
+    # Monthly limits
+    transcription_minutes_limit = Column(Integer, nullable=False, server_default="100")
+    ai_calls_limit = Column(Integer, nullable=False, server_default="500")
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (Index("idx_usage_quotas_user_id", "user_id"),)
+
+
+class Feedback(Base):
+    """
+    User feedback submissions (bug reports, feature requests, general feedback).
+    """
+
+    __tablename__ = "feedback"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+
+    # Feedback type: bug, feature, general
+    feedback_type = Column(String(50), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    rating = Column(Integer, nullable=True)  # 1-5 optional
+
+    # Future email integration stub
+    email_sent = Column(Boolean, nullable=False, server_default="0")
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_feedback_user_id", "user_id"),
+        Index("idx_feedback_created", "created_at"),
+    )
+
+
 def get_database_url() -> str:
     """
     Get database URL from environment, defaulting to SQLite.

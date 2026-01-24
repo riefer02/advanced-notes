@@ -141,6 +141,49 @@ def _cleanup_stale_pending_audio_clips(user_id: str, svc) -> None:  # noqa: ANN0
         svc.storage.delete_audio_clips(user_id, [c.id for c in stale])
 
 
+def require_quota(service_type: str):
+    """
+    Decorator that checks user quota before allowing the request.
+
+    Args:
+        service_type: The service type to check ("transcription" or "ai_calls")
+
+    Returns 429 with quota details when exceeded.
+    """
+
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            user_id = g.user_id
+            svc = get_services()
+
+            quota_check = svc.usage_tracking.check_quota(user_id, service_type)
+
+            if not quota_check.allowed:
+                return (
+                    jsonify(
+                        {
+                            "error": "Monthly quota exceeded",
+                            "quota": {
+                                "service": quota_check.service_type,
+                                "used": quota_check.used,
+                                "limit": quota_check.limit,
+                                "unit": quota_check.unit,
+                                "resets_at": quota_check.resets_at.isoformat(),
+                            },
+                        }
+                    ),
+                    429,
+                )
+
+            # Execute the decorated function
+            return f(*args, **kwargs)
+
+        return decorated
+
+    return decorator
+
+
 # ============================================================================
 # TRANSCRIPTION ENDPOINTS
 # ============================================================================
@@ -148,6 +191,7 @@ def _cleanup_stale_pending_audio_clips(user_id: str, svc) -> None:  # noqa: ANN0
 
 @bp.post("/summarize")
 @require_auth
+@require_quota("ai_calls")
 def summarize_notes():
     """
     Generate a smart summary digest from recent notes.
@@ -180,10 +224,23 @@ def summarize_notes():
         # 2. Extract content
         notes_content = [f"Title: {n.title}\nContent: {n.content}" for n in recent_notes]
 
-        # 3. Generate summary
-        digest_result = svc.summarizer.summarize(notes_content)
+        # 3. Generate summary with usage tracking
+        summarization_result = svc.summarizer.summarize(notes_content, return_usage=True)
+        digest_result = summarization_result.digest
 
-        # 4. Save to database (store the structured result as JSON string)
+        # 4. Record usage
+        if summarization_result.usage:
+            svc.usage_tracking.record_usage(
+                user_id=user_id,
+                service_type="summarization",
+                model=summarization_result.model,
+                prompt_tokens=summarization_result.usage.prompt_tokens,
+                completion_tokens=summarization_result.usage.completion_tokens,
+                total_tokens=summarization_result.usage.total_tokens,
+                endpoint="/api/summarize",
+            )
+
+        # 5. Save to database (store the structured result as JSON string)
         digest_json = digest_result.model_dump_json()
         digest_id = svc.storage.save_digest(user_id, digest_json)
 
@@ -196,6 +253,7 @@ def summarize_notes():
 @bp.post("/transcribe")
 @require_auth
 @require_audio_clips
+@require_quota("transcription")
 def transcribe():
     """
     Transcribe audio and automatically categorize/save to database (user-scoped).
@@ -297,11 +355,35 @@ def transcribe():
             svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
             raise
 
+        # Record transcription usage
+        audio_duration = meta.get("duration")
+        if audio_duration is not None:
+            svc.usage_tracking.record_usage(
+                user_id=user_id,
+                service_type="transcription",
+                model=meta.get("model", "gpt-4o-mini-transcribe"),
+                audio_seconds=float(audio_duration),
+                endpoint="/api/transcribe",
+            )
+
         # Step 2: Get AI categorization (user-scoped folders)
         folder_tree = svc.storage.get_folder_tree(user_id)
 
         existing_folders = extract_folder_paths(folder_tree)
-        categorization_result = svc.categorizer.categorize(text, existing_folders)
+        cat_result = svc.categorizer.categorize(text, existing_folders, return_usage=True)
+        categorization_result = cat_result.suggestion
+
+        # Record categorization usage
+        if cat_result.usage:
+            svc.usage_tracking.record_usage(
+                user_id=user_id,
+                service_type="categorization",
+                model=cat_result.model,
+                prompt_tokens=cat_result.usage.prompt_tokens,
+                completion_tokens=cat_result.usage.completion_tokens,
+                total_tokens=cat_result.usage.total_tokens,
+                endpoint="/api/transcribe",
+            )
 
         # Step 3: Save to database (user-scoped)
         note_metadata = NoteMetadata(
@@ -901,6 +983,7 @@ def search_notes():
 
 @bp.post("/ask")
 @require_auth
+@require_quota("ai_calls")
 def ask_notes():
     """
     Ask a natural-language question about your notes.
@@ -986,7 +1069,20 @@ def ask_notes():
                 )
             )
 
-        answer = svc.asker.answer(query, plan, retrieved_notes)
+        ask_result = svc.asker.answer(query, plan, retrieved_notes, return_usage=True)
+        answer = ask_result.answer
+
+        # Record chat usage
+        if ask_result.usage:
+            svc.usage_tracking.record_usage(
+                user_id=user_id,
+                service_type="chat",
+                model=ask_result.model,
+                prompt_tokens=ask_result.usage.prompt_tokens,
+                completion_tokens=ask_result.usage.completion_tokens,
+                total_tokens=ask_result.usage.total_tokens,
+                endpoint="/api/ask",
+            )
 
         # Persist ask history (compact)
         import json as _json
@@ -1494,6 +1590,7 @@ def accept_note_todos(note_id: str):
 @bp.post("/meals/transcribe")
 @require_auth
 @require_audio_clips
+@require_quota("transcription")
 def transcribe_meal():
     """
     Transcribe audio and extract meal data.
@@ -1593,6 +1690,17 @@ def transcribe_meal():
                 s3_audio.delete_object(storage_key=audio_storage_key)
             svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
             raise
+
+        # Record transcription usage
+        audio_duration = meta.get("duration")
+        if audio_duration is not None:
+            svc.usage_tracking.record_usage(
+                user_id=user_id,
+                service_type="transcription",
+                model=meta.get("model", "gpt-4o-mini-transcribe"),
+                audio_seconds=float(audio_duration),
+                endpoint="/api/meals/transcribe",
+            )
 
         # Step 2: Extract meal data using AI
         current_date = date.today().isoformat()
@@ -1975,6 +2083,183 @@ def delete_meal_item(meal_id: str, item_id: str):
             return api_error("Item not found", 404)
 
         return jsonify({"success": True})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# USAGE TRACKING ENDPOINTS
+# ============================================================================
+
+
+@bp.get("/usage")
+@require_auth
+def get_usage():
+    """
+    Get current usage summary and quota status.
+
+    Returns:
+        JSON: {
+            "user_id": str,
+            "period_start": str,
+            "period_end": str,
+            "transcription_minutes_used": float,
+            "transcription_minutes_limit": int,
+            "ai_calls_used": int,
+            "ai_calls_limit": int,
+            "estimated_cost_usd": float,
+            "tier": str
+        }
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        usage = svc.usage_tracking.get_current_usage(user_id)
+        return jsonify(usage.model_dump())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/usage/history")
+@require_auth
+def get_usage_history():
+    """
+    Get detailed usage history (paginated).
+
+    Query params:
+        - limit: Max results (default: 50)
+        - offset: Pagination offset (default: 0)
+        - service_type: Filter by service type (optional)
+
+    Returns:
+        JSON: {"records": [...], "total": int, "limit": int, "offset": int}
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        limit, offset = parse_pagination(default_limit=50, max_limit=100)
+        service_type = request.args.get("service_type")
+
+        records = svc.usage_tracking.get_usage_history(
+            user_id,
+            limit=limit,
+            offset=offset,
+            service_type=service_type,
+        )
+
+        return jsonify(
+            {
+                "records": [r.model_dump() for r in records],
+                "total": len(records),
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# FEEDBACK ENDPOINTS
+# ============================================================================
+
+
+@bp.post("/feedback")
+@require_auth
+def create_feedback():
+    """
+    Submit user feedback (bug reports, feature requests, general feedback).
+
+    Body:
+        JSON: {
+            "feedback_type": str (required: "bug", "feature", "general"),
+            "title": str (required),
+            "description": str (optional),
+            "rating": int (optional: 1-5)
+        }
+
+    Returns:
+        JSON: FeedbackResponse object
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        data = request.get_json()
+        if not data:
+            return api_error("No data provided", 400)
+
+        feedback_type = (data.get("feedback_type") or "").strip()
+        if feedback_type not in ("bug", "feature", "general"):
+            return api_error("feedback_type must be 'bug', 'feature', or 'general'", 400)
+
+        title = (data.get("title") or "").strip()
+        if not title:
+            return api_error("title is required", 400)
+        if len(title) > 255:
+            return api_error("title must be 255 characters or less", 400)
+
+        description = data.get("description")
+        if description:
+            description = description.strip()
+            if len(description) > 5000:
+                return api_error("description must be 5000 characters or less", 400)
+
+        rating = data.get("rating")
+        if rating is not None:
+            try:
+                rating = int(rating)
+                if rating < 1 or rating > 5:
+                    return api_error("rating must be between 1 and 5", 400)
+            except (TypeError, ValueError):
+                return api_error("rating must be an integer", 400)
+
+        feedback = svc.storage.create_feedback(
+            user_id=user_id,
+            feedback_type=feedback_type,
+            title=title,
+            description=description,
+            rating=rating,
+        )
+
+        return jsonify(feedback.model_dump()), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/feedback")
+@require_auth
+def list_feedback():
+    """
+    List user's feedback submissions.
+
+    Query params:
+        - limit: Max results (default: 50)
+        - offset: Pagination offset (default: 0)
+
+    Returns:
+        JSON: {"feedback": [...], "total": int, "limit": int, "offset": int}
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        limit, offset = parse_pagination(default_limit=50, max_limit=100)
+
+        feedback_list = svc.storage.list_feedback(user_id, limit=limit, offset=offset)
+
+        return jsonify(
+            {
+                "feedback": [f.model_dump() for f in feedback_list],
+                "total": len(feedback_list),
+                "limit": limit,
+                "offset": offset,
+            }
+        )
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
