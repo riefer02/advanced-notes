@@ -14,8 +14,8 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from app.services.storage import NoteStorage
 from app.services.models import NoteMetadata
+from app.services.storage import NoteStorage
 
 TEST_USER_ID = "test-user"
 
@@ -245,7 +245,7 @@ Essential patterns for React hooks:
     
     stats = storage.get_folder_stats(TEST_USER_ID, "blog-ideas/react")
     if stats:
-        print(f"✅ Folder stats for blog-ideas/react:")
+        print("✅ Folder stats for blog-ideas/react:")
         print(f"   Note count: {stats.note_count}")
         print(f"   Total duration: {stats.total_duration:.1f}s")
         print(f"   Avg confidence: {stats.avg_confidence:.2f}")

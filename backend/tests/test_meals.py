@@ -10,10 +10,9 @@ import pytest
 
 from app import create_app
 from app.services.container import Services
-from app.services.meal_extractor import MealExtractionResult, MealType, ExtractedFoodItem
+from app.services.meal_extractor import ExtractedFoodItem, MealExtractionResult, MealType
 from app.services.models import MealEntryMetadata
 from app.services.storage import NoteStorage
-
 
 # ============================================================================
 # TEST FAKES
@@ -116,6 +115,13 @@ class _FakeMealExtractor:
         )
 
 
+class _FakeVinylExtractor:
+    model = "gpt-4.1-mini"
+
+    def extract(self, image_urls):
+        raise AssertionError("vinyl extractor should not be called in meal tests")
+
+
 class _FakeUsageTracking:
     """Fake usage tracking service for tests."""
 
@@ -163,6 +169,7 @@ def app(tmp_path: Path, monkeypatch):
         categorizer=_FakeCategorizer(),
         summarizer=_FakeSummarizer(),
         meal_extractor=_FakeMealExtractor(),
+        vinyl_extractor=_FakeVinylExtractor(),
         usage_tracking=_FakeUsageTracking(),
         email=_FakeEmailService(),
     )

@@ -9,7 +9,15 @@ import { askNotes, deleteNote, fetchNote, generateSummary, setAuthTokenGetter } 
 import type { AskResponse, DigestResult, Note } from '../../lib/api'
 
 type NavItem = {
-  to: '/dashboard' | '/summaries' | '/notes' | '/todos' | '/meals' | '/settings' | '/feedback'
+  to:
+    | '/dashboard'
+    | '/summaries'
+    | '/notes'
+    | '/todos'
+    | '/meals'
+    | '/vinyl'
+    | '/settings'
+    | '/feedback'
   label: string
   icon: (props: { className?: string }) => JSX.Element
 }
@@ -106,6 +114,25 @@ const NAV_ITEMS: NavItem[] = [
           strokeLinecap="round"
           strokeLinejoin="round"
           d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75-1.5.75a3.354 3.354 0 0 1-3 0 3.354 3.354 0 0 0-3 0 3.354 3.354 0 0 1-3 0 3.354 3.354 0 0 0-3 0 3.354 3.354 0 0 1-3 0L3 16.5m18-4.5a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+        />
+      </svg>
+    ),
+  },
+  {
+    to: '/vinyl',
+    label: 'Vinyl',
+    icon: ({ className }) => (
+      <svg
+        className={className}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.5}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66a2.25 2.25 0 0 0 1.632-2.163Zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 0 1-.99-3.467l2.31-.66A2.25 2.25 0 0 0 9 15.553Z"
         />
       </svg>
     ),

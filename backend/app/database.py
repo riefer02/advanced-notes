@@ -441,6 +441,129 @@ class Feedback(Base):
     )
 
 
+class VinylRecord(Base):
+    """
+    Vinyl record metadata with user isolation.
+    """
+
+    __tablename__ = "vinyl_records"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+
+    artist = Column(String(500), nullable=False)
+    album_title = Column(String(500), nullable=False)
+    release_year = Column(Integer, nullable=True)
+    genre = Column(Text, nullable=True)  # JSON array
+    label = Column(String(255), nullable=True)
+    catalog_number = Column(String(100), nullable=True)
+    format = Column(String(50), nullable=True)  # LP, 7", 10", 12"
+    pressing_country = Column(String(100), nullable=True)
+    color = Column(String(100), nullable=True)
+    condition = Column(String(50), nullable=True)  # Mint/VG+/VG/G+/G/Fair/Poor
+    notes = Column(Text, nullable=True)
+
+    extraction_status = Column(String(20), nullable=False, server_default="manual")
+    extraction_confidence = Column(Float, nullable=True)
+    cover_image_id = Column(String(36), nullable=True)
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_vinyl_records_user_id", "user_id"),
+        Index("idx_vinyl_records_user_artist", "user_id", "artist"),
+        Index("idx_vinyl_records_user_created", "user_id", "created_at"),
+    )
+
+
+class VinylImage(Base):
+    """
+    Images associated with a vinyl record (front cover, back cover, label, etc.).
+    """
+
+    __tablename__ = "vinyl_images"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    vinyl_record_id = Column(
+        String(36),
+        ForeignKey("vinyl_records.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    image_type = Column(String(50), nullable=False)  # front_cover/back_cover/label/inner_sleeve/other
+    storage_key = Column(Text, nullable=False)
+    mime_type = Column(String(100), nullable=False)
+    bytes = Column(Integer, nullable=False)
+    status = Column(String(20), nullable=False, server_default="pending")
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_vinyl_images_user_id", "user_id"),
+        Index("idx_vinyl_images_record", "vinyl_record_id"),
+    )
+
+
+class VinylTrack(Base):
+    """
+    Individual tracks on a vinyl record.
+    """
+
+    __tablename__ = "vinyl_tracks"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    vinyl_record_id = Column(
+        String(36),
+        ForeignKey("vinyl_records.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    side = Column(String(10), nullable=True)  # A, B, C, D
+    position = Column(Integer, nullable=True)
+    title = Column(String(500), nullable=False)
+    duration = Column(String(20), nullable=True)  # "3:45" format
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_vinyl_tracks_user_id", "user_id"),
+        Index("idx_vinyl_tracks_record", "vinyl_record_id"),
+    )
+
+
+class VinylEmbedding(Base):
+    """
+    Embeddings for semantic search over vinyl collection.
+    """
+
+    __tablename__ = "vinyl_embeddings"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    vinyl_record_id = Column(String(36), nullable=False, index=True)
+
+    embedding_model = Column(String(100), nullable=False)
+    content_hash = Column(String(64), nullable=False)
+    embedding = Column(VectorEmbedding(1536), nullable=False)
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_vinyl_embeddings_user_record", "user_id", "vinyl_record_id"),
+        Index("idx_vinyl_embeddings_user_model", "user_id", "embedding_model"),
+    )
+
+
 def get_database_url() -> str:
     """
     Get database URL from environment, defaulting to SQLite.

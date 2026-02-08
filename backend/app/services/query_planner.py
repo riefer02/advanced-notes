@@ -13,7 +13,7 @@ Uses OpenAI structured outputs (Pydantic) for reliable JSON.
 from __future__ import annotations
 
 from datetime import date
-from enum import Enum
+from enum import StrEnum
 
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from .openai_provider import chat_model, get_openai_client
 
 
-class AskIntent(str, Enum):
+class AskIntent(StrEnum):
     fact_lookup = "fact_lookup"
     summary = "summary"
     trend = "trend"

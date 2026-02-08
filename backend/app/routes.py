@@ -11,6 +11,7 @@ Organized into logical groups:
 All routes require authentication and are user-scoped.
 """
 
+import base64
 from contextlib import suppress
 from functools import wraps
 
@@ -19,7 +20,7 @@ from flask import Blueprint, g, jsonify, request
 from .asr import transcribe_bytes
 from .auth import require_auth
 from .config import Config
-from .services import s3_audio
+from .services import s3_audio, s3_vinyl
 from .services.ask_service import RetrievedNote
 from .services.container import get_services
 from .services.embeddings import vector_to_json, vector_to_pg_literal
@@ -2083,6 +2084,602 @@ def delete_meal_item(meal_id: str, item_id: str):
             return api_error("Item not found", 404)
 
         return jsonify({"success": True})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# VINYL COLLECTION ENDPOINTS
+# ============================================================================
+
+
+def _enrich_vinyl_record(record_dict: dict) -> dict:
+    """Add cover_image_url to a serialised vinyl record if it has a cover image."""
+    cover_id = record_dict.get("cover_image_id")
+    if cover_id and s3_vinyl.s3_available():
+        # Find the image in the nested images list to get its storage_key
+        for img in record_dict.get("images", []):
+            if img.get("id") == cover_id and img.get("status") == "ready":
+                try:
+                    dl = s3_vinyl.presign_get_object(storage_key=img["storage_key"])
+                    record_dict["cover_image_url"] = dl.url
+                except Exception:
+                    pass
+                break
+    if "cover_image_url" not in record_dict:
+        record_dict["cover_image_url"] = None
+    return record_dict
+
+
+@bp.post("/vinyl")
+@require_auth
+def create_vinyl_record():
+    """
+    Create a new vinyl record (manual entry).
+
+    Body:
+        JSON: {
+            "artist": str (required),
+            "album_title": str (required),
+            "release_year": int (optional),
+            "genre": list[str] (optional),
+            "label": str (optional),
+            "catalog_number": str (optional),
+            "format": str (optional),
+            "pressing_country": str (optional),
+            "color": str (optional),
+            "condition": str (optional),
+            "notes": str (optional)
+        }
+
+    Returns:
+        JSON: VinylRecord object
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        data = request.get_json()
+        if not data:
+            return api_error("No data provided", 400)
+
+        artist = (data.get("artist") or "").strip()
+        if not artist:
+            return api_error("'artist' is required", 400)
+
+        album_title = (data.get("album_title") or "").strip()
+        if not album_title:
+            return api_error("'album_title' is required", 400)
+
+        record_id = svc.storage.save_vinyl_record(
+            user_id,
+            artist=artist,
+            album_title=album_title,
+            release_year=data.get("release_year"),
+            genre=data.get("genre"),
+            label=data.get("label"),
+            catalog_number=data.get("catalog_number"),
+            format=data.get("format"),
+            pressing_country=data.get("pressing_country"),
+            color=data.get("color"),
+            condition=data.get("condition"),
+            notes=data.get("notes"),
+        )
+
+        record = svc.storage.get_vinyl_record(user_id, record_id)
+        return jsonify(record.model_dump() if record else {"id": record_id}), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/vinyl")
+@require_auth
+def list_vinyl_records():
+    """
+    List vinyl records with optional filtering.
+
+    Query params:
+        - genre: Filter by genre (optional)
+        - decade: Filter by decade e.g. 1970 (optional)
+        - format: Filter by format e.g. LP (optional)
+        - search: Text search across artist/album/label (optional)
+        - sort_by: created_at, artist, album_title, release_year (default: created_at)
+        - limit: Max results (default: 50)
+        - offset: Pagination offset (default: 0)
+
+    Returns:
+        JSON: {"records": [...], "total": int, "limit": int, "offset": int}
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        limit, offset = parse_pagination(default_limit=50, max_limit=100)
+
+        genre = request.args.get("genre")
+        decade = request.args.get("decade")
+        fmt = request.args.get("format")
+        search = request.args.get("search")
+        sort_by = request.args.get("sort_by", "created_at")
+
+        decade_int = None
+        if decade:
+            try:
+                decade_int = int(decade)
+            except ValueError:
+                return api_error("'decade' must be an integer", 400)
+
+        records = svc.storage.list_vinyl_records(
+            user_id,
+            genre=genre,
+            decade=decade_int,
+            format=fmt,
+            search=search,
+            sort_by=sort_by,
+            limit=limit,
+            offset=offset,
+        )
+
+        return jsonify({
+            "records": [_enrich_vinyl_record(r.model_dump()) for r in records],
+            "total": len(records),
+            "limit": limit,
+            "offset": offset,
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/vinyl/stats")
+@require_auth
+def get_vinyl_stats():
+    """
+    Get collection statistics.
+
+    Returns:
+        JSON: {"total_records": int, "total_artists": int}
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        stats = svc.storage.get_vinyl_collection_stats(user_id)
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/vinyl/search")
+@require_auth
+def search_vinyl():
+    """
+    Search vinyl records (text search).
+
+    Query params:
+        - q: Search query (required)
+        - limit: Max results (default: 50)
+        - offset: Pagination offset (default: 0)
+
+    Returns:
+        JSON: {"records": [...], "query": str}
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        query = request.args.get("q")
+        if not query:
+            return api_error("Query parameter 'q' is required", 400)
+
+        limit, offset = parse_pagination(default_limit=50, max_limit=100)
+
+        records = svc.storage.list_vinyl_records(
+            user_id,
+            search=query,
+            limit=limit,
+            offset=offset,
+        )
+
+        return jsonify({
+            "records": [r.model_dump() for r in records],
+            "query": query,
+            "total": len(records),
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.post("/vinyl/extract-photos")
+@require_auth
+@require_quota("ai_calls")
+def extract_vinyl_from_photos():
+    """
+    Extract vinyl metadata directly from uploaded photos (no S3 required).
+
+    Accepts multipart form data with image files, converts to base64 data URLs,
+    and sends to GPT-4.1-mini for OCR extraction.
+
+    Returns:
+        JSON: VinylExtractionResult
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    files = request.files.getlist("images")
+    if not files:
+        return api_error("No images provided", 400)
+    if len(files) > 6:
+        return api_error("Maximum 6 images allowed", 400)
+
+    allowed_mimes = {"image/jpeg", "image/png", "image/webp", "image/heic"}
+    image_urls: list[str] = []
+    for f in files:
+        mime = f.content_type or "image/jpeg"
+        if mime not in allowed_mimes:
+            return api_error(f"Unsupported image type: {mime}", 400)
+        data = base64.b64encode(f.read()).decode("utf-8")
+        image_urls.append(f"data:{mime};base64,{data}")
+
+    try:
+        result = svc.vinyl_extractor.extract(image_urls)
+
+        svc.usage_tracking.record_usage(
+            user_id=user_id,
+            service_type="vinyl_extraction",
+            model=svc.vinyl_extractor.model,
+            endpoint="/api/vinyl/extract-photos",
+        )
+
+        return jsonify(result.model_dump())
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/vinyl/<record_id>")
+@require_auth
+def get_vinyl_record(record_id: str):
+    """
+    Get a vinyl record with tracks and images.
+
+    Returns:
+        JSON: VinylRecord object with tracks and images
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        record = svc.storage.get_vinyl_record(user_id, record_id)
+        if not record:
+            return api_error("Vinyl record not found", 404)
+        return jsonify(_enrich_vinyl_record(record.model_dump()))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.put("/vinyl/<record_id>")
+@require_auth
+def update_vinyl_record(record_id: str):
+    """
+    Update a vinyl record's metadata and optionally replace tracks.
+
+    Body:
+        JSON: {
+            "artist": str (optional),
+            "album_title": str (optional),
+            "release_year": int (optional),
+            "genre": list[str] (optional),
+            "label": str (optional),
+            "catalog_number": str (optional),
+            "format": str (optional),
+            "pressing_country": str (optional),
+            "color": str (optional),
+            "condition": str (optional),
+            "notes": str (optional),
+            "extraction_status": str (optional),
+            "extraction_confidence": float (optional),
+            "cover_image_id": str (optional),
+            "tracks": list[{side, position, title, duration}] (optional, replaces all)
+        }
+
+    Returns:
+        JSON: Updated VinylRecord object
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        data = request.get_json()
+        if not data:
+            return api_error("No data provided", 400)
+
+        success = svc.storage.update_vinyl_record(
+            user_id,
+            record_id,
+            artist=data.get("artist"),
+            album_title=data.get("album_title"),
+            release_year=data.get("release_year"),
+            genre=data.get("genre"),
+            label=data.get("label"),
+            catalog_number=data.get("catalog_number"),
+            format=data.get("format"),
+            pressing_country=data.get("pressing_country"),
+            color=data.get("color"),
+            condition=data.get("condition"),
+            notes=data.get("notes"),
+            extraction_status=data.get("extraction_status"),
+            extraction_confidence=data.get("extraction_confidence"),
+            cover_image_id=data.get("cover_image_id"),
+            tracks=data.get("tracks"),
+        )
+
+        if not success:
+            return api_error("Vinyl record not found", 404)
+
+        # Best-effort embedding refresh
+        updated = svc.storage.get_vinyl_record(user_id, record_id)
+        if updated:
+            try:
+                import hashlib
+
+                content = f"{updated.artist} - {updated.album_title}"
+                if updated.genre:
+                    content += f" [{', '.join(updated.genre)}]"
+                if updated.label:
+                    content += f" ({updated.label})"
+                track_titles = [t.title for t in updated.tracks]
+                if track_titles:
+                    content += " " + " ".join(track_titles)
+
+                vec = svc.embeddings.embed_query(content)
+                content_hash = hashlib.sha256(content.encode()).hexdigest()
+                embedding_value = (
+                    vector_to_pg_literal(vec)
+                    if svc.storage.dialect == "postgresql"
+                    else vector_to_json(vec)
+                )
+                svc.storage.upsert_vinyl_embedding(
+                    user_id=user_id,
+                    vinyl_record_id=record_id,
+                    embedding_model=svc.embeddings.model,
+                    content_hash=content_hash,
+                    embedding_value=embedding_value,
+                )
+            except Exception as e:
+                print(f"Vinyl embedding failed for {record_id}: {e}")
+
+        return jsonify(updated.model_dump() if updated else {})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.delete("/vinyl/<record_id>")
+@require_auth
+def delete_vinyl_record(record_id: str):
+    """
+    Delete a vinyl record (cascades images, tracks, embeddings).
+
+    Returns:
+        JSON: {"success": bool}
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        # Delete S3 objects for images (best-effort)
+        warning = None
+        try:
+            images = svc.storage.list_vinyl_images(user_id, record_id)
+            for img in images:
+                with suppress(Exception):
+                    s3_vinyl.delete_object(storage_key=img.storage_key)
+        except Exception as e:
+            warning = f"Failed to delete some image objects: {e}"
+
+        success = svc.storage.delete_vinyl_record(user_id, record_id)
+        if not success:
+            return api_error("Vinyl record not found", 404)
+
+        payload = {"success": True}
+        if warning:
+            payload["warning"] = warning
+        return jsonify(payload)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.post("/vinyl/<record_id>/images")
+@require_auth
+def create_vinyl_image(record_id: str):
+    """
+    Upload a vinyl image. The backend stores it in S3 and marks it as ready.
+
+    Multipart form:
+        - file: image file (required)
+        - image_type: front_cover, back_cover, label, inner_sleeve, other (default: other)
+
+    Returns:
+        JSON: { "image": VinylImage }
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    if not s3_vinyl.s3_available():
+        return api_error("Image upload requires S3 storage to be configured", 400)
+
+    try:
+        # Validate record exists
+        record = svc.storage.get_vinyl_record(user_id, record_id)
+        if not record:
+            return api_error("Vinyl record not found", 404)
+
+        f = request.files.get("file")
+        if not f:
+            return api_error("'file' is required", 400)
+
+        image_type = (request.form.get("image_type") or "other").strip()
+        valid_types = {"front_cover", "back_cover", "label", "inner_sleeve", "other"}
+        if image_type not in valid_types:
+            return api_error(f"'image_type' must be one of: {', '.join(sorted(valid_types))}", 400)
+
+        mime_type = f.content_type or "image/jpeg"
+        file_data = f.read()
+        bytes_value = len(file_data)
+
+        if bytes_value == 0:
+            return api_error("Empty file", 400)
+
+        from uuid import uuid4
+
+        image_id = str(uuid4())
+        storage_key = s3_vinyl.object_key_for_image(
+            user_id=user_id,
+            image_id=image_id,
+            mime_type=mime_type,
+        )
+
+        # Upload to S3
+        s3_vinyl.upload_object(
+            storage_key=storage_key,
+            content_type=mime_type,
+            data=file_data,
+        )
+
+        # Create DB record and mark as ready immediately
+        image = svc.storage.create_vinyl_image_pending(
+            user_id,
+            image_id=image_id,
+            vinyl_record_id=record_id,
+            image_type=image_type,
+            mime_type=mime_type,
+            bytes=bytes_value,
+            storage_key=storage_key,
+        )
+        updated = svc.storage.mark_vinyl_image_ready(user_id, image_id)
+        return jsonify({"image": (updated or image).model_dump()})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/vinyl/<record_id>/images/<image_id>/url")
+@require_auth
+def get_vinyl_image_url(record_id: str, image_id: str):
+    """
+    Get a presigned GET URL for viewing an image.
+
+    Returns:
+        JSON: { "url": str, "expires_at": str }
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        image = svc.storage.get_vinyl_image(user_id, image_id)
+        if not image:
+            return api_error("Image not found", 404)
+        if image.vinyl_record_id != record_id:
+            return api_error("Image does not belong to this record", 400)
+        if image.status != "ready":
+            return api_error("Image is not ready", 409)
+
+        dl = s3_vinyl.presign_get_object(storage_key=image.storage_key)
+        return jsonify({"url": dl.url, "expires_at": dl.expires_at})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.delete("/vinyl/<record_id>/images/<image_id>")
+@require_auth
+def delete_vinyl_image(record_id: str, image_id: str):
+    """
+    Delete a vinyl image from S3 and DB.
+
+    Returns:
+        JSON: {"success": bool}
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        image = svc.storage.get_vinyl_image(user_id, image_id)
+        if not image:
+            return api_error("Image not found", 404)
+        if image.vinyl_record_id != record_id:
+            return api_error("Image does not belong to this record", 400)
+
+        warning = None
+        try:
+            s3_vinyl.delete_object(storage_key=image.storage_key)
+        except Exception as e:
+            warning = f"Failed to delete image from storage: {e}"
+            print(warning)
+
+        success = svc.storage.delete_vinyl_image(user_id, image_id)
+        if not success:
+            return api_error("Image not found", 404)
+
+        payload = {"success": True}
+        if warning:
+            payload["warning"] = warning
+        return jsonify(payload)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.post("/vinyl/<record_id>/extract")
+@require_auth
+@require_quota("ai_calls")
+def extract_vinyl_metadata(record_id: str):
+    """
+    Run AI OCR extraction on a record's images.
+
+    Returns extracted metadata (does NOT auto-save -- the client reviews and calls PUT to save).
+
+    Returns:
+        JSON: VinylExtractionResult
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        record = svc.storage.get_vinyl_record(user_id, record_id)
+        if not record:
+            return api_error("Vinyl record not found", 404)
+
+        # Get ready images for this record
+        images = svc.storage.list_vinyl_images(user_id, record_id)
+        ready_images = [img for img in images if img.status == "ready"]
+
+        if not ready_images:
+            return api_error("No ready images found for this record. Upload images first.", 400)
+
+        # Generate presigned GET URLs for the extraction service
+        image_urls = []
+        for img in ready_images:
+            dl = s3_vinyl.presign_get_object(storage_key=img.storage_key)
+            image_urls.append(dl.url)
+
+        # Run extraction
+        result = svc.vinyl_extractor.extract(image_urls)
+
+        # Record usage
+        svc.usage_tracking.record_usage(
+            user_id=user_id,
+            service_type="vinyl_extraction",
+            model=svc.vinyl_extractor.model,
+            endpoint="/api/vinyl/<id>/extract",
+        )
+
+        return jsonify(result.model_dump())
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

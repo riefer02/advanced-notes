@@ -6,12 +6,11 @@ Tests validation logic and prompt building without calling OpenAI API.
 from __future__ import annotations
 
 from datetime import date
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.services.query_planner import QueryPlan, QueryPlanner
-
 
 # ============================================================================
 # Input Validation Tests

@@ -5,10 +5,10 @@ from pathlib import Path
 import pytest
 
 from app import create_app
+from app.services import s3_audio as _s3_audio
 from app.services.container import Services
 from app.services.models import NoteMetadata
 from app.services.storage import NoteStorage
-from app.services import s3_audio as _s3_audio
 
 
 class _FakeAsker:
@@ -48,6 +48,13 @@ class _FakePlanner:
 class _FakeMealExtractor:
     def extract(self, *args, **kwargs):  # noqa: ANN001 - test fake
         raise AssertionError("meal extractor should not be called in these tests")
+
+
+class _FakeVinylExtractor:
+    model = "gpt-4.1-mini"
+
+    def extract(self, image_urls):
+        raise AssertionError("vinyl extractor should not be called in api route tests")
 
 
 class _FakeUsageTracking:
@@ -234,6 +241,7 @@ def app(tmp_path: Path, monkeypatch):  # noqa: ANN001 - pytest fixture
         categorizer=_FakeCategorizer(),
         summarizer=_FakeSummarizer(),
         meal_extractor=_FakeMealExtractor(),
+        vinyl_extractor=_FakeVinylExtractor(),
         usage_tracking=_FakeUsageTracking(),
         email=_FakeEmailService(),
     )
@@ -531,6 +539,7 @@ def test_audio_clips_disabled_returns_501(tmp_path, monkeypatch):  # noqa: ANN00
         categorizer=_FakeCategorizer(),
         summarizer=_FakeSummarizer(),
         meal_extractor=_FakeMealExtractor(),
+        vinyl_extractor=_FakeVinylExtractor(),
         usage_tracking=_FakeUsageTracking(),
         email=_FakeEmailService(),
     )

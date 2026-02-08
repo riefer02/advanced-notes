@@ -13,8 +13,8 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from app.services.ai_categorizer import AICategorizationService, CategoryAction
 from app.config import config
+from app.services.ai_categorizer import AICategorizationService
 
 
 def test_categorization():
@@ -30,7 +30,7 @@ def test_categorization():
         print("See ENV_SETUP.md for instructions.\n")
         return False
     
-    print(f"✅ OpenAI API Key found")
+    print("✅ OpenAI API Key found")
     print(f"📊 Model: {config.OPENAI_MODEL}")
     print(f"🎯 Confidence threshold: {config.CONFIDENCE_THRESHOLD}\n")
     
@@ -79,7 +79,7 @@ def test_categorization():
                 existing_folders=test_case['existing_folders']
             )
             
-            print(f"✅ Categorization successful!")
+            print("✅ Categorization successful!")
             print(f"   Action: {result.action.value}")
             print(f"   Folder path: {result.folder_path}")
             print(f"   Filename: {result.filename}")
