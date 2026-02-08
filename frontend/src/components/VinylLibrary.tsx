@@ -5,6 +5,7 @@ import type { VinylRecord } from '../lib/api'
 interface VinylLibraryProps {
   onSelectRecord: (recordId: string) => void
   onAddRecord: () => void
+  owner?: string
 }
 
 const DECADE_OPTIONS = [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020]
@@ -16,7 +17,8 @@ const SORT_OPTIONS = [
   { value: 'release_year', label: 'Year' },
 ]
 
-export default function VinylLibrary({ onSelectRecord, onAddRecord }: VinylLibraryProps) {
+export default function VinylLibrary({ onSelectRecord, onAddRecord, owner }: VinylLibraryProps) {
+  const isSharedView = !!owner
   const [search, setSearch] = useState('')
   const [genre, setGenre] = useState<string | undefined>()
   const [decade, setDecade] = useState<number | undefined>()
@@ -31,12 +33,13 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord }: VinylLibra
       format,
       sort_by: sortBy,
       limit: 100,
+      owner,
     }),
-    [search, genre, decade, format, sortBy]
+    [search, genre, decade, format, sortBy, owner]
   )
 
   const { data, isLoading, error } = useVinylRecords(params)
-  const { data: stats } = useVinylStats()
+  const { data: stats } = useVinylStats(owner)
 
   const records = data?.records ?? []
   const hasFilters = search || genre || decade || format
@@ -53,22 +56,24 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord }: VinylLibra
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onAddRecord}
-          className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
+        {!isSharedView && (
+          <button
+            type="button"
+            onClick={onAddRecord}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Add Record
-        </button>
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Add Record
+          </button>
+        )}
       </div>
 
       {/* Search + Filters */}

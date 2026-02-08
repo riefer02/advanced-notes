@@ -9,6 +9,7 @@ interface MealCalendarProps {
   onNextMonth: () => void
   onSelectDate: (date: string) => void
   selectedDate: string | null
+  calendarOwner?: string
 }
 
 const MEAL_TYPE_COLORS: Record<MealType, string> = {
@@ -42,8 +43,9 @@ export default function MealCalendar({
   onNextMonth,
   onSelectDate,
   selectedDate,
+  calendarOwner,
 }: MealCalendarProps) {
-  const { data, isLoading } = useMealsCalendar(year, month)
+  const { data, isLoading } = useMealsCalendar(year, month, calendarOwner)
 
   const calendarDays = useMemo(() => {
     const firstDay = new Date(year, month - 1, 1)

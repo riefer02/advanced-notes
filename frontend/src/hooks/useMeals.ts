@@ -24,6 +24,7 @@ interface MealsParams {
   meal_type?: MealType
   limit?: number
   offset?: number
+  calendar_owner?: string
 }
 
 export function useMeals(params: MealsParams) {
@@ -34,10 +35,10 @@ export function useMeals(params: MealsParams) {
   })
 }
 
-export function useMealsCalendar(year: number, month: number) {
+export function useMealsCalendar(year: number, month: number, calendarOwner?: string) {
   return useQuery({
-    queryKey: ['mealsCalendar', year, month],
-    queryFn: () => fetchMealsCalendar(year, month),
+    queryKey: ['mealsCalendar', year, month, calendarOwner],
+    queryFn: () => fetchMealsCalendar(year, month, calendarOwner),
     enabled: !!year && !!month,
   })
 }

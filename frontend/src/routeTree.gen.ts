@@ -15,6 +15,7 @@ import { Route as SummariesRouteImport } from './routes/summaries'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as NotesRouteImport } from './routes/notes'
 import { Route as MealsRouteImport } from './routes/meals'
+import { Route as FriendsRouteImport } from './routes/friends'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
@@ -51,6 +52,11 @@ const MealsRoute = MealsRouteImport.update({
   path: '/meals',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FriendsRoute = FriendsRouteImport.update({
+  id: '/friends',
+  path: '/friends',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FeedbackRoute = FeedbackRouteImport.update({
   id: '/feedback',
   path: '/feedback',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/feedback': typeof FeedbackRoute
+  '/friends': typeof FriendsRoute
   '/meals': typeof MealsRoute
   '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/feedback': typeof FeedbackRoute
+  '/friends': typeof FriendsRoute
   '/meals': typeof MealsRoute
   '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/feedback': typeof FeedbackRoute
+  '/friends': typeof FriendsRoute
   '/meals': typeof MealsRoute
   '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/feedback'
+    | '/friends'
     | '/meals'
     | '/notes'
     | '/settings'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/feedback'
+    | '/friends'
     | '/meals'
     | '/notes'
     | '/settings'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/feedback'
+    | '/friends'
     | '/meals'
     | '/notes'
     | '/settings'
@@ -163,6 +175,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
   FeedbackRoute: typeof FeedbackRoute
+  FriendsRoute: typeof FriendsRoute
   MealsRoute: typeof MealsRoute
   NotesRoute: typeof NotesRoute
   SettingsRoute: typeof SettingsRoute
@@ -217,6 +230,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MealsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/friends': {
+      id: '/friends'
+      path: '/friends'
+      fullPath: '/friends'
+      preLoaderRoute: typeof FriendsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/feedback': {
       id: '/feedback'
       path: '/feedback'
@@ -259,6 +279,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
   FeedbackRoute: FeedbackRoute,
+  FriendsRoute: FriendsRoute,
   MealsRoute: MealsRoute,
   NotesRoute: NotesRoute,
   SettingsRoute: SettingsRoute,

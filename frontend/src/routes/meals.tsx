@@ -5,13 +5,23 @@ import MealCalendar from '../components/MealCalendar'
 import MealRecorder from '../components/MealRecorder'
 import DayMealsSlideOver from '../components/DayMealsSlideOver'
 import MealDetailSlideOver from '../components/MealDetailSlideOver'
+import SharedContentBanner from '../components/SharedContentBanner'
+
+interface MealsSearch {
+  calendar_owner?: string
+}
 
 export const Route = createFileRoute('/meals')({
   component: MealsPage,
+  validateSearch: (search: Record<string, unknown>): MealsSearch => ({
+    calendar_owner: typeof search.calendar_owner === 'string' ? search.calendar_owner : undefined,
+  }),
 })
 
 function MealsPage() {
   const { isLoaded, isSignedIn } = useAuth()
+  const { calendar_owner: calendarOwner } = Route.useSearch()
+  const isSharedView = !!calendarOwner
 
   // Calendar state
   const now = new Date()
@@ -96,6 +106,13 @@ function MealsPage() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      {/* Shared Content Banner */}
+      {isSharedView && calendarOwner && (
+        <div className="px-4 pt-4 lg:px-8 lg:pt-6">
+          <SharedContentBanner ownerId={calendarOwner} backTo="/meals" backLabel="Meal Calendar" />
+        </div>
+      )}
+
       {/* Mobile Tabs */}
       <div className="lg:hidden border-b bg-white flex-shrink-0">
         <div className="flex">
@@ -179,6 +196,7 @@ function MealsPage() {
               onNextMonth={handleNextMonth}
               onSelectDate={handleSelectDate}
               selectedDate={selectedDate}
+              calendarOwner={calendarOwner}
             />
           </div>
         </div>

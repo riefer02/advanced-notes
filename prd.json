@@ -1,0 +1,118 @@
+{
+  "title": "Sharing & Collaboration System",
+  "version": "1.0",
+  "status": "in-progress",
+  "overview": "Add social features to Chisos: friend-based sharing of vinyl libraries (view-only) and collaborative meal calendars (multi-editor). This is the foundational architecture for a broader sharing journey.",
+  "goals": [
+    "Enable users to share their vinyl collection with friends (view-only)",
+    "Enable collaborative meal calendars where multiple users can add meals",
+    "Build a friend system for managing trusted connections",
+    "Maintain backward compatibility with all existing single-user flows"
+  ],
+  "non_goals": [
+    "Organization or team-based sharing",
+    "Public/anonymous sharing (link-based)",
+    "Real-time collaboration (WebSocket sync)",
+    "Activity feeds (future iteration)",
+    "Per-resource privacy controls (future iteration)"
+  ],
+  "design_decisions": [
+    {
+      "decision": "Friend-based sharing (not organizations)",
+      "rationale": "Simpler model for a personal productivity app; matches the social graph users already have"
+    },
+    {
+      "decision": "Single-owner with editor grants",
+      "rationale": "One owner per resource, invited collaborators get view or edit permissions. Clear ownership semantics."
+    },
+    {
+      "decision": "Permission checks at route layer",
+      "rationale": "Storage layer stays dumb (user_id-scoped queries). Permission logic is explicit in routes via resolve_target_user helper."
+    },
+    {
+      "decision": "URL-based context switching (?owner=userId)",
+      "rationale": "Enables deep-linking to shared content, works with browser history, no global state needed"
+    },
+    {
+      "decision": "Quota charges the actor (not the resource owner)",
+      "rationale": "Prevents abuse where a user shares their calendar to get free API calls from others' quotas"
+    },
+    {
+      "decision": "Existing user_id semantics unchanged",
+      "rationale": "Sharing is a permission layer on top of existing isolation. No migration of existing data needed."
+    }
+  ],
+  "features": {
+    "user_profiles": {
+      "description": "User profiles with display name, bio, and discoverability settings",
+      "endpoints": [
+        "GET /api/profile - Own profile (auto-creates from Clerk JWT if missing)",
+        "PUT /api/profile - Update display_name, bio, discoverable",
+        "GET /api/users/<user_id>/profile - View another user's profile (requires relationship)"
+      ]
+    },
+    "friend_system": {
+      "description": "Request/accept/decline friend connections",
+      "endpoints": [
+        "GET /api/friends - List accepted friends",
+        "GET /api/friends/requests - Pending incoming requests",
+        "GET /api/friends/sent - Pending outgoing requests",
+        "POST /api/friends/request - Send friend request",
+        "POST /api/friends/<id>/accept - Accept request",
+        "POST /api/friends/<id>/decline - Decline request",
+        "DELETE /api/friends/<id> - Remove friend",
+        "GET /api/friends/search?q= - Search discoverable users"
+      ]
+    },
+    "resource_sharing": {
+      "description": "Share vinyl libraries (view-only) and meal calendars (view/edit) with friends",
+      "resource_types": ["vinyl_library", "meal_calendar"],
+      "permission_levels": ["view", "edit"],
+      "endpoints": [
+        "POST /api/shares - Create share invitation (must be friends)",
+        "GET /api/shares - List owned and received shares",
+        "GET /api/shares/received - Pending share invitations",
+        "POST /api/shares/<id>/accept - Accept share",
+        "POST /api/shares/<id>/decline - Decline share",
+        "DELETE /api/shares/<id> - Revoke or leave share"
+      ]
+    },
+    "vinyl_sharing": {
+      "description": "View-only access to a friend's vinyl collection",
+      "modified_endpoints": [
+        "GET /api/vinyl?owner=<user_id> - Browse shared library",
+        "GET /api/vinyl/<id>?owner=<user_id> - View shared record detail",
+        "GET /api/vinyl/stats?owner=<user_id> - Shared collection stats",
+        "GET /api/vinyl/search?owner=<user_id> - Search shared library",
+        "GET /api/vinyl/search?include_shared=true - Cross-library search"
+      ],
+      "constraints": ["POST/PUT/DELETE unchanged - only owner can mutate"]
+    },
+    "meal_collaboration": {
+      "description": "Multi-editor meal calendars where each member can add meals",
+      "modified_endpoints": [
+        "GET /api/meals?calendar_owner=<user_id> - Shared calendar meals",
+        "GET /api/meals/calendar?calendar_owner=<user_id> - Shared calendar view",
+        "POST /api/meals/transcribe?calendar_owner=<user_id> - Add meal to shared calendar"
+      ],
+      "constraints": [
+        "Each user can only edit/delete their own meals",
+        "Quota charges the actor, not the calendar owner"
+      ]
+    }
+  },
+  "database_tables": {
+    "user_profiles": {
+      "columns": ["id", "user_id", "display_name", "email", "avatar_url", "bio", "discoverable", "created_at", "updated_at"],
+      "indexes": ["(user_id) UNIQUE", "(email)", "(display_name)"]
+    },
+    "friendships": {
+      "columns": ["id", "requester_id", "addressee_id", "status", "created_at", "updated_at"],
+      "indexes": ["(requester_id)", "(addressee_id)", "(requester_id, addressee_id) UNIQUE", "(addressee_id, status)"]
+    },
+    "resource_shares": {
+      "columns": ["id", "owner_id", "shared_with_id", "resource_type", "permission", "status", "created_at", "updated_at"],
+      "indexes": ["(owner_id)", "(shared_with_id)", "(owner_id, shared_with_id, resource_type) UNIQUE", "(shared_with_id, status)"]
+    }
+  }
+}

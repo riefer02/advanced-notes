@@ -233,6 +233,14 @@ class MealEntry(BaseModel):
         json_encoders = {datetime: lambda v: v.isoformat()}
 
 
+class MealCalendarEntry(BaseModel):
+    """A single entry in the calendar view (compact)."""
+    id: str
+    meal_type: str
+    item_count: int = 0
+    user_id: str | None = None
+
+
 class MealEntryMetadata(BaseModel):
     """Metadata for creating/updating a meal entry"""
     meal_type: str = Field(..., description="breakfast, lunch, dinner, or snack")
@@ -437,3 +445,77 @@ class VinylImageUploadRequest(BaseModel):
     image_type: str = Field(..., description="front_cover, back_cover, label, inner_sleeve, other")
     mime_type: str = Field(..., min_length=1, description="MIME type of the image")
     bytes: int = Field(..., ge=1, description="Size in bytes")
+
+
+# ============================================================================
+# SHARING & COLLABORATION MODELS
+# ============================================================================
+
+
+class UserProfileResponse(BaseModel):
+    """User profile response"""
+    id: str
+    user_id: str
+    display_name: str
+    username: str | None = None
+    email: str | None = None
+    avatar_url: str | None = None
+    avatar_storage_key: str | None = None
+    bio: str | None = None
+    discoverable: bool = True
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class UpdateProfileRequest(BaseModel):
+    """Request body for updating user profile"""
+    display_name: str | None = Field(None, min_length=1, max_length=255)
+    username: str | None = Field(None, min_length=3, max_length=30, pattern=r"^[a-z0-9][a-z0-9_.]{1,28}[a-z0-9]$")
+    bio: str | None = Field(None, max_length=1000)
+    discoverable: bool | None = None
+
+
+class FriendshipResponse(BaseModel):
+    """Friendship with enriched profile data"""
+    id: str
+    requester_id: str
+    addressee_id: str
+    status: str
+    profile: UserProfileResponse | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class SendFriendRequestBody(BaseModel):
+    """Request body for sending a friend request"""
+    user_id: str = Field(..., description="User ID to send friend request to")
+
+
+class ResourceShareResponse(BaseModel):
+    """Resource share with enriched profile data"""
+    id: str
+    owner_id: str
+    shared_with_id: str
+    resource_type: str
+    permission: str
+    status: str
+    owner_profile: UserProfileResponse | None = None
+    shared_with_profile: UserProfileResponse | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class CreateShareRequest(BaseModel):
+    """Request body for creating a resource share"""
+    shared_with_id: str = Field(..., description="User ID to share with")
+    resource_type: str = Field(..., description="vinyl_library or meal_calendar")
+    permission: str = Field(default="view", description="view or edit")

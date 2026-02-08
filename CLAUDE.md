@@ -52,6 +52,7 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 - `backend/app/services/usage_tracking.py` - Rate limiting and API usage tracking
 - `backend/app/services/s3_audio.py` - Core S3 operations (shared by all S3 features)
 - `backend/app/services/s3_vinyl.py` - Vinyl image S3 helpers (delegates to s3_audio)
+- `backend/app/services/s3_avatar.py` - Avatar image S3 helpers (delegates to s3_audio)
 - `backend/app/database.py` - SQLAlchemy models (source of truth for schema)
 - `frontend/src/routes/` - TanStack Router file-based routes
 - `frontend/src/components/` - React components
@@ -217,6 +218,7 @@ cd frontend && npm run format:check  # Check formatting
 - Check `backend/.env` has `OPENAI_API_KEY` set
 - For 401 errors: verify Clerk domain config or use `X-Test-User-Id` header in tests
 - SQLite DB at `backend/.notes.db` (can delete for fresh start in dev)
+- **After adding/modifying database models or creating new migrations**, always run `cd backend && uv run alembic upgrade head` before finishing. Tests use a fresh in-memory DB so they pass without migrations, but the local dev SQLite DB will be out of date and cause runtime errors.
 
 ### Frontend
 - Check browser console for API errors
@@ -253,8 +255,9 @@ GitHub Actions workflows run automatically on PRs and pushes to `main`:
 - `backend/tests/test_happy_path.py` - Comprehensive API endpoint tests
 - `backend/tests/test_meals.py` - Meal tracking endpoint tests
 - `backend/tests/test_vinyl.py` - Vinyl collection endpoint tests
+- `backend/tests/test_sharing.py` - Sharing, profiles, friendships, username & avatar tests
 - `frontend/src/components/*.test.tsx` - Component unit tests
-- **Total**: 258 backend tests, 29 frontend tests
+- `frontend/src/routes/settings.test.tsx` - Settings page tests
 
 ## Deployment
 
@@ -286,3 +289,4 @@ See `docs/` for detailed guides:
 - `authentication-flow-explained.md` / `clerk-authentication-setup.md` - Auth patterns
 - `deployment-lessons.md` / `railway-deployment.md` - Production deployment
 - `semantic-organization-spec.md` - Embeddings and semantic search
+- `sharing-architecture.md` - Sharing system, profiles, usernames, avatars, friendships

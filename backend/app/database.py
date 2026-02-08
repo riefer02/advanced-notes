@@ -564,6 +564,98 @@ class VinylEmbedding(Base):
     )
 
 
+# ============================================================================
+# SHARING & COLLABORATION TABLES
+# ============================================================================
+
+
+class UserProfile(Base):
+    """User profile for sharing features (display name, discoverability)."""
+
+    __tablename__ = "user_profiles"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, unique=True, index=True)
+    display_name = Column(String(255), nullable=False)
+    username = Column(String(30), nullable=True)
+    email = Column(String(255), nullable=True, index=True)
+    avatar_url = Column(Text, nullable=True)
+    avatar_storage_key = Column(String(512), nullable=True)
+    bio = Column(Text, nullable=True)
+    discoverable = Column(Boolean, nullable=False, server_default="1")
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_user_profiles_user_id", "user_id", unique=True),
+        Index("idx_user_profiles_username", "username", unique=True),
+        Index("idx_user_profiles_email", "email"),
+        Index("idx_user_profiles_display_name", "display_name"),
+    )
+
+
+class Friendship(Base):
+    """Friend connections between users (request/accept flow)."""
+
+    __tablename__ = "friendships"
+
+    id = Column(String(36), primary_key=True)
+    requester_id = Column(String(255), nullable=False, index=True)
+    addressee_id = Column(String(255), nullable=False, index=True)
+    status = Column(String(20), nullable=False, server_default="pending")
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_friendships_requester", "requester_id"),
+        Index("idx_friendships_addressee", "addressee_id"),
+        Index(
+            "idx_friendships_pair",
+            "requester_id",
+            "addressee_id",
+            unique=True,
+        ),
+        Index("idx_friendships_addressee_status", "addressee_id", "status"),
+    )
+
+
+class ResourceShare(Base):
+    """Per-resource-type sharing grants between users."""
+
+    __tablename__ = "resource_shares"
+
+    id = Column(String(36), primary_key=True)
+    owner_id = Column(String(255), nullable=False, index=True)
+    shared_with_id = Column(String(255), nullable=False, index=True)
+    resource_type = Column(String(50), nullable=False)
+    permission = Column(String(20), nullable=False, server_default="view")
+    status = Column(String(20), nullable=False, server_default="pending")
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_resource_shares_owner", "owner_id"),
+        Index("idx_resource_shares_shared_with", "shared_with_id"),
+        Index(
+            "idx_resource_shares_unique",
+            "owner_id",
+            "shared_with_id",
+            "resource_type",
+            unique=True,
+        ),
+        Index("idx_resource_shares_recipient_status", "shared_with_id", "status"),
+    )
+
+
 def get_database_url() -> str:
     """
     Get database URL from environment, defaulting to SQLite.
