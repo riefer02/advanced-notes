@@ -6,7 +6,7 @@ Uses structured outputs with Pydantic models for reliable JSON responses.
 """
 
 from datetime import date
-from enum import Enum
+from enum import StrEnum
 
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from .openai_provider import chat_model, get_openai_client
 
 
-class MealType(str, Enum):
+class MealType(StrEnum):
     """Type of meal"""
     BREAKFAST = "breakfast"
     LUNCH = "lunch"

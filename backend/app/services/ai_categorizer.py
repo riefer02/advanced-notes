@@ -5,7 +5,7 @@ This module provides an abstraction layer for AI-powered note categorization.
 Uses structured outputs with Pydantic models for reliable JSON responses.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from .openai_provider import chat_model, get_openai_client
 
 
-class CategoryAction(str, Enum):
+class CategoryAction(StrEnum):
     """Action to take with the transcription"""
     APPEND = "append"  # Add to existing folder
     CREATE_FOLDER = "create_folder"  # Create new top-level folder
