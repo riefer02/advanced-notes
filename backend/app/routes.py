@@ -13,6 +13,8 @@ All routes require authentication and are user-scoped.
 
 import base64
 import re
+import secrets
+import string
 from contextlib import suppress
 from functools import wraps
 
@@ -2990,6 +2992,30 @@ def _derive_display_name(email: str | None, user_id: str) -> str:
     return "User"
 
 
+_USERNAME_SUFFIX_CHARS = string.ascii_lowercase + string.digits
+
+
+def _random_suffix(length: int) -> str:
+    return "".join(secrets.choice(_USERNAME_SUFFIX_CHARS) for _ in range(length))
+
+
+def _generate_username(display_name: str, storage) -> str:
+    """Generate a unique username from display_name + random suffix."""
+    # Sanitize display_name into a valid base: lowercase, only alnum
+    base = re.sub(r"[^a-z0-9]", "", display_name.lower())
+    if not base:
+        base = "user"
+    # Truncate so base + _ + 6-char suffix fits in 30 chars
+    base = base[:23]
+
+    for _attempt in range(10):
+        candidate = f"{base}_{_random_suffix(6)}"
+        if not storage.get_username_exists(candidate):
+            return candidate
+    # Extremely unlikely fallback — longer random for guaranteed uniqueness
+    return f"user_{_random_suffix(12)}"
+
+
 @bp.get("/profile")
 @require_auth
 def get_my_profile():
@@ -3002,10 +3028,12 @@ def get_my_profile():
         if not profile:
             email = getattr(g, "user_email", None)
             display_name = getattr(g, "user_name", None) or _derive_display_name(email, user_id)
+            username = _generate_username(display_name, svc.storage)
             profile = svc.storage.create_user_profile(
                 user_id=user_id,
                 display_name=display_name,
                 email=email,
+                username=username,
             )
         return jsonify(_enrich_profile(profile.model_dump()))
     except Exception as e:

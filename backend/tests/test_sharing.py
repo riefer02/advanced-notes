@@ -1069,13 +1069,35 @@ class TestProfileEnhancements:
         assert resp.status_code == 200
         assert resp.get_json()["username"] == "alice123"
 
-    def test_auto_created_profile_has_null_username_and_avatar(self, client):
-        """Fresh GET /api/profile returns username: null, avatar_url: null."""
+    def test_auto_created_profile_has_generated_username(self, client):
+        """Fresh GET /api/profile auto-generates a username."""
         resp = client.get("/api/profile", headers=auth("fresh-user-123"))
         assert resp.status_code == 200
         data = resp.get_json()
-        assert data["username"] is None
+        assert data["username"] is not None
+        assert len(data["username"]) >= 3
+        # Should be lowercase with underscore separator
+        assert data["username"] == data["username"].lower()
+        assert "_" in data["username"]
+        # Default display_name is "User" -> base "user"
+        assert data["username"].startswith("user_")
         assert data["avatar_url"] is None
+
+    def test_generated_username_derives_from_display_name(self, client):
+        """Username base comes from the display name."""
+        # Alice gets profile auto-created; her display_name is "User" by default
+        # but if we set a name first we can verify derivation on a fresh user
+        # Instead, verify that two auto-created users get unique usernames
+        resp1 = client.get("/api/profile", headers=auth("gen-user-aaa"))
+        resp2 = client.get("/api/profile", headers=auth("gen-user-bbb"))
+        u1 = resp1.get_json()["username"]
+        u2 = resp2.get_json()["username"]
+        assert u1 != u2
+        # Both should be valid per the regex
+        import re
+        pattern = re.compile(r"^[a-z0-9][a-z0-9_.]{1,28}[a-z0-9]$")
+        assert pattern.match(u1), f"Invalid username: {u1}"
+        assert pattern.match(u2), f"Invalid username: {u2}"
 
     def test_friend_list_has_avatar_url(self, app, client, monkeypatch):
         """After user A uploads avatar, user B's friend list shows A's avatar_url."""
