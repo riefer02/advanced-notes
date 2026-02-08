@@ -5,15 +5,15 @@ Tests pure utility functions and mocked boto3 operations.
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.services import s3_audio
 from app.services.s3_audio import (
+    _MIME_TO_EXT,
     ObjectHead,
     PresignedRequest,
-    _MIME_TO_EXT,
     base_mime,
     delete_object,
     head_object,
@@ -22,7 +22,6 @@ from app.services.s3_audio import (
     presign_put_object,
     put_object_bytes,
 )
-
 
 # ============================================================================
 # base_mime

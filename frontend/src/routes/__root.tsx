@@ -21,6 +21,7 @@ function RootComponent() {
     pathname.startsWith('/settings') ||
     pathname.startsWith('/todos') ||
     pathname.startsWith('/meals') ||
+    pathname.startsWith('/vinyl') ||
     pathname.startsWith('/feedback')
 
   return (

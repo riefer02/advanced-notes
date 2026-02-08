@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VinylRouteImport } from './routes/vinyl'
 import { Route as TodosRouteImport } from './routes/todos'
 import { Route as SummariesRouteImport } from './routes/summaries'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -20,6 +21,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignUpSplatRouteImport } from './routes/sign-up.$'
 import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
 
+const VinylRoute = VinylRouteImport.update({
+  id: '/vinyl',
+  path: '/vinyl',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TodosRoute = TodosRouteImport.update({
   id: '/todos',
   path: '/todos',
@@ -80,6 +86,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/summaries': typeof SummariesRoute
   '/todos': typeof TodosRoute
+  '/vinyl': typeof VinylRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
 }
@@ -92,6 +99,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/summaries': typeof SummariesRoute
   '/todos': typeof TodosRoute
+  '/vinyl': typeof VinylRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
 }
@@ -105,6 +113,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/summaries': typeof SummariesRoute
   '/todos': typeof TodosRoute
+  '/vinyl': typeof VinylRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
 }
@@ -119,6 +128,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/summaries'
     | '/todos'
+    | '/vinyl'
     | '/sign-in/$'
     | '/sign-up/$'
   fileRoutesByTo: FileRoutesByTo
@@ -131,6 +141,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/summaries'
     | '/todos'
+    | '/vinyl'
     | '/sign-in/$'
     | '/sign-up/$'
   id:
@@ -143,6 +154,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/summaries'
     | '/todos'
+    | '/vinyl'
     | '/sign-in/$'
     | '/sign-up/$'
   fileRoutesById: FileRoutesById
@@ -156,12 +168,20 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SummariesRoute: typeof SummariesRoute
   TodosRoute: typeof TodosRoute
+  VinylRoute: typeof VinylRoute
   SignInSplatRoute: typeof SignInSplatRoute
   SignUpSplatRoute: typeof SignUpSplatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/vinyl': {
+      id: '/vinyl'
+      path: '/vinyl'
+      fullPath: '/vinyl'
+      preLoaderRoute: typeof VinylRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/todos': {
       id: '/todos'
       path: '/todos'
@@ -244,6 +264,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SummariesRoute: SummariesRoute,
   TodosRoute: TodosRoute,
+  VinylRoute: VinylRoute,
   SignInSplatRoute: SignInSplatRoute,
   SignUpSplatRoute: SignUpSplatRoute,
 }

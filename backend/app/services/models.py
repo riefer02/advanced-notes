@@ -333,3 +333,107 @@ class CreateFeedbackRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=255, description="Feedback title")
     description: str | None = Field(None, max_length=5000, description="Detailed description")
     rating: int | None = Field(None, ge=1, le=5, description="Optional 1-5 rating")
+
+
+# ============================================================================
+# VINYL COLLECTION MODELS
+# ============================================================================
+
+
+class VinylTrack(BaseModel):
+    """A track on a vinyl record"""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    user_id: str = Field(..., description="Clerk user ID")
+    vinyl_record_id: str = Field(..., description="Parent vinyl record ID")
+    side: str | None = Field(None, description="Side: A, B, C, D")
+    position: int | None = Field(None, ge=1, description="Track position on side")
+    title: str = Field(..., min_length=1, max_length=500, description="Track title")
+    duration: str | None = Field(None, description="Duration in M:SS or MM:SS format")
+    created_at: datetime = Field(default_factory=datetime.now)
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class VinylImage(BaseModel):
+    """Image associated with a vinyl record"""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    user_id: str = Field(..., description="Clerk user ID")
+    vinyl_record_id: str = Field(..., description="Parent vinyl record ID")
+    image_type: str = Field(..., description="front_cover, back_cover, label, inner_sleeve, other")
+    storage_key: str
+    mime_type: str
+    bytes: int = Field(..., ge=1)
+    status: str = Field(default="pending")
+    created_at: datetime = Field(default_factory=datetime.now)
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class VinylRecord(BaseModel):
+    """Complete vinyl record with metadata"""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    user_id: str = Field(..., description="Clerk user ID")
+    artist: str = Field(..., min_length=1, max_length=500, description="Artist name")
+    album_title: str = Field(..., min_length=1, max_length=500, description="Album title")
+    release_year: int | None = Field(None, description="Release year")
+    genre: list[str] = Field(default_factory=list, description="Genre tags")
+    label: str | None = Field(None, description="Record label name")
+    catalog_number: str | None = Field(None, description="Catalog number")
+    format: str | None = Field(None, description="LP, 7\", 10\", 12\"")
+    pressing_country: str | None = Field(None, description="Country of pressing")
+    color: str | None = Field(None, description="Vinyl color (special pressings)")
+    condition: str | None = Field(None, description="Mint/VG+/VG/G+/G/Fair/Poor")
+    notes: str | None = Field(None, description="Freeform user notes")
+    extraction_status: str = Field(default="manual", description="pending/completed/failed/manual")
+    extraction_confidence: float | None = Field(None, ge=0.0, le=1.0)
+    cover_image_id: str | None = Field(None, description="FK to vinyl_images for grid display")
+    tracks: list[VinylTrack] = Field(default_factory=list, description="Tracklist")
+    images: list[VinylImage] = Field(default_factory=list, description="Associated images")
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class CreateVinylRecordRequest(BaseModel):
+    """Request body for creating a vinyl record"""
+    artist: str = Field(..., min_length=1, max_length=500, description="Artist name")
+    album_title: str = Field(..., min_length=1, max_length=500, description="Album title")
+    release_year: int | None = Field(None, description="Release year")
+    genre: list[str] = Field(default_factory=list, description="Genre tags")
+    label: str | None = Field(None, description="Record label name")
+    catalog_number: str | None = Field(None, description="Catalog number")
+    format: str | None = Field(None, description="LP, 7\", 10\", 12\"")
+    pressing_country: str | None = Field(None, description="Country of pressing")
+    color: str | None = Field(None, description="Vinyl color")
+    condition: str | None = Field(None, description="Condition grade")
+    notes: str | None = Field(None, description="Freeform notes")
+
+
+class UpdateVinylRecordRequest(BaseModel):
+    """Request body for updating a vinyl record"""
+    artist: str | None = Field(None, min_length=1, max_length=500)
+    album_title: str | None = Field(None, min_length=1, max_length=500)
+    release_year: int | None = None
+    genre: list[str] | None = None
+    label: str | None = None
+    catalog_number: str | None = None
+    format: str | None = None
+    pressing_country: str | None = None
+    color: str | None = None
+    condition: str | None = None
+    notes: str | None = None
+    extraction_status: str | None = None
+    extraction_confidence: float | None = Field(None, ge=0.0, le=1.0)
+    cover_image_id: str | None = None
+    tracks: list[dict] | None = Field(None, description="Full tracklist replacement")
+
+
+class VinylImageUploadRequest(BaseModel):
+    """Request body for creating a pending vinyl image upload"""
+    image_type: str = Field(..., description="front_cover, back_cover, label, inner_sleeve, other")
+    mime_type: str = Field(..., min_length=1, description="MIME type of the image")
+    bytes: int = Field(..., ge=1, description="Size in bytes")

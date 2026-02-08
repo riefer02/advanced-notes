@@ -10,7 +10,6 @@ from flask import Flask
 
 from app.auth import get_auth_token
 
-
 # ============================================================================
 # FIXTURES
 # ============================================================================
@@ -95,11 +94,12 @@ def test_get_auth_token_with_extra_spaces(app):
 
 def test_require_auth_with_test_user_header():
     """Test user header works in testing mode."""
+    import tempfile
+    from pathlib import Path
+
     from app import create_app
     from app.services.container import Services
     from app.services.storage import NoteStorage
-    from pathlib import Path
-    import tempfile
 
     with tempfile.TemporaryDirectory() as tmp:
         test_db = Path(tmp) / "test.db"
@@ -133,6 +133,11 @@ def test_require_auth_with_test_user_header():
             def extract(self, *a, **k):
                 raise AssertionError("not called")
 
+        class _FakeVinylExtractor:
+            model = "gpt-4.1-mini"
+            def extract(self, *a, **k):
+                raise AssertionError("not called")
+
         class _FakeUsageTracking:
             def record_usage(self, **k):
                 return "test-id"
@@ -160,6 +165,7 @@ def test_require_auth_with_test_user_header():
             categorizer=_FakeCategorizer(),
             summarizer=_FakeSummarizer(),
             meal_extractor=_FakeMealExtractor(),
+            vinyl_extractor=_FakeVinylExtractor(),
             usage_tracking=_FakeUsageTracking(),
             email=_FakeEmailService(),
         )
@@ -178,11 +184,12 @@ def test_require_auth_with_test_user_header():
 
 def test_require_auth_returns_401_without_token():
     """Returns 401 when no token is provided (non-testing mode)."""
+    import tempfile
+    from pathlib import Path
+
     from app import create_app
     from app.services.container import Services
     from app.services.storage import NoteStorage
-    from pathlib import Path
-    import tempfile
 
     with tempfile.TemporaryDirectory() as tmp:
         test_db = Path(tmp) / "test.db"
@@ -215,6 +222,11 @@ def test_require_auth_returns_401_without_token():
             def extract(self, *a, **k):
                 raise AssertionError("not called")
 
+        class _FakeVinylExtractor:
+            model = "gpt-4.1-mini"
+            def extract(self, *a, **k):
+                raise AssertionError("not called")
+
         class _FakeUsageTracking:
             def record_usage(self, **k):
                 return "test-id"
@@ -242,6 +254,7 @@ def test_require_auth_returns_401_without_token():
             categorizer=_FakeCategorizer(),
             summarizer=_FakeSummarizer(),
             meal_extractor=_FakeMealExtractor(),
+            vinyl_extractor=_FakeVinylExtractor(),
             usage_tracking=_FakeUsageTracking(),
             email=_FakeEmailService(),
         )

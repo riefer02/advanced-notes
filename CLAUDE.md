@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Chisos is a production-ready notes application with audio transcription and AI-powered categorization. It's a full-stack monorepo with a Flask/Python backend and React/TypeScript frontend.
+Chisos is a personal productivity platform. It started as an AI-powered notes app and has grown to include meal tracking, task management, and a vinyl record collection. Full-stack monorepo with a Flask/Python backend and React/TypeScript frontend.
 
 ## Commands
 
@@ -48,8 +48,10 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 
 ### Key Directories
 - `backend/app/routes.py` - REST API endpoints
-- `backend/app/services/` - Business logic (storage, AI categorization, embeddings, S3, usage tracking)
+- `backend/app/services/` - Business logic (storage, AI categorization, embeddings, S3, usage tracking, extractors)
 - `backend/app/services/usage_tracking.py` - Rate limiting and API usage tracking
+- `backend/app/services/s3_audio.py` - Core S3 operations (shared by all S3 features)
+- `backend/app/services/s3_vinyl.py` - Vinyl image S3 helpers (delegates to s3_audio)
 - `backend/app/database.py` - SQLAlchemy models (source of truth for schema)
 - `frontend/src/routes/` - TanStack Router file-based routes
 - `frontend/src/components/` - React components
@@ -66,6 +68,20 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 **Testing Seam**: When `app.config["TESTING"] == True`, authenticate with `X-Test-User-Id` header instead of Clerk JWT.
 
 **Rate Limiting**: Routes that call OpenAI APIs use `@require_quota(service_type)` decorator. Returns 429 when monthly quota exceeded. Service types: `"transcription"` (100 min/month) and `"ai_calls"` (500 calls/month for chat/categorize/summarize).
+
+**S3 File Uploads**: Browser clients upload files to the backend via multipart form data. The backend uploads to S3 server-side (`put_object_bytes`). Never use presigned PUT URLs for browser uploads (CORS issues). Presigned GET URLs are generated at response time for viewing. See `docs/audio-clips-s3.md` for the full pattern.
+
+**Feature Modules**: Each major feature has its own set of files following the same pattern:
+- ORM models in `database.py`
+- Pydantic DTOs in `services/models.py`
+- Storage methods in `services/storage.py`
+- Service class in `services/` (e.g. `meal_extractor.py`, `vinyl_extractor.py`)
+- Registered in `services/container.py`
+- API endpoints in `routes.py`
+- Frontend types + API functions in `lib/api.ts`
+- TanStack Query hooks in `hooks/`
+- Components in `components/`
+- File-based route in `routes/`
 
 ### Usage Tracking
 
@@ -84,6 +100,8 @@ All OpenAI API calls are tracked for billing/analytics:
 - `POST /api/meals/transcribe` - transcription quota
 - `POST /api/summarize` - ai_calls quota
 - `POST /api/ask` - ai_calls quota
+- `POST /api/vinyl/extract-photos` - ai_calls quota
+- `POST /api/vinyl/<id>/extract` - ai_calls quota
 
 **Default Limits (Free Tier):**
 | Resource | Monthly Limit |
@@ -215,6 +233,9 @@ GitHub Actions workflows run automatically on PRs and pushes to `main`:
 - Runs pytest with coverage (minimum 50% required)
 - Uploads coverage report as artifact
 
+### Migrations CI (`.github/workflows/ci-migrations-postgres.yml`)
+- Tests Alembic migrations against PostgreSQL
+
 ### Frontend CI (`.github/workflows/ci-frontend-tests.yml`)
 - Triggers on changes to `frontend/**`
 - Runs ESLint
@@ -231,16 +252,37 @@ GitHub Actions workflows run automatically on PRs and pushes to `main`:
 - `backend/tests/test_api_routes.py` - Audio clip endpoint tests
 - `backend/tests/test_happy_path.py` - Comprehensive API endpoint tests
 - `backend/tests/test_meals.py` - Meal tracking endpoint tests
+- `backend/tests/test_vinyl.py` - Vinyl collection endpoint tests
 - `frontend/src/components/*.test.tsx` - Component unit tests
-- **Total**: 227 backend tests, 29 frontend tests
+- **Total**: 258 backend tests, 29 frontend tests
+
+## Deployment
+
+Production runs on Railway via `backend/Procfile`:
+```
+web: python migrate.py && gunicorn -w 4 -b 0.0.0.0:$PORT wsgi:app
+```
+Migrations run automatically before the app starts. Entry point is `backend/wsgi.py`.
 
 ## Environment Variables
 
 Backend (`backend/.env`):
 - `OPENAI_API_KEY` - Required for transcription and AI
 - `CLERK_DOMAIN` - JWT issuer domain
+- `DATABASE_URL` - PostgreSQL connection string (prod); omit for SQLite (dev)
 - `AUDIO_CLIPS_ENABLED` - Feature flag for S3 audio storage
+- `S3_BUCKET`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` - S3 storage (required for audio clips and vinyl images)
+- `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `ADMIN_EMAIL` - Email notifications (optional)
 
 Frontend (`frontend/.env.local`):
 - `VITE_CLERK_PUBLISHABLE_KEY` - Clerk public key
 - `VITE_API_URL` - Backend URL (default: http://localhost:5001)
+
+## Additional Documentation
+
+See `docs/` for detailed guides:
+- `audio-clips-s3.md` - S3 storage patterns, upload flows, and best practices for adding new S3-backed features
+- `ai-service-implementation.md` - Adding AI/OpenAI-powered services
+- `authentication-flow-explained.md` / `clerk-authentication-setup.md` - Auth patterns
+- `deployment-lessons.md` / `railway-deployment.md` - Production deployment
+- `semantic-organization-spec.md` - Embeddings and semantic search

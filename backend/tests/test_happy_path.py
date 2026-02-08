@@ -14,7 +14,6 @@ from app.services.container import Services
 from app.services.models import NoteMetadata
 from app.services.storage import NoteStorage
 
-
 # ============================================================================
 # TEST FAKES
 # ============================================================================
@@ -146,6 +145,13 @@ class _FakeMealExtractor:
         raise AssertionError("meal extractor should not be called in these tests")
 
 
+class _FakeVinylExtractor:
+    model = "gpt-4.1-mini"
+
+    def extract(self, image_urls):
+        raise AssertionError("vinyl extractor should not be called in happy path tests")
+
+
 class _FakeEmailService:
     """Fake email service for tests."""
 
@@ -243,6 +249,7 @@ def app(tmp_path: Path, monkeypatch):  # noqa: ANN001
         categorizer=_FakeCategorizer(),
         summarizer=_FakeSummarizer(),
         meal_extractor=_FakeMealExtractor(),
+        vinyl_extractor=_FakeVinylExtractor(),
         usage_tracking=_FakeUsageTracking(),
         email=_FakeEmailService(),
     )
