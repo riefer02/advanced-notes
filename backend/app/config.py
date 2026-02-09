@@ -102,6 +102,11 @@ class Config:
     SES_ACCESS_KEY_ID: str | None = os.getenv("SES_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID")
     SES_SECRET_ACCESS_KEY: str | None = os.getenv("SES_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY")
 
+    # Cost alerting
+    MONTHLY_COST_ALERT_THRESHOLD_USD: float = float(
+        os.getenv("MONTHLY_COST_ALERT_THRESHOLD_USD", "5.0")
+    )
+
     @classmethod
     def email_enabled(cls) -> bool:
         """
