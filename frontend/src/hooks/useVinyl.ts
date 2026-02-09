@@ -24,6 +24,7 @@ interface VinylListParams {
   sort_by?: string
   limit?: number
   offset?: number
+  owner?: string
 }
 
 export function useVinylRecords(params?: VinylListParams) {
@@ -33,25 +34,25 @@ export function useVinylRecords(params?: VinylListParams) {
   })
 }
 
-export function useVinylRecord(recordId: string | null) {
+export function useVinylRecord(recordId: string | null, owner?: string) {
   return useQuery({
-    queryKey: ['vinyl', recordId],
-    queryFn: () => fetchVinylRecord(recordId!),
+    queryKey: ['vinyl', recordId, owner],
+    queryFn: () => fetchVinylRecord(recordId!, owner),
     enabled: !!recordId,
   })
 }
 
-export function useVinylStats() {
+export function useVinylStats(owner?: string) {
   return useQuery({
-    queryKey: ['vinylStats'],
-    queryFn: fetchVinylStats,
+    queryKey: ['vinylStats', owner],
+    queryFn: () => fetchVinylStats(owner),
   })
 }
 
-export function useVinylSearch(query: string) {
+export function useVinylSearch(query: string, owner?: string) {
   return useQuery({
-    queryKey: ['vinylSearch', query],
-    queryFn: () => searchVinylRecords(query),
+    queryKey: ['vinylSearch', query, owner],
+    queryFn: () => searchVinylRecords(query, undefined, undefined, owner),
     enabled: query.length >= 2,
   })
 }

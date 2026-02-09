@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranscribeAudio } from '../hooks/useNotes'
 import type { TranscriptionResponse } from '../lib/api'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 
 interface AudioUploaderProps {
   recordButtonRef?: React.RefObject<HTMLButtonElement>
@@ -165,11 +167,11 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
             {!isRecording ? (
-              <button
+              <Button
                 ref={recordButtonRef}
                 onClick={startRecording}
                 disabled={transcribeMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                className="bg-linear-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                   <path
@@ -179,15 +181,12 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
                   />
                 </svg>
                 Start Recording
-              </button>
+              </Button>
             ) : (
-              <button
-                onClick={stopRecording}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium transition-colors"
-              >
+              <Button variant="secondary" onClick={stopRecording}>
                 <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
                 Stop Recording ({formatTime(recordingTime)})
-              </button>
+              </Button>
             )}
           </div>
           {!isRecording && (
@@ -226,18 +225,18 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
       )}
 
       {transcribeMutation.isError && (
-        <div className="rounded-lg bg-red-50 p-4 border border-red-200">
-          <h3 className="text-sm font-semibold text-red-800">Error</h3>
-          <p className="text-sm text-red-700 mt-1">
+        <Alert variant="destructive">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
             {transcribeMutation.error instanceof Error
               ? transcribeMutation.error.message
               : 'Transcription failed'}
-          </p>
-        </div>
+          </AlertDescription>
+        </Alert>
       )}
 
       {lastResult && (
-        <div className="rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 p-6 border-2 border-green-200 shadow-sm">
+        <div className="rounded-xl bg-linear-to-br from-green-50 to-emerald-50 p-6 border-2 border-green-200 shadow-xs">
           <div className="flex items-center gap-2 mb-3">
             <svg className="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
               <path

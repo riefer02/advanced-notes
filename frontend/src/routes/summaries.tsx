@@ -4,14 +4,18 @@ import { useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 import SlideOver from '../components/ui/SlideOver'
+import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import NoteDetail from '../components/NoteDetail'
 import { fetchNote } from '../lib/api'
-import type { AskHistoryItem, DigestHistoryItem, Note } from '../lib/api'
+import type { AskHistoryItem, DigestHistoryItem, DigestResult, Note } from '../lib/api'
 import {
   useAskHistory,
   useDigests,
   useDeleteAskHistoryItem,
   useDeleteDigest,
+  useGenerateSummary,
 } from '../hooks/useNotes'
 
 export const Route = createFileRoute('/summaries')({
@@ -29,12 +33,16 @@ function SummariesPage() {
 
   const deleteDigestMutation = useDeleteDigest()
   const deleteAskMutation = useDeleteAskHistoryItem()
+  const generateSummaryMutation = useGenerateSummary()
 
   const [selectedDigest, setSelectedDigest] = useState<DigestHistoryItem | null>(null)
   const [selectedAsk, setSelectedAsk] = useState<AskHistoryItem | null>(null)
 
   const [selectedSourceNote, setSelectedSourceNote] = useState<Note | null>(null)
   const [isLoadingSourceNote, setIsLoadingSourceNote] = useState(false)
+
+  const [inlineResult, setInlineResult] = useState<DigestResult | null>(null)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
 
   const parsedDigest = useMemo(() => {
     if (!selectedDigest) return null
@@ -96,6 +104,20 @@ function SummariesPage() {
     setSelectedAsk(null)
   }
 
+  const handleGenerateSummary = () => {
+    setSummaryError(null)
+    setInlineResult(null)
+    generateSummaryMutation.mutate(undefined, {
+      onSuccess: (data) => {
+        setInlineResult(data)
+        setTab('digests')
+      },
+      onError: (error) => {
+        setSummaryError(error instanceof Error ? error.message : 'Failed to generate summary')
+      },
+    })
+  }
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -114,29 +136,74 @@ function SummariesPage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-xl font-semibold text-gray-900">Summaries</h2>
+          <Button onClick={handleGenerateSummary} loading={generateSummaryMutation.isPending}>
+            Generate Summary
+          </Button>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setTab('digests')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-              tab === 'digests'
-                ? 'bg-purple-50 text-purple-800 border-purple-200'
-                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            Digests
-          </button>
-          <button
-            onClick={() => setTab('ask')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-              tab === 'ask'
-                ? 'bg-blue-50 text-blue-800 border-blue-200'
-                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            Ask History
-          </button>
-        </div>
+
+        {summaryError && (
+          <Alert variant="destructive">
+            <AlertDescription className="flex items-center justify-between">
+              <span>{summaryError}</span>
+              <button
+                onClick={() => setSummaryError(null)}
+                className="text-red-600 hover:text-red-800 text-sm font-medium"
+              >
+                Dismiss
+              </button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {inlineResult && (
+          <Alert variant="accent" className="rounded-xl p-6">
+            <AlertDescription>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-purple-900">New Summary</h3>
+                <button
+                  onClick={() => setInlineResult(null)}
+                  className="text-purple-600 hover:text-purple-800 text-sm font-medium"
+                >
+                  Dismiss
+                </button>
+              </div>
+              <div className="prose prose-purple max-w-none text-sm mb-4">
+                <ReactMarkdown>{inlineResult.summary}</ReactMarkdown>
+              </div>
+              {inlineResult.key_themes.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-sm font-semibold text-purple-800 uppercase tracking-wider mb-2">
+                    Key Themes
+                  </h4>
+                  <ul className="space-y-1 text-sm text-gray-800 list-disc pl-5">
+                    {inlineResult.key_themes.map((theme, i) => (
+                      <li key={i}>{theme}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {inlineResult.action_items.length > 0 && (
+                <div className="pt-4 border-t border-purple-200">
+                  <h4 className="text-sm font-semibold text-purple-800 uppercase tracking-wider mb-2">
+                    Action Items
+                  </h4>
+                  <ul className="space-y-1 text-sm text-gray-800 list-disc pl-5">
+                    {inlineResult.action_items.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+          <TabsList>
+            <TabsTrigger value="digests">Digests</TabsTrigger>
+            <TabsTrigger value="ask">Ask History</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {tab === 'digests' ? (
           <DigestList
@@ -203,12 +270,13 @@ function SummariesPage() {
             ) : null}
 
             <div className="pt-4 border-t">
-              <button
+              <Button
+                variant="destructive"
                 onClick={() => void handleDeleteDigest(selectedDigest.id)}
-                className="w-full px-4 py-2 rounded-lg border border-red-200 text-red-700 hover:bg-red-50 text-sm font-medium transition-colors"
+                className="w-full"
               >
                 Delete Digest
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -225,12 +293,14 @@ function SummariesPage() {
             <div className="text-xs text-gray-500">
               {new Date(selectedAsk.created_at).toLocaleString()}
             </div>
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
-              <div className="text-xs font-semibold text-blue-900 uppercase tracking-wider mb-1">
-                Question
-              </div>
-              <div className="text-sm text-blue-900">{selectedAsk.query}</div>
-            </div>
+            <Alert variant="info">
+              <AlertDescription>
+                <div className="text-xs font-semibold text-blue-900 uppercase tracking-wider mb-1">
+                  Question
+                </div>
+                <div className="text-sm text-blue-900">{selectedAsk.query}</div>
+              </AlertDescription>
+            </Alert>
             <div className="prose prose-blue max-w-none">
               <ReactMarkdown>{selectedAsk.answer_markdown}</ReactMarkdown>
             </div>
@@ -243,7 +313,7 @@ function SummariesPage() {
                     <button
                       key={nid}
                       onClick={() => void openSourceNote(nid)}
-                      className="w-full text-left rounded-lg border border-gray-200 bg-white p-3 hover:border-blue-300 hover:shadow-sm transition"
+                      className="w-full text-left rounded-lg border border-gray-200 bg-white p-3 hover:border-blue-300 hover:shadow-xs transition"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
@@ -253,7 +323,7 @@ function SummariesPage() {
                           </div>
                         </div>
                         <svg
-                          className="h-5 w-5 text-gray-400 flex-shrink-0"
+                          className="h-5 w-5 text-gray-400 shrink-0"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -273,12 +343,13 @@ function SummariesPage() {
             ) : null}
 
             <div className="pt-4 border-t">
-              <button
+              <Button
+                variant="destructive"
                 onClick={() => void handleDeleteAsk(selectedAsk.id)}
-                className="w-full px-4 py-2 rounded-lg border border-red-200 text-red-700 hover:bg-red-50 text-sm font-medium transition-colors"
+                className="w-full"
               >
                 Delete Ask History Item
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -322,7 +393,7 @@ function DigestList(props: {
         <button
           key={d.id}
           onClick={() => props.onSelect(d)}
-          className="w-full text-left rounded-lg border border-gray-200 bg-white p-4 hover:border-purple-300 hover:shadow-sm transition"
+          className="w-full text-left rounded-lg border border-gray-200 bg-white p-4 hover:border-purple-300 hover:shadow-xs transition"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -332,7 +403,7 @@ function DigestList(props: {
               </div>
             </div>
             <svg
-              className="h-5 w-5 text-gray-400 flex-shrink-0"
+              className="h-5 w-5 text-gray-400 shrink-0"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -368,7 +439,7 @@ function AskHistoryList(props: {
         <button
           key={d.id}
           onClick={() => props.onSelect(d)}
-          className="w-full text-left rounded-lg border border-gray-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition"
+          className="w-full text-left rounded-lg border border-gray-200 bg-white p-4 hover:border-blue-300 hover:shadow-xs transition"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -378,7 +449,7 @@ function AskHistoryList(props: {
               </div>
             </div>
             <svg
-              className="h-5 w-5 text-gray-400 flex-shrink-0"
+              className="h-5 w-5 text-gray-400 shrink-0"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"

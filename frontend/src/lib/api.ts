@@ -830,6 +830,7 @@ export interface MealsCalendarEntry {
   id: string
   meal_type: MealType
   item_count: number
+  user_id?: string
 }
 
 export interface MealsCalendarResponse {
@@ -887,6 +888,7 @@ export async function fetchMeals(params: {
   meal_type?: MealType
   limit?: number
   offset?: number
+  calendar_owner?: string
 }): Promise<MealsResponse> {
   return apiRequest<MealsResponse>('GET', '/api/meals', { params })
 }
@@ -896,10 +898,11 @@ export async function fetchMeals(params: {
  */
 export async function fetchMealsCalendar(
   year: number,
-  month: number
+  month: number,
+  calendarOwner?: string
 ): Promise<MealsCalendarResponse> {
   return apiRequest<MealsCalendarResponse>('GET', '/api/meals/calendar', {
-    params: { year, month },
+    params: { year, month, calendar_owner: calendarOwner },
   })
 }
 
@@ -1059,12 +1062,15 @@ export async function fetchVinylRecords(params?: {
   sort_by?: string
   limit?: number
   offset?: number
+  owner?: string
 }): Promise<VinylRecordsResponse> {
   return apiRequest<VinylRecordsResponse>('GET', '/api/vinyl', { params })
 }
 
-export async function fetchVinylRecord(recordId: string): Promise<VinylRecord> {
-  return apiRequest<VinylRecord>('GET', `/api/vinyl/${recordId}`)
+export async function fetchVinylRecord(recordId: string, owner?: string): Promise<VinylRecord> {
+  return apiRequest<VinylRecord>('GET', `/api/vinyl/${recordId}`, {
+    params: owner ? { owner } : undefined,
+  })
 }
 
 export async function createVinylRecord(data: {
@@ -1110,17 +1116,20 @@ export async function deleteVinylRecord(recordId: string): Promise<void> {
   await apiRequest<{ success: boolean }>('DELETE', `/api/vinyl/${recordId}`)
 }
 
-export async function fetchVinylStats(): Promise<VinylStatsResponse> {
-  return apiRequest<VinylStatsResponse>('GET', '/api/vinyl/stats')
+export async function fetchVinylStats(owner?: string): Promise<VinylStatsResponse> {
+  return apiRequest<VinylStatsResponse>('GET', '/api/vinyl/stats', {
+    params: owner ? { owner } : undefined,
+  })
 }
 
 export async function searchVinylRecords(
   query: string,
   limit?: number,
-  offset?: number
+  offset?: number,
+  owner?: string
 ): Promise<VinylSearchResponse> {
   return apiRequest<VinylSearchResponse>('GET', '/api/vinyl/search', {
-    params: { q: query, limit, offset },
+    params: { q: query, limit, offset, owner },
   })
 }
 
@@ -1148,11 +1157,13 @@ export async function uploadVinylImage(
 
 export async function getVinylImageUrl(
   recordId: string,
-  imageId: string
+  imageId: string,
+  owner?: string
 ): Promise<{ url: string; expires_at: string }> {
   return apiRequest<{ url: string; expires_at: string }>(
     'GET',
-    `/api/vinyl/${recordId}/images/${imageId}/url`
+    `/api/vinyl/${recordId}/images/${imageId}/url`,
+    { params: owner ? { owner } : undefined }
   )
 }
 
@@ -1181,6 +1192,72 @@ export async function extractVinylFromPhotos(files: File[]): Promise<VinylExtrac
   }
 
   return response.json()
+}
+
+// ============================================================================
+// Sharing & Collaboration Types
+// ============================================================================
+
+export interface UserProfile {
+  id: string
+  user_id: string
+  display_name: string
+  username: string | null
+  email: string | null
+  avatar_url: string | null
+  bio: string | null
+  discoverable: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface Friendship {
+  id: string
+  requester_id: string
+  addressee_id: string
+  status: 'pending' | 'accepted' | 'declined'
+  requester_profile?: UserProfile
+  addressee_profile?: UserProfile
+  created_at: string
+  updated_at: string
+}
+
+export interface ResourceShare {
+  id: string
+  owner_id: string
+  shared_with_id: string
+  resource_type: string
+  permission: 'view' | 'edit'
+  status: 'pending' | 'accepted' | 'declined' | 'revoked'
+  owner_profile?: UserProfile
+  shared_with_profile?: UserProfile
+  created_at: string
+  updated_at: string
+}
+
+export interface FriendsListResponse {
+  friends: Friendship[]
+}
+
+export interface FriendRequestsResponse {
+  requests: Friendship[]
+}
+
+export interface SentRequestsResponse {
+  sent: Friendship[]
+}
+
+export interface SharesResponse {
+  owned: ResourceShare[]
+  received: ResourceShare[]
+}
+
+export interface ReceivedSharesResponse {
+  received: ResourceShare[]
+}
+
+export interface UserSearchResponse {
+  users: UserProfile[]
 }
 
 // ============================================================================
@@ -1230,4 +1307,137 @@ export async function fetchFeedback(params?: {
   offset?: number
 }): Promise<FeedbackListResponse> {
   return apiRequest<FeedbackListResponse>('GET', '/api/feedback', { params })
+}
+
+// ============================================================================
+// Profile API Functions
+// ============================================================================
+
+export async function fetchMyProfile(): Promise<UserProfile> {
+  return apiRequest<UserProfile>('GET', '/api/profile')
+}
+
+export async function updateProfile(data: {
+  display_name?: string
+  username?: string | null
+  bio?: string
+  discoverable?: boolean
+}): Promise<UserProfile> {
+  return apiRequest<UserProfile>('PUT', '/api/profile', { body: data })
+}
+
+export async function fetchUserProfile(userId: string): Promise<UserProfile> {
+  return apiRequest<UserProfile>('GET', `/api/users/${userId}/profile`)
+}
+
+export async function uploadAvatar(file: File): Promise<UserProfile> {
+  const headers = new Headers(await getAuthHeaders())
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await fetch(`${API_BASE_URL}/api/profile/avatar`, {
+    method: 'PUT',
+    headers,
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    let errorMessage: string
+    try {
+      const errorJson = JSON.parse(errorText)
+      errorMessage = errorJson.error || `Upload failed: ${response.status}`
+    } catch {
+      errorMessage = errorText || `Upload failed: ${response.status}`
+    }
+    throw new Error(errorMessage)
+  }
+
+  return response.json()
+}
+
+export async function deleteAvatar(): Promise<UserProfile> {
+  return apiRequest<UserProfile>('DELETE', '/api/profile/avatar')
+}
+
+export async function checkUsernameAvailable(
+  username: string
+): Promise<{ available: boolean; reason?: string }> {
+  return apiRequest<{ available: boolean; reason?: string }>(
+    'GET',
+    '/api/profile/username-available',
+    { params: { username } }
+  )
+}
+
+// ============================================================================
+// Friends API Functions
+// ============================================================================
+
+export async function fetchFriends(): Promise<FriendsListResponse> {
+  return apiRequest<FriendsListResponse>('GET', '/api/friends')
+}
+
+export async function fetchFriendRequests(): Promise<FriendRequestsResponse> {
+  return apiRequest<FriendRequestsResponse>('GET', '/api/friends/requests')
+}
+
+export async function fetchSentRequests(): Promise<SentRequestsResponse> {
+  return apiRequest<SentRequestsResponse>('GET', '/api/friends/sent')
+}
+
+export async function sendFriendRequest(userId: string): Promise<Friendship> {
+  return apiRequest<Friendship>('POST', '/api/friends/request', {
+    body: { user_id: userId },
+  })
+}
+
+export async function acceptFriendRequest(friendshipId: string): Promise<Friendship> {
+  return apiRequest<Friendship>('POST', `/api/friends/${friendshipId}/accept`)
+}
+
+export async function declineFriendRequest(friendshipId: string): Promise<Friendship> {
+  return apiRequest<Friendship>('POST', `/api/friends/${friendshipId}/decline`)
+}
+
+export async function removeFriend(friendshipId: string): Promise<void> {
+  await apiRequest<{ success: boolean }>('DELETE', `/api/friends/${friendshipId}`)
+}
+
+export async function searchUsers(query: string): Promise<UserSearchResponse> {
+  return apiRequest<UserSearchResponse>('GET', '/api/friends/search', {
+    params: { q: query },
+  })
+}
+
+// ============================================================================
+// Shares API Functions
+// ============================================================================
+
+export async function createShare(data: {
+  shared_with_id: string
+  resource_type: string
+  permission: 'view' | 'edit'
+}): Promise<ResourceShare> {
+  return apiRequest<ResourceShare>('POST', '/api/shares', { body: data })
+}
+
+export async function fetchShares(): Promise<SharesResponse> {
+  return apiRequest<SharesResponse>('GET', '/api/shares')
+}
+
+export async function fetchReceivedShares(): Promise<ReceivedSharesResponse> {
+  return apiRequest<ReceivedSharesResponse>('GET', '/api/shares/received')
+}
+
+export async function acceptShare(shareId: string): Promise<ResourceShare> {
+  return apiRequest<ResourceShare>('POST', `/api/shares/${shareId}/accept`)
+}
+
+export async function declineShare(shareId: string): Promise<ResourceShare> {
+  return apiRequest<ResourceShare>('POST', `/api/shares/${shareId}/decline`)
+}
+
+export async function revokeShare(shareId: string): Promise<void> {
+  await apiRequest<{ success: boolean }>('DELETE', `/api/shares/${shareId}`)
 }

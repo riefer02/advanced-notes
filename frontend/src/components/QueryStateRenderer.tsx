@@ -93,10 +93,10 @@ export function ListLoadingSkeleton({ count = 3 }: { count?: number }) {
     <div className="space-y-3" role="status" aria-label="Loading">
       {[...Array(count)].map((_, i) => (
         <div key={i} className="rounded-lg border border-gray-200 bg-white p-4 animate-pulse">
-          <div className="h-5 bg-gray-200 rounded w-3/4 mb-3" />
+          <div className="h-5 bg-gray-200 rounded-sm w-3/4 mb-3" />
           <div className="flex items-center gap-3 mb-3">
-            <div className="h-3 bg-gray-200 rounded w-24" />
-            <div className="h-3 bg-gray-200 rounded w-20" />
+            <div className="h-3 bg-gray-200 rounded-sm w-24" />
+            <div className="h-3 bg-gray-200 rounded-sm w-20" />
           </div>
         </div>
       ))}

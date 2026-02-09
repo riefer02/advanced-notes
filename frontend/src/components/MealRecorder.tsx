@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranscribeMeal } from '../hooks/useMeals'
 import type { MealTranscriptionResponse, MealType } from '../lib/api'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 
 const MEAL_TYPE_LABELS: Record<MealType, string> = {
   breakfast: 'Breakfast',
@@ -163,7 +165,7 @@ export default function MealRecorder({ onMealCreated }: MealRecorderProps) {
       {/* Header */}
       <div className="flex items-center gap-2">
         <svg
-          className="w-6 h-6 text-green-600"
+          className="w-6 h-6 text-blue-600"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -187,12 +189,13 @@ export default function MealRecorder({ onMealCreated }: MealRecorderProps) {
       {/* Recording Button */}
       <div className="flex flex-col gap-3">
         {!isRecording ? (
-          <button
+          <Button
             onClick={startRecording}
             disabled={transcribeMutation.isPending}
-            className="flex items-center justify-center gap-2 w-full px-4 py-3 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+            size="lg"
+            className="w-full"
           >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
               <path
                 fillRule="evenodd"
                 d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
@@ -200,15 +203,16 @@ export default function MealRecorder({ onMealCreated }: MealRecorderProps) {
               />
             </svg>
             Start Recording
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             onClick={stopRecording}
-            className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium transition-colors"
+            size="lg"
+            className="w-full bg-gray-800 hover:bg-gray-900"
           >
-            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2" />
             Stop Recording ({formatTime(recordingTime)})
-          </button>
+          </Button>
         )}
       </div>
 
@@ -241,19 +245,19 @@ export default function MealRecorder({ onMealCreated }: MealRecorderProps) {
 
       {/* Error State */}
       {transcribeMutation.isError && (
-        <div className="rounded-lg bg-red-50 p-4 border border-red-200">
-          <h3 className="text-sm font-semibold text-red-800">Error</h3>
-          <p className="text-sm text-red-700 mt-1">
+        <Alert variant="destructive">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
             {transcribeMutation.error instanceof Error
               ? transcribeMutation.error.message
               : 'Meal recording failed'}
-          </p>
-        </div>
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* Success Result */}
       {lastResult && lastResult.meal && (
-        <div className="rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 p-4 border-2 border-green-200 shadow-sm">
+        <div className="rounded-xl bg-linear-to-br from-green-50 to-emerald-50 p-4 border-2 border-green-200 shadow-xs">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <span className="text-xl">{MEAL_TYPE_ICONS[lastResult.meal.meal_type]}</span>

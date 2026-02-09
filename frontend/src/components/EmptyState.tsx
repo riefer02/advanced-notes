@@ -19,7 +19,7 @@ interface EmptyStateProps {
  */
 export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
   return (
-    <div className="rounded-lg bg-gradient-to-br from-gray-50 to-blue-50 p-8 text-center border-2 border-dashed border-gray-300">
+    <div className="rounded-lg bg-linear-to-br from-gray-50 to-blue-50 p-8 text-center border-2 border-dashed border-gray-300">
       {icon || (
         <svg
           className="mx-auto h-16 w-16 text-gray-400"

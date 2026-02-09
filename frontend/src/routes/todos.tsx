@@ -4,6 +4,11 @@ import { useAuth } from '@clerk/clerk-react'
 import { useTodos, useCreateTodo } from '../hooks/useTodos'
 import TodoList from '../components/TodoList'
 import type { Todo } from '../lib/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 export const Route = createFileRoute('/todos')({
   component: TodosPage,
@@ -85,10 +90,7 @@ function TodosPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-gray-900">Todos</h2>
           {!isCreating && (
-            <button
-              onClick={() => setIsCreating(true)}
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-            >
+            <Button onClick={() => setIsCreating(true)}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
@@ -98,100 +100,85 @@ function TodosPage() {
                 />
               </svg>
               New Todo
-            </button>
+            </Button>
           )}
         </div>
 
         {/* New Todo Form */}
         {isCreating && (
           <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
-            <input
+            <Input
               type="text"
               value={newTodoTitle}
               onChange={(e) => setNewTodoTitle(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="What needs to be done?"
               autoFocus
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <div className="flex justify-end gap-2">
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => {
                   setIsCreating(false)
                   setNewTodoTitle('')
                 }}
-                className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleCreateTodo}
-                disabled={!newTodoTitle.trim() || createTodo.isPending}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!newTodoTitle.trim()}
+                loading={createTodo.isPending}
               >
-                {createTodo.isPending ? 'Adding...' : 'Add Todo'}
-              </button>
+                Add Todo
+              </Button>
             </div>
           </div>
         )}
 
         {/* Suggested Todos Section */}
         {suggestedTodos.length > 0 && activeTab === 'all' && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <svg
-                className="h-5 w-5 text-amber-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-              <h3 className="text-sm font-semibold text-amber-900">
+          <Alert variant="warning">
+            <svg
+              className="h-5 w-5 text-amber-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            <AlertDescription>
+              <h3 className="text-sm font-semibold text-amber-900 mb-1">
                 Suggested Todos ({suggestedTodos.length})
               </h3>
-            </div>
-            <p className="text-sm text-amber-700 mb-3">
-              These todos were extracted from your voice notes. Accept them to add to your list.
-            </p>
-            <TodoList todos={suggestedTodos} showNoteLinks />
-          </div>
+              <p className="text-sm text-amber-700 mb-3">
+                These todos were extracted from your voice notes. Accept them to add to your list.
+              </p>
+              <TodoList todos={suggestedTodos} showNoteLinks />
+            </AlertDescription>
+          </Alert>
         )}
 
         {/* Tabs */}
-        <div className="border-b border-gray-200">
-          <nav className="flex gap-6" aria-label="Tabs">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
+          <TabsList variant="line">
             {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.key
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
+              <TabsTrigger key={tab.key} value={tab.key}>
                 {tab.label}
                 {tab.count !== undefined && (
-                  <span
-                    className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-                      activeTab === tab.key
-                        ? 'bg-blue-100 text-blue-600'
-                        : 'bg-gray-100 text-gray-500'
-                    }`}
-                  >
+                  <Badge variant="neutral" className="ml-2 text-xs">
                     {tab.count}
-                  </span>
+                  </Badge>
                 )}
-              </button>
+              </TabsTrigger>
             ))}
-          </nav>
-        </div>
+          </TabsList>
+        </Tabs>
 
         {/* Todo List */}
         {isLoading ? (

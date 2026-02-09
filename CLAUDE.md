@@ -41,7 +41,7 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 
 ### Tech Stack
 - **Backend**: Flask + Python 3.11+ + SQLAlchemy + OpenAI API
-- **Frontend**: Vite + React 18 + TypeScript + TanStack Router + TanStack Query + Tailwind CSS
+- **Frontend**: Vite + React 18 + TypeScript + TanStack Router + TanStack Query + Tailwind CSS v4 + shadcn/ui (New York style)
 - **Auth**: Clerk JWT (all endpoints except `/api/health` require auth)
 - **Database**: SQLite (dev) / PostgreSQL (prod)
 - **Package Management**: `uv` (backend), `pnpm` or `npm` (frontend)
@@ -52,6 +52,7 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 - `backend/app/services/usage_tracking.py` - Rate limiting and API usage tracking
 - `backend/app/services/s3_audio.py` - Core S3 operations (shared by all S3 features)
 - `backend/app/services/s3_vinyl.py` - Vinyl image S3 helpers (delegates to s3_audio)
+- `backend/app/services/s3_avatar.py` - Avatar image S3 helpers (delegates to s3_audio)
 - `backend/app/database.py` - SQLAlchemy models (source of truth for schema)
 - `frontend/src/routes/` - TanStack Router file-based routes
 - `frontend/src/components/` - React components
@@ -82,6 +83,36 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 - TanStack Query hooks in `hooks/`
 - Components in `components/`
 - File-based route in `routes/`
+
+### Frontend UI Components (shadcn/ui)
+
+**Stack:** Tailwind CSS v4, shadcn/ui (New York style), Radix UI primitives, class-variance-authority (CVA).
+
+**Configuration files:**
+- `frontend/components.json` — shadcn CLI config (style, aliases, base color)
+- `frontend/src/index.css` — Tailwind v4 theme (OKLch CSS variables, `@theme inline` block)
+- No `tailwind.config.ts` — Tailwind v4 configures entirely via CSS
+
+**Installed components** (in `frontend/src/components/ui/`):
+button, card, badge, tabs, input, textarea, dropdown-menu, alert, label, select, switch, separator, SlideOver (custom)
+
+**Adding a new shadcn component:**
+```bash
+cd frontend && npx shadcn@latest add <component-name>
+```
+After install, **add `React.forwardRef`** to any component that Radix uses with `asChild` (e.g. triggers, content wrappers). React 18 requires explicit `forwardRef`; shadcn targets React 19 which auto-forwards refs. Already fixed: Button, DropdownMenuTrigger, DropdownMenuContent. Check new components and apply the same pattern if needed.
+
+**Adding custom color tokens** (e.g. `warning`, `success`):
+1. Define CSS variables in `:root` and `.dark` blocks in `src/index.css`
+2. Register with Tailwind in the `@theme inline` block: `--color-warning: var(--warning);`
+3. Use in components: `className="bg-warning text-warning-foreground"`
+
+**Key conventions:**
+- Import from `@/components/ui/<name>` (path alias `@/` → `src/`)
+- Use `cn()` from `@/lib/utils` for className merging (clsx + tailwind-merge)
+- Use CVA (`class-variance-authority`) for component variants
+- Components are source code you own — edit them directly, don't wrap
+- Semantic color tokens (`bg-primary`, `text-muted-foreground`) preferred over raw colors (`bg-gray-900`) for new code
 
 ### Usage Tracking
 
@@ -205,6 +236,8 @@ cd frontend && npm run format:check  # Check formatting
 2. Use `QueryStateRenderer` for loading/error states
 3. Use `EmptyState` for empty content states
 4. Add TanStack Query hooks in `frontend/src/hooks/`
+5. Use shadcn/ui primitives (Button, Input, Alert, Card, etc.) instead of raw HTML elements
+6. Import from `@/components/ui/<name>`
 
 ### Adding a New Route (Frontend)
 1. Create file in `frontend/src/routes/` (file-based routing)
@@ -217,6 +250,7 @@ cd frontend && npm run format:check  # Check formatting
 - Check `backend/.env` has `OPENAI_API_KEY` set
 - For 401 errors: verify Clerk domain config or use `X-Test-User-Id` header in tests
 - SQLite DB at `backend/.notes.db` (can delete for fresh start in dev)
+- **After adding/modifying database models or creating new migrations**, always run `cd backend && uv run alembic upgrade head` before finishing. Tests use a fresh in-memory DB so they pass without migrations, but the local dev SQLite DB will be out of date and cause runtime errors.
 
 ### Frontend
 - Check browser console for API errors
@@ -253,8 +287,9 @@ GitHub Actions workflows run automatically on PRs and pushes to `main`:
 - `backend/tests/test_happy_path.py` - Comprehensive API endpoint tests
 - `backend/tests/test_meals.py` - Meal tracking endpoint tests
 - `backend/tests/test_vinyl.py` - Vinyl collection endpoint tests
+- `backend/tests/test_sharing.py` - Sharing, profiles, friendships, username & avatar tests
 - `frontend/src/components/*.test.tsx` - Component unit tests
-- **Total**: 258 backend tests, 29 frontend tests
+- `frontend/src/routes/settings.test.tsx` - Settings page tests
 
 ## Deployment
 
@@ -286,3 +321,4 @@ See `docs/` for detailed guides:
 - `authentication-flow-explained.md` / `clerk-authentication-setup.md` - Auth patterns
 - `deployment-lessons.md` / `railway-deployment.md` - Production deployment
 - `semantic-organization-spec.md` - Embeddings and semantic search
+- `sharing-architecture.md` - Sharing system, profiles, usernames, avatars, friendships

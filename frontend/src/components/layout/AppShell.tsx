@@ -1,12 +1,24 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import { SignedIn, useAuth, UserButton } from '@clerk/clerk-react'
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 import SlideOver from '../ui/SlideOver'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import NoteDetail from '../NoteDetail'
-import { askNotes, deleteNote, fetchNote, generateSummary, setAuthTokenGetter } from '../../lib/api'
-import type { AskResponse, DigestResult, Note } from '../../lib/api'
+import { askNotes, deleteNote, fetchNote, setAuthTokenGetter } from '../../lib/api'
+import type { AskResponse, Note } from '../../lib/api'
+import { useFriendRequests } from '../../hooks/useFriends'
+import { useReceivedShares } from '../../hooks/useSharing'
 
 type NavItem = {
   to:
@@ -16,6 +28,7 @@ type NavItem = {
     | '/todos'
     | '/meals'
     | '/vinyl'
+    | '/friends'
     | '/settings'
     | '/feedback'
   label: string
@@ -138,6 +151,25 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    to: '/friends',
+    label: 'Friends',
+    icon: ({ className }) => (
+      <svg
+        className={className}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={1.5}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"
+        />
+      </svg>
+    ),
+  },
+  {
     to: '/settings',
     label: 'Settings',
     icon: ({ className }) => (
@@ -216,24 +248,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const drawerPanelRef = useRef<HTMLDivElement>(null)
   const lastFocusedRef = useRef<HTMLElement | null>(null)
 
-  // AI Modals state (Ask primary + Summarize secondary)
+  // Ask Notes state
   const [showAsk, setShowAsk] = useState(false)
   const [askQuery, setAskQuery] = useState('')
   const [isAsking, setIsAsking] = useState(false)
   const [askResult, setAskResult] = useState<AskResponse | null>(null)
   const [askError, setAskError] = useState<string | null>(null)
 
-  const [showSummary, setShowSummary] = useState(false)
-  const [isSummarizing, setIsSummarizing] = useState(false)
-  const [digestResult, setDigestResult] = useState<DigestResult | null>(null)
-  const [summaryError, setSummaryError] = useState<string | null>(null)
-
   const [selectedSourceNote, setSelectedSourceNote] = useState<Note | null>(null)
   const [isLoadingSourceNote, setIsLoadingSourceNote] = useState(false)
 
-  const [isAIMenuOpen, setIsAIMenuOpen] = useState(false)
-  const aiMenuButtonRef = useRef<HTMLButtonElement>(null)
-  const aiMenuRef = useRef<HTMLDivElement>(null)
+  const { data: friendRequestsData } = useFriendRequests()
+  const { data: receivedSharesData } = useReceivedShares()
+  const pendingCount =
+    (friendRequestsData?.requests?.length ?? 0) + (receivedSharesData?.received?.length ?? 0)
 
   const activeItem = useMemo(() => {
     return NAV_ITEMS.find((i) => getIsActive(pathname, i.to))
@@ -291,31 +319,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     document.body.style.overflow = 'unset'
   }, [isDrawerOpen])
 
-  useEffect(() => {
-    if (!isAIMenuOpen) return
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        setIsAIMenuOpen(false)
-      }
-    }
-    const onClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node | null
-      if (!target) return
-      if (aiMenuRef.current?.contains(target)) return
-      if (aiMenuButtonRef.current?.contains(target)) return
-      setIsAIMenuOpen(false)
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('mousedown', onClickOutside)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('mousedown', onClickOutside)
-    }
-  }, [isAIMenuOpen])
-
   const handleAskQuery = useCallback(async (query: string) => {
     const q = query.trim()
     if (!q) return
@@ -331,22 +334,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       setAskError(error instanceof Error ? error.message : 'Failed to ask notes')
     } finally {
       setIsAsking(false)
-    }
-  }, [])
-
-  const handleSummarize = useCallback(async () => {
-    setShowSummary(true)
-    setIsSummarizing(true)
-    setDigestResult(null)
-    setSummaryError(null)
-    try {
-      const result = await generateSummary()
-      setDigestResult(result)
-    } catch (error) {
-      console.error('Failed to generate summary:', error)
-      setSummaryError(error instanceof Error ? error.message : 'Failed to generate summary')
-    } finally {
-      setIsSummarizing(false)
     }
   }, [])
 
@@ -373,29 +360,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const aiActions = useMemo(
-    () => ({
-      openAsk: (prefill?: string) => {
-        if (prefill) setAskQuery(prefill)
-        setShowAsk(true)
-      },
-      openAskWithQuery: (prefill: string) => {
-        setAskQuery(prefill)
-        void handleAskQuery(prefill)
-      },
-      openSummarize: () => void handleSummarize(),
-    }),
-    [handleAskQuery, handleSummarize]
-  )
-
   return (
-    <AIActionContext.Provider value={aiActions}>
+    <>
       <div className="min-h-screen bg-gray-50 flex">
         {/* Desktop rail */}
         <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-gray-200 lg:bg-white">
           <div className="h-16 px-4 flex items-center border-b border-gray-200">
             <div className="flex items-center gap-2">
-              <span className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="text-lg font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 Chisos
               </span>
             </div>
@@ -417,6 +389,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     >
                       <item.icon className="h-5 w-5" />
                       <span>{item.label}</span>
+                      {item.to === '/friends' && pendingCount > 0 && (
+                        <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-white bg-red-500 rounded-full">
+                          {pendingCount}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 )
@@ -453,7 +430,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => setIsDrawerOpen(false)}
-                  className="rounded-md p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="rounded-md p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 >
                   <span className="sr-only">Close menu</span>
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -484,6 +461,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         >
                           <item.icon className="h-5 w-5" />
                           <span>{item.label}</span>
+                          {item.to === '/friends' && pendingCount > 0 && (
+                            <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-white bg-red-500 rounded-full">
+                              {pendingCount}
+                            </span>
+                          )}
                         </Link>
                       </li>
                     )
@@ -501,7 +483,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => setIsDrawerOpen(true)}
-                className="lg:hidden rounded-md p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="lg:hidden rounded-md p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               >
                 <span className="sr-only">Open menu</span>
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -515,7 +497,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
 
               <div className="flex items-baseline gap-2 min-w-0">
-                <span className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                <span className="text-lg font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                   🐺
                 </span>
                 <span className="text-sm font-semibold text-gray-900 truncate">
@@ -525,72 +507,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAsk(true)
-                }}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-white font-medium text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                aria-label="Ask your notes"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 10h.01M12 10h.01M16 10h.01M9 16h6M12 20a8 8 0 100-16 8 8 0 000 16z"
-                  />
-                </svg>
-                <span className="hidden sm:inline">Ask Notes</span>
-              </button>
-
-              <div className="relative">
-                <button
-                  ref={aiMenuButtonRef}
-                  type="button"
-                  onClick={() => setIsAIMenuOpen((v) => !v)}
-                  className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  aria-label="AI actions"
-                  aria-haspopup="menu"
-                  aria-expanded={isAIMenuOpen}
-                >
-                  <span className="hidden sm:inline">AI</span>
-                  <svg
-                    className="h-5 w-5 sm:ml-2"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button aria-label="Quick actions">
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
                       strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </button>
-                {isAIMenuOpen && (
-                  <div
-                    ref={aiMenuRef}
-                    role="menu"
-                    aria-label="AI actions menu"
-                    className="absolute right-0 mt-2 w-52 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden z-50"
-                  >
-                    <button
-                      role="menuitem"
-                      type="button"
-                      onClick={() => {
-                        setIsAIMenuOpen(false)
-                        void handleSummarize()
-                      }}
-                      className="w-full text-left px-4 py-3 text-sm text-gray-800 hover:bg-gray-50"
                     >
-                      Summarize Recent
-                      <div className="text-xs text-gray-500 mt-0.5">Recap your latest notes</div>
-                    </button>
-                  </div>
-                )}
-              </div>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span className="hidden sm:inline">New</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem asChild>
+                    <Link to="/dashboard">Record a Note</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setShowAsk(true)}>Ask Notes</DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/summaries">Create Summary</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/meals">Log a Meal</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/vinyl">Browse Vinyl</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/feedback">Send Feedback</Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <SignedIn>
                 <UserButton afterSignOutUrl="/" />
               </SignedIn>
@@ -626,24 +576,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-900" htmlFor="ask-query">
-              Question
-            </label>
-            <textarea
+            <Label htmlFor="ask-query">Question</Label>
+            <Textarea
               id="ask-query"
               value={askQuery}
               onChange={(e) => setAskQuery(e.target.value)}
               placeholder='e.g. "Tell me what I have been eating in February"'
-              className="w-full min-h-[90px] rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+              className="min-h-[90px]"
             />
             <div className="flex items-center gap-2">
-              <button
+              <Button
                 onClick={() => void handleAskQuery(askQuery)}
                 disabled={!askQuery.trim() || isAsking}
-                className="inline-flex items-center gap-2 px-4 py-2 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium transition-colors bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               >
                 {isAsking ? 'Asking…' : 'Ask'}
-              </button>
+              </Button>
               <button
                 onClick={() => {
                   setAskQuery('')
@@ -667,9 +614,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
 
           {askError && (
-            <div className="rounded-lg bg-red-50 p-4 border border-red-200">
-              <p className="text-sm text-red-800">{askError}</p>
-            </div>
+            <Alert variant="destructive">
+              <AlertDescription>{askError}</AlertDescription>
+            </Alert>
           )}
 
           {askResult && (
@@ -725,16 +672,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
 
               {askResult.warnings?.length > 0 && (
-                <div className="rounded-lg bg-yellow-50 p-4 border border-yellow-200">
-                  <div className="text-xs font-semibold text-yellow-900 uppercase tracking-wider mb-2">
-                    Warnings
-                  </div>
-                  <ul className="text-sm text-yellow-900 space-y-1 list-disc pl-5">
-                    {askResult.warnings.map((w, i) => (
-                      <li key={i}>{w}</li>
-                    ))}
-                  </ul>
-                </div>
+                <Alert variant="warning">
+                  <AlertDescription>
+                    <div className="text-xs font-semibold text-amber-900 uppercase tracking-wider mb-2">
+                      Warnings
+                    </div>
+                    <ul className="text-sm text-amber-900 space-y-1 list-disc pl-5">
+                      {askResult.warnings.map((w, i) => (
+                        <li key={i}>{w}</li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
               )}
 
               <div className="prose prose-blue max-w-none">
@@ -751,7 +700,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <button
                       key={s.note_id}
                       onClick={() => void openSourceNote(s.note_id)}
-                      className="w-full text-left rounded-lg border border-gray-200 bg-white p-3 hover:border-blue-300 hover:shadow-sm transition"
+                      className="w-full text-left rounded-lg border border-gray-200 bg-white p-3 hover:border-blue-300 hover:shadow-xs transition"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
@@ -764,7 +713,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           </div>
                         </div>
                         <svg
-                          className="h-5 w-5 text-gray-400 flex-shrink-0"
+                          className="h-5 w-5 text-gray-400 shrink-0"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -803,92 +752,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </SlideOver>
 
-      {/* Summary Slide-Over (global) */}
-      <SlideOver
-        isOpen={showSummary}
-        onClose={() => setShowSummary(false)}
-        title={
-          <div className="flex items-center gap-2 text-purple-900">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
-            Smart Summary
-          </div>
-        }
-        width="max-w-xl"
-      >
-        <div className="space-y-6">
-          {isSummarizing ? (
-            <div className="flex flex-col items-center justify-center py-12 space-y-4">
-              <div className="relative">
-                <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-xs font-bold text-purple-600">AI</span>
-                </div>
-              </div>
-              <p className="text-sm text-purple-600 font-medium animate-pulse">
-                Analyzing your recent notes...
-              </p>
-            </div>
-          ) : summaryError ? (
-            <div className="rounded-lg bg-red-50 p-4 border border-red-200">
-              <p className="text-sm text-red-800">{summaryError}</p>
-            </div>
-          ) : digestResult ? (
-            <div className="prose prose-purple max-w-none">
-              <div className="bg-purple-50 rounded-xl p-6 border border-purple-100 mb-6">
-                <h3 className="text-lg font-semibold text-purple-900 mb-4 mt-0">Smart Digest</h3>
-                <div className="text-gray-800 leading-relaxed mb-4 text-sm">
-                  <ReactMarkdown>{digestResult.summary}</ReactMarkdown>
-                </div>
-                {digestResult.key_themes.length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="text-sm font-semibold text-purple-800 uppercase tracking-wider mb-2">
-                      Key Themes
-                    </h4>
-                    <ul className="space-y-1 text-gray-700 list-none pl-0 my-0">
-                      {digestResult.key_themes.map((theme, i) => (
-                        <li key={i} className="flex items-start gap-2">
-                          <span className="mt-1.5 w-1.5 h-1.5 bg-purple-500 rounded-full flex-shrink-0" />
-                          <span>{theme}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {digestResult.action_items.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-purple-200">
-                    <h4 className="text-sm font-semibold text-purple-800 uppercase tracking-wider mb-2">
-                      Action Items
-                    </h4>
-                    <ul className="space-y-2 text-gray-700 list-none pl-0 my-0">
-                      {digestResult.action_items.map((item, i) => (
-                        <li key={i} className="flex items-start gap-2">
-                          <input
-                            type="checkbox"
-                            className="mt-1 rounded border-purple-300 text-purple-600 focus:ring-purple-500"
-                          />
-                          <span className="text-sm">{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="py-10 text-sm text-gray-600">
-              Use “Summarize Recent” to generate a digest of your latest notes.
-            </div>
-          )}
-        </div>
-      </SlideOver>
-
       {/* Source Note Detail (nested) */}
       <SlideOver
         isOpen={!!selectedSourceNote || isLoadingSourceNote}
@@ -902,22 +765,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <NoteDetail note={selectedSourceNote} onDelete={handleDeleteSourceNote} />
         ) : null}
       </SlideOver>
-    </AIActionContext.Provider>
+    </>
   )
-}
-
-type AIActionContextValue = {
-  openAsk: (prefill?: string) => void
-  openAskWithQuery: (prefill: string) => void
-  openSummarize: () => void
-}
-
-const AIActionContext = createContext<AIActionContextValue | null>(null)
-
-export function useAIActions() {
-  const ctx = useContext(AIActionContext)
-  if (!ctx) {
-    throw new Error('useAIActions must be used within AppShell')
-  }
-  return ctx
 }

@@ -81,7 +81,7 @@ export default function VinylImageUploader({
         onClick={() => !isDisabled && fileInputRef.current?.click()}
         className={`
           relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
-          ${isDragOver ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-gray-400'}
+          ${isDragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
           ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
         `}
       >
@@ -98,7 +98,7 @@ export default function VinylImageUploader({
         {isCompressing ? (
           <>
             <svg
-              className="mx-auto h-10 w-10 text-indigo-500 animate-spin"
+              className="mx-auto h-10 w-10 text-blue-500 animate-spin"
               fill="none"
               viewBox="0 0 24 24"
             >
@@ -116,7 +116,7 @@ export default function VinylImageUploader({
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
               />
             </svg>
-            <p className="mt-2 text-sm font-medium text-indigo-600">Compressing photos...</p>
+            <p className="mt-2 text-sm font-medium text-blue-600">Compressing photos...</p>
           </>
         ) : (
           <>

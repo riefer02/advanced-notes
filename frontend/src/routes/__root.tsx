@@ -22,6 +22,7 @@ function RootComponent() {
     pathname.startsWith('/todos') ||
     pathname.startsWith('/meals') ||
     pathname.startsWith('/vinyl') ||
+    pathname.startsWith('/friends') ||
     pathname.startsWith('/feedback')
 
   return (

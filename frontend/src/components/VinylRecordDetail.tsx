@@ -2,12 +2,17 @@ import { useState } from 'react'
 import SlideOver from './ui/SlideOver'
 import { useVinylRecord, useUpdateVinylRecord, useDeleteVinylRecord } from '../hooks/useVinyl'
 import type { VinylRecord } from '../lib/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
 
 interface VinylRecordDetailProps {
   isOpen: boolean
   onClose: () => void
   recordId: string | null
   onDeleted?: () => void
+  owner?: string
 }
 
 export default function VinylRecordDetail({
@@ -15,8 +20,10 @@ export default function VinylRecordDetail({
   onClose,
   recordId,
   onDeleted,
+  owner,
 }: VinylRecordDetailProps) {
-  const { data: record, isLoading } = useVinylRecord(recordId)
+  const isSharedView = !!owner
+  const { data: record, isLoading } = useVinylRecord(recordId, owner)
   const updateMutation = useUpdateVinylRecord()
   const deleteMutation = useDeleteVinylRecord()
   const [isEditing, setIsEditing] = useState(false)
@@ -74,12 +81,9 @@ export default function VinylRecordDetail({
               <p className="text-xs font-medium text-gray-500 mb-1.5">Genre</p>
               <div className="flex flex-wrap gap-1.5">
                 {record.genre.map((g) => (
-                  <span
-                    key={g}
-                    className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs rounded-full"
-                  >
+                  <Badge key={g} className="bg-indigo-50 text-indigo-700 px-2">
                     {g}
-                  </span>
+                  </Badge>
                 ))}
               </div>
             </div>
@@ -114,42 +118,35 @@ export default function VinylRecordDetail({
           )}
 
           {/* Actions */}
-          <div className="flex gap-2 pt-4 border-t">
-            <button
-              type="button"
-              onClick={() => setIsEditing(true)}
-              className="flex-1 px-3 py-2 text-sm font-medium text-indigo-600 border border-indigo-300 rounded-lg hover:bg-indigo-50 transition-colors"
-            >
-              Edit
-            </button>
-            {!confirmDelete ? (
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(true)}
-                className="px-3 py-2 text-sm font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
-              >
-                Delete
-              </button>
-            ) : (
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={deleteMutation.isPending}
-                  className="px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+          {!isSharedView && (
+            <div className="flex gap-2 pt-4 border-t">
+              <Button variant="outline" className="flex-1" onClick={() => setIsEditing(true)}>
+                Edit
+              </Button>
+              {!confirmDelete ? (
+                <Button
+                  variant="ghost"
+                  className="text-red-600 hover:bg-red-50"
+                  onClick={() => setConfirmDelete(true)}
                 >
-                  {deleteMutation.isPending ? 'Deleting...' : 'Confirm'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(false)}
-                  className="px-3 py-2 text-sm text-gray-500"
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-          </div>
+                  Delete
+                </Button>
+              ) : (
+                <div className="flex gap-1">
+                  <Button
+                    variant="destructive"
+                    onClick={handleDelete}
+                    disabled={deleteMutation.isPending}
+                  >
+                    {deleteMutation.isPending ? 'Deleting...' : 'Confirm'}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -240,29 +237,16 @@ function EditRecordForm({
 
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-        />
+        <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
       </div>
 
       <div className="flex gap-2 pt-4 border-t">
-        <button
-          type="submit"
-          disabled={isSaving || !artist || !albumTitle}
-          className="flex-1 px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={isSaving || !artist || !albumTitle} className="flex-1">
           {isSaving ? 'Saving...' : 'Save'}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700"
-        >
+        </Button>
+        <Button variant="ghost" type="button" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   )
@@ -286,13 +270,12 @@ function FormField({
   return (
     <div>
       <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-      <input
+      <Input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
         placeholder={placeholder}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
       />
     </div>
   )

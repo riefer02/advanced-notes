@@ -1,5 +1,6 @@
 import type { Note } from '../lib/api'
 import SuggestedTodos from './SuggestedTodos'
+import { Button } from '@/components/ui/button'
 
 interface NoteDetailProps {
   note: Note & { snippet?: string; rank?: number }
@@ -92,10 +93,7 @@ export default function NoteDetail({ note, onDelete }: NoteDetailProps) {
 
       {/* Actions */}
       <div className="pt-6 border-t border-gray-200">
-        <button
-          onClick={onDelete}
-          className="w-full flex justify-center items-center gap-2 px-4 py-2 border border-red-300 shadow-sm text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-        >
+        <Button variant="destructive" onClick={onDelete} className="w-full">
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               strokeLinecap="round"
@@ -105,7 +103,7 @@ export default function NoteDetail({ note, onDelete }: NoteDetailProps) {
             />
           </svg>
           Delete Note
-        </button>
+        </Button>
       </div>
     </div>
   )

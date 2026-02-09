@@ -43,10 +43,10 @@ export default function NotesList({
       <div className="space-y-3" role="status" aria-label="Loading notes">
         {[...Array(3)].map((_, i) => (
           <div key={i} className="rounded-lg border border-gray-200 bg-white p-4 animate-pulse">
-            <div className="h-5 bg-gray-200 rounded w-3/4 mb-3"></div>
+            <div className="h-5 bg-gray-200 rounded-sm w-3/4 mb-3"></div>
             <div className="flex items-center gap-3 mb-3">
-              <div className="h-3 bg-gray-200 rounded w-24"></div>
-              <div className="h-3 bg-gray-200 rounded w-20"></div>
+              <div className="h-3 bg-gray-200 rounded-sm w-24"></div>
+              <div className="h-3 bg-gray-200 rounded-sm w-20"></div>
             </div>
           </div>
         ))}
@@ -80,7 +80,7 @@ export default function NotesList({
 
   if (notes.length === 0) {
     return (
-      <div className="rounded-lg bg-gradient-to-br from-gray-50 to-blue-50 p-8 text-center border-2 border-dashed border-gray-300">
+      <div className="rounded-lg bg-linear-to-br from-gray-50 to-blue-50 p-8 text-center border-2 border-dashed border-gray-300">
         <svg
           className="mx-auto h-16 w-16 text-gray-400"
           fill="none"
@@ -159,8 +159,8 @@ function NoteItem({ note, isSelected, onClick, onTagClick }: NoteItemProps) {
         group relative rounded-lg border p-4 cursor-pointer transition-all
         ${
           isSelected
-            ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 shadow-sm'
-            : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm'
+            ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 shadow-xs'
+            : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-xs'
         }
       `}
       role="listitem"
@@ -174,7 +174,7 @@ function NoteItem({ note, isSelected, onClick, onTagClick }: NoteItemProps) {
               {note.title}
             </h4>
             {hasSnippet && note.rank && (
-              <span className="flex-shrink-0 text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full font-medium">
+              <span className="shrink-0 text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full font-medium">
                 {Math.round(note.rank * 100)}%
               </span>
             )}

@@ -3,6 +3,7 @@ import { useAuth } from '@clerk/clerk-react'
 import { useState, useRef } from 'react'
 import AudioUploader from '../components/AudioUploader'
 import NotesPanel from '../components/NotesPanel'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardPage,
@@ -31,31 +32,17 @@ function DashboardPage() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Mobile Tabs - Visible only on mobile */}
-      <div className="lg:hidden border-b bg-white flex-shrink-0">
-        <div className="flex">
-          <button
-            onClick={() => setActiveTab('transcribe')}
-            className={`flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'transcribe'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-            aria-current={activeTab === 'transcribe' ? 'page' : undefined}
-          >
-            🎤 Transcribe
-          </button>
-          <button
-            onClick={() => setActiveTab('notes')}
-            className={`flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'notes'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-            aria-current={activeTab === 'notes' ? 'page' : undefined}
-          >
-            📁 Notes
-          </button>
-        </div>
+      <div className="lg:hidden border-b bg-white shrink-0">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'transcribe' | 'notes')}>
+          <TabsList variant="line" className="w-full">
+            <TabsTrigger value="transcribe" className="flex-1">
+              🎤 Transcribe
+            </TabsTrigger>
+            <TabsTrigger value="notes" className="flex-1">
+              📁 Notes
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {/* Desktop Split-Pane Layout */}

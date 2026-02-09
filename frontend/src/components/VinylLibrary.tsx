@@ -1,10 +1,21 @@
 import { useState, useMemo } from 'react'
+import { Link } from '@tanstack/react-router'
 import { useVinylRecords, useVinylStats } from '../hooks/useVinyl'
 import type { VinylRecord } from '../lib/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface VinylLibraryProps {
   onSelectRecord: (recordId: string) => void
   onAddRecord: () => void
+  owner?: string
 }
 
 const DECADE_OPTIONS = [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020]
@@ -16,7 +27,8 @@ const SORT_OPTIONS = [
   { value: 'release_year', label: 'Year' },
 ]
 
-export default function VinylLibrary({ onSelectRecord, onAddRecord }: VinylLibraryProps) {
+export default function VinylLibrary({ onSelectRecord, onAddRecord, owner }: VinylLibraryProps) {
+  const isSharedView = !!owner
   const [search, setSearch] = useState('')
   const [genre, setGenre] = useState<string | undefined>()
   const [decade, setDecade] = useState<number | undefined>()
@@ -31,12 +43,13 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord }: VinylLibra
       format,
       sort_by: sortBy,
       limit: 100,
+      owner,
     }),
-    [search, genre, decade, format, sortBy]
+    [search, genre, decade, format, sortBy, owner]
   )
 
   const { data, isLoading, error } = useVinylRecords(params)
-  const { data: stats } = useVinylStats()
+  const { data: stats } = useVinylStats(owner)
 
   const records = data?.records ?? []
   const hasFilters = search || genre || decade || format
@@ -53,92 +66,111 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord }: VinylLibra
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onAddRecord}
-          className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Add Record
-        </button>
+        {!isSharedView && (
+          <div className="flex items-center gap-2">
+            <Link
+              to="/friends"
+              search={{ tab: 'shares' }}
+              className="inline-flex items-center justify-center font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:ring-blue-500 px-4 py-2 text-sm rounded-lg"
+            >
+              Share
+            </Link>
+            <Button onClick={onAddRecord}>
+              <svg
+                className="w-4 h-4 mr-1.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Add Record
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Search + Filters */}
       <div className="space-y-3">
-        <input
+        <Input
           type="text"
           placeholder="Search artist, album, label..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         />
 
         <div className="flex flex-wrap gap-2">
-          <select
-            value={genre ?? ''}
-            onChange={(e) => setGenre(e.target.value || undefined)}
-            className="px-2 py-1.5 border border-gray-300 rounded-md text-xs bg-white"
+          <Select
+            value={genre ?? '__all__'}
+            onValueChange={(v) => setGenre(v === '__all__' ? undefined : v)}
           >
-            <option value="">All Genres</option>
-            <option value="Rock">Rock</option>
-            <option value="Jazz">Jazz</option>
-            <option value="Soul">Soul</option>
-            <option value="Electronic">Electronic</option>
-            <option value="Hip Hop">Hip Hop</option>
-            <option value="Classical">Classical</option>
-            <option value="Country">Country</option>
-            <option value="Blues">Blues</option>
-            <option value="Folk">Folk</option>
-            <option value="Punk">Punk</option>
-            <option value="Metal">Metal</option>
-            <option value="Pop">Pop</option>
-          </select>
+            <SelectTrigger size="sm" className="text-xs">
+              <SelectValue placeholder="All Genres" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Genres</SelectItem>
+              <SelectItem value="Rock">Rock</SelectItem>
+              <SelectItem value="Jazz">Jazz</SelectItem>
+              <SelectItem value="Soul">Soul</SelectItem>
+              <SelectItem value="Electronic">Electronic</SelectItem>
+              <SelectItem value="Hip Hop">Hip Hop</SelectItem>
+              <SelectItem value="Classical">Classical</SelectItem>
+              <SelectItem value="Country">Country</SelectItem>
+              <SelectItem value="Blues">Blues</SelectItem>
+              <SelectItem value="Folk">Folk</SelectItem>
+              <SelectItem value="Punk">Punk</SelectItem>
+              <SelectItem value="Metal">Metal</SelectItem>
+              <SelectItem value="Pop">Pop</SelectItem>
+            </SelectContent>
+          </Select>
 
-          <select
-            value={decade ?? ''}
-            onChange={(e) => setDecade(e.target.value ? Number(e.target.value) : undefined)}
-            className="px-2 py-1.5 border border-gray-300 rounded-md text-xs bg-white"
+          <Select
+            value={decade?.toString() ?? '__all__'}
+            onValueChange={(v) => setDecade(v === '__all__' ? undefined : Number(v))}
           >
-            <option value="">All Decades</option>
-            {DECADE_OPTIONS.map((d) => (
-              <option key={d} value={d}>
-                {d}s
-              </option>
-            ))}
-          </select>
+            <SelectTrigger size="sm" className="text-xs">
+              <SelectValue placeholder="All Decades" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Decades</SelectItem>
+              {DECADE_OPTIONS.map((d) => (
+                <SelectItem key={d} value={d.toString()}>
+                  {d}s
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          <select
-            value={format ?? ''}
-            onChange={(e) => setFormat(e.target.value || undefined)}
-            className="px-2 py-1.5 border border-gray-300 rounded-md text-xs bg-white"
+          <Select
+            value={format ?? '__all__'}
+            onValueChange={(v) => setFormat(v === '__all__' ? undefined : v)}
           >
-            <option value="">All Formats</option>
-            {FORMAT_OPTIONS.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger size="sm" className="text-xs">
+              <SelectValue placeholder="All Formats" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Formats</SelectItem>
+              {FORMAT_OPTIONS.map((f) => (
+                <SelectItem key={f} value={f}>
+                  {f}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="px-2 py-1.5 border border-gray-300 rounded-md text-xs bg-white"
-          >
-            {SORT_OPTIONS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v)}>
+            <SelectTrigger size="sm" className="text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {hasFilters && (
             <button
@@ -180,13 +212,9 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord }: VinylLibra
               : 'Add your first vinyl record to get started'}
           </p>
           {!hasFilters && (
-            <button
-              type="button"
-              onClick={onAddRecord}
-              className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-            >
+            <Button className="mt-4" onClick={onAddRecord}>
               Add Record
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -215,10 +243,10 @@ function RecordCard({ record, onClick }: { record: VinylRecord; onClick: () => v
     <button
       type="button"
       onClick={onClick}
-      className="text-left group rounded-lg overflow-hidden border border-gray-200 hover:border-indigo-300 hover:shadow-md transition-all bg-white"
+      className="text-left group rounded-lg overflow-hidden border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all bg-white"
     >
       {/* Cover image or placeholder */}
-      <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center group-hover:from-indigo-50 group-hover:to-indigo-100 transition-colors overflow-hidden">
+      <div className="aspect-square bg-linear-to-br from-gray-100 to-gray-200 flex items-center justify-center group-hover:from-blue-50 group-hover:to-blue-100 transition-colors overflow-hidden">
         {record.cover_image_url ? (
           <img
             src={record.cover_image_url}
@@ -226,7 +254,7 @@ function RecordCard({ record, onClick }: { record: VinylRecord; onClick: () => v
             className="w-full h-full object-cover"
           />
         ) : (
-          <span className="text-3xl font-bold text-gray-400 group-hover:text-indigo-400 transition-colors">
+          <span className="text-3xl font-bold text-gray-400 group-hover:text-blue-400 transition-colors">
             {initials}
           </span>
         )}
