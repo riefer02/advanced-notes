@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useMealsCalendar } from '../hooks/useMeals'
 import type { MealType } from '../lib/api'
+import { Button } from '@/components/ui/button'
 
 interface MealCalendarProps {
   year: number
@@ -79,12 +80,7 @@ export default function MealCalendar({
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {/* Header with navigation */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
-        <button
-          type="button"
-          onClick={onPrevMonth}
-          className="p-2 rounded-lg hover:bg-gray-200 transition-colors"
-          aria-label="Previous month"
-        >
+        <Button variant="ghost" size="icon" onClick={onPrevMonth} aria-label="Previous month">
           <svg
             className="w-5 h-5 text-gray-600"
             fill="none"
@@ -98,16 +94,11 @@ export default function MealCalendar({
               d="M15 19l-7-7 7-7"
             />
           </svg>
-        </button>
+        </Button>
         <h2 className="text-lg font-semibold text-gray-900">
           {MONTH_NAMES[month - 1]} {year}
         </h2>
-        <button
-          type="button"
-          onClick={onNextMonth}
-          className="p-2 rounded-lg hover:bg-gray-200 transition-colors"
-          aria-label="Next month"
-        >
+        <Button variant="ghost" size="icon" onClick={onNextMonth} aria-label="Next month">
           <svg
             className="w-5 h-5 text-gray-600"
             fill="none"
@@ -116,7 +107,7 @@ export default function MealCalendar({
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-        </button>
+        </Button>
       </div>
 
       {/* Day names header */}

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranscribeAudio } from '../hooks/useNotes'
 import type { TranscriptionResponse } from '../lib/api'
+import { Button } from '@/components/ui/button'
 
 interface AudioUploaderProps {
   recordButtonRef?: React.RefObject<HTMLButtonElement>
@@ -165,11 +166,11 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
             {!isRecording ? (
-              <button
+              <Button
                 ref={recordButtonRef}
                 onClick={startRecording}
                 disabled={transcribeMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                className="bg-linear-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                   <path
@@ -179,15 +180,12 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
                   />
                 </svg>
                 Start Recording
-              </button>
+              </Button>
             ) : (
-              <button
-                onClick={stopRecording}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium transition-colors"
-              >
+              <Button variant="secondary" onClick={stopRecording}>
                 <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
                 Stop Recording ({formatTime(recordingTime)})
-              </button>
+              </Button>
             )}
           </div>
           {!isRecording && (
@@ -237,7 +235,7 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
       )}
 
       {lastResult && (
-        <div className="rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 p-6 border-2 border-green-200 shadow-sm">
+        <div className="rounded-xl bg-linear-to-br from-green-50 to-emerald-50 p-6 border-2 border-green-200 shadow-xs">
           <div className="flex items-center gap-2 mb-3">
             <svg className="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
               <path

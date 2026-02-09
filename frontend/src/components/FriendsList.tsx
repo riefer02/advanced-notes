@@ -7,6 +7,8 @@ import {
 } from '../hooks/useFriends'
 import type { Friendship, UserProfile } from '../lib/api'
 import UserAvatar from './UserAvatar'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 
 export default function FriendsList({ currentUserId }: { currentUserId: string }) {
   const { data: friendsData, isLoading: loadingFriends } = useFriends()
@@ -114,22 +116,12 @@ function RequestCard({
         </div>
       </div>
       <div className="flex items-center gap-2 ml-3">
-        <button
-          type="button"
-          onClick={onAccept}
-          disabled={isAccepting || isDeclining}
-          className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
-        >
+        <Button size="sm" onClick={onAccept} disabled={isAccepting || isDeclining}>
           Accept
-        </button>
-        <button
-          type="button"
-          onClick={onDecline}
-          disabled={isAccepting || isDeclining}
-          className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50 transition-colors"
-        >
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onDecline} disabled={isAccepting || isDeclining}>
           Decline
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -145,7 +137,7 @@ function FriendCard({
   isRemoving: boolean
 }) {
   return (
-    <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+    <Card className="flex items-center justify-between p-3">
       <div className="flex items-center gap-3 min-w-0">
         <UserAvatar
           avatarUrl={profile?.avatar_url}
@@ -163,14 +155,15 @@ function FriendCard({
           )}
         </div>
       </div>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={onRemove}
         disabled={isRemoving}
-        className="ml-3 px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md disabled:opacity-50 transition-colors"
+        className="ml-3 text-red-600 hover:text-red-700 hover:bg-red-50"
       >
         Remove
-      </button>
-    </div>
+      </Button>
+    </Card>
   )
 }

@@ -1,6 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import type { Todo } from '../lib/api'
 import { useCompleteTodo, useDeleteTodo, useAcceptTodo } from '../hooks/useTodos'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 
 interface TodoItemProps {
   todo: Todo
@@ -44,7 +46,7 @@ export default function TodoItem({ todo, showNoteLink = true }: TodoItemProps) {
       <button
         onClick={handleComplete}
         disabled={completeTodo.isPending || acceptTodo.isPending || isCompleted}
-        className={`flex-shrink-0 w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center transition-colors ${
+        className={`shrink-0 w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center transition-colors ${
           isCompleted
             ? 'bg-green-500 border-green-500 text-white cursor-default'
             : isSuggested
@@ -66,11 +68,7 @@ export default function TodoItem({ todo, showNoteLink = true }: TodoItemProps) {
         </p>
         {todo.description && <p className="text-xs text-gray-500 mt-1">{todo.description}</p>}
         <div className="flex items-center gap-2 mt-2 text-xs">
-          {isSuggested && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
-              Suggested
-            </span>
-          )}
+          {isSuggested && <Badge variant="warning">Suggested</Badge>}
           {showNoteLink && todo.note_id ? (
             <Link
               to="/notes"
@@ -89,15 +87,16 @@ export default function TodoItem({ todo, showNoteLink = true }: TodoItemProps) {
       </div>
 
       {/* Actions */}
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         {isSuggested && (
-          <button
+          <Button
+            size="sm"
+            className="mr-2"
             onClick={() => acceptTodo.mutate(todo.id)}
             disabled={acceptTodo.isPending}
-            className="inline-flex items-center px-2.5 py-1 mr-2 text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
           >
             Accept
-          </button>
+          </Button>
         )}
         <button
           onClick={handleDelete}

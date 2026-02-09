@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { type FeedbackType } from '../lib/api'
 import { useSubmitFeedback } from '../hooks/useFeedback'
+import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/feedback')({
   component: FeedbackPage,
@@ -84,12 +85,7 @@ function FeedbackPage() {
           <p className="text-green-700 mb-6">
             We appreciate you taking the time to help us improve Chisos.
           </p>
-          <button
-            onClick={handleNewFeedback}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-          >
-            Submit More Feedback
-          </button>
+          <Button onClick={handleNewFeedback}>Submit More Feedback</Button>
         </div>
       </div>
     )
@@ -213,13 +209,14 @@ function FeedbackPage() {
         )}
 
         {/* Submit */}
-        <button
+        <Button
           type="submit"
           disabled={submitMutation.isPending || !title.trim()}
-          className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          size="lg"
+          className="w-full"
         >
           {submitMutation.isPending ? 'Submitting...' : 'Submit Feedback'}
-        </button>
+        </Button>
       </form>
     </div>
   )

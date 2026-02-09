@@ -5,6 +5,9 @@ import { useUserSettings, useUpdateUserSettings } from '../hooks/useSettings'
 import { useMyProfile, useUpdateProfile } from '../hooks/useProfile'
 import AvatarUploader from '../components/AvatarUploader'
 import UsernameInput from '../components/UsernameInput'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -115,13 +118,12 @@ function SettingsPage() {
                   >
                     Display name
                   </label>
-                  <input
+                  <Input
                     id="display-name"
                     type="text"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     maxLength={255}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
@@ -137,14 +139,14 @@ function SettingsPage() {
                   <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">
                     Bio
                   </label>
-                  <textarea
+                  <Textarea
                     id="bio"
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
                     maxLength={1000}
                     rows={3}
                     placeholder="Tell us about yourself..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                    className="resize-none"
                   />
                 </div>
 
@@ -167,7 +169,7 @@ function SettingsPage() {
                     role="switch"
                     aria-checked={discoverable}
                     onClick={() => setDiscoverable(!discoverable)}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                       discoverable ? 'bg-blue-600' : 'bg-gray-200'
                     }`}
                   >
@@ -182,14 +184,9 @@ function SettingsPage() {
                 {/* Save Button */}
                 {hasChanges && (
                   <div className="flex items-center gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={handleSaveProfile}
-                      disabled={updateProfile.isPending}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                    >
+                    <Button onClick={handleSaveProfile} loading={updateProfile.isPending}>
                       {updateProfile.isPending ? 'Saving...' : 'Save changes'}
-                    </button>
+                    </Button>
                     {updateProfile.isError && (
                       <p className="text-sm text-red-500">{updateProfile.error.message}</p>
                     )}
@@ -237,7 +234,7 @@ function SettingsPage() {
                   aria-checked={settings?.auto_accept_todos ?? false}
                   onClick={handleAutoAcceptToggle}
                   disabled={updateSettings.isPending}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                     settings?.auto_accept_todos ? 'bg-blue-600' : 'bg-gray-200'
                   } ${updateSettings.isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >

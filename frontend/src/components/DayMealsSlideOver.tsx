@@ -124,7 +124,7 @@ export default function DayMealsSlideOver({
                         key={meal.id}
                         type="button"
                         onClick={() => onSelectMeal(meal.id)}
-                        className={`w-full text-left p-3 rounded-lg border ${colors.bg} ${colors.border} hover:shadow-sm transition-shadow`}
+                        className={`w-full text-left p-3 rounded-lg border ${colors.bg} ${colors.border} hover:shadow-xs transition-shadow`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
@@ -152,7 +152,7 @@ export default function DayMealsSlideOver({
                             )}
                           </div>
                           <svg
-                            className="w-5 h-5 text-gray-400 flex-shrink-0"
+                            className="w-5 h-5 text-gray-400 shrink-0"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"

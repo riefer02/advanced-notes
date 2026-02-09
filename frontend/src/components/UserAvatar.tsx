@@ -45,14 +45,14 @@ export default function UserAvatar({
       <img
         src={avatarUrl}
         alt={displayName}
-        className={`${sizeClass} rounded-full object-cover flex-shrink-0 ${className}`}
+        className={`${sizeClass} rounded-full object-cover shrink-0 ${className}`}
       />
     )
   }
 
   return (
     <div
-      className={`${sizeClass} ${bgColor} rounded-full flex items-center justify-center text-white font-medium flex-shrink-0 ${className}`}
+      className={`${sizeClass} ${bgColor} rounded-full flex items-center justify-center text-white font-medium shrink-0 ${className}`}
     >
       {initial}
     </div>

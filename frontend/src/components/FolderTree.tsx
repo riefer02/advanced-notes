@@ -168,7 +168,7 @@ function FolderTreeNode({
         {hasChildren && (
           <button
             onClick={() => onToggle(node.path)}
-            className="p-1 hover:bg-gray-100 rounded transition-colors"
+            className="p-1 hover:bg-gray-100 rounded-sm transition-colors"
             aria-label={isExpanded ? 'Collapse folder' : 'Expand folder'}
             tabIndex={-1}
           >
@@ -193,7 +193,7 @@ function FolderTreeNode({
           aria-current={isSelected ? 'true' : undefined}
         >
           <svg
-            className={`h-4 w-4 flex-shrink-0 ${isSelected ? 'text-blue-600' : 'text-gray-400'}`}
+            className={`h-4 w-4 shrink-0 ${isSelected ? 'text-blue-600' : 'text-gray-400'}`}
             fill={isExpanded ? 'none' : 'currentColor'}
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -208,7 +208,7 @@ function FolderTreeNode({
           <span className="truncate">{node.name}</span>
           {node.note_count > 0 && (
             <span
-              className={`ml-auto flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+              className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
                 isSelected ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
               }`}
             >

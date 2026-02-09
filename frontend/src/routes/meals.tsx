@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useAuth } from '@clerk/clerk-react'
 import { useState, useCallback, useMemo } from 'react'
 import MealCalendar from '../components/MealCalendar'
@@ -6,6 +6,7 @@ import MealRecorder from '../components/MealRecorder'
 import DayMealsSlideOver from '../components/DayMealsSlideOver'
 import MealDetailSlideOver from '../components/MealDetailSlideOver'
 import SharedContentBanner from '../components/SharedContentBanner'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface MealsSearch {
   calendar_owner?: string
@@ -17,6 +18,11 @@ export const Route = createFileRoute('/meals')({
     calendar_owner: typeof search.calendar_owner === 'string' ? search.calendar_owner : undefined,
   }),
 })
+
+const MOBILE_TABS = [
+  { id: 'record', label: 'Record' },
+  { id: 'calendar', label: 'Calendar' },
+] as const
 
 function MealsPage() {
   const { isLoaded, isSignedIn } = useAuth()
@@ -113,79 +119,81 @@ function MealsPage() {
         </div>
       )}
 
-      {/* Mobile Tabs */}
-      <div className="lg:hidden border-b bg-white flex-shrink-0">
-        <div className="flex">
-          <button
-            onClick={() => setActiveTab('record')}
-            className={`flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'record'
-                ? 'border-green-600 text-green-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-            aria-current={activeTab === 'record' ? 'page' : undefined}
+      {/* Share Calendar link (own view only) */}
+      {!isSharedView && (
+        <div className="px-4 pt-3 lg:px-8 lg:pt-4 flex justify-end">
+          <Link
+            to="/friends"
+            search={{ tab: 'shares' }}
+            className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
           >
-            🎤 Record
-          </button>
-          <button
-            onClick={() => setActiveTab('calendar')}
-            className={`flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'calendar'
-                ? 'border-green-600 text-green-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-            aria-current={activeTab === 'calendar' ? 'page' : undefined}
-          >
-            📅 Calendar
-          </button>
+            Share Calendar
+          </Link>
         </div>
-      </div>
+      )}
+
+      {/* Mobile Tabs */}
+      {!isSharedView && (
+        <div className="lg:hidden bg-white shrink-0 px-4 pt-2">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'record' | 'calendar')}>
+            <TabsList className="w-full">
+              {MOBILE_TABS.map((t) => (
+                <TabsTrigger key={t.id} value={t.id} className="flex-1">
+                  {t.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
 
       {/* Desktop Split-Pane Layout */}
       <div className="flex-1 lg:flex overflow-hidden">
-        {/* Left Pane: Record Controls (40%) */}
-        <div
-          className={`lg:w-[40%] lg:border-r lg:border-gray-200 bg-white lg:bg-gray-50 overflow-y-auto ${
-            activeTab === 'record' ? 'block' : 'hidden lg:block'
-          }`}
-        >
-          <div className="p-4 lg:p-8 max-w-xl mx-auto">
-            <MealRecorder onMealCreated={handleMealCreated} />
+        {/* Left Pane: Record Controls (40%) — hidden in shared view */}
+        {!isSharedView && (
+          <div
+            className={`lg:w-[40%] lg:border-r lg:border-gray-200 bg-white lg:bg-gray-50 overflow-y-auto ${
+              activeTab === 'record' ? 'block' : 'hidden lg:block'
+            }`}
+          >
+            <div className="p-4 lg:p-8 max-w-xl mx-auto">
+              <MealRecorder onMealCreated={handleMealCreated} />
 
-            {/* Quick Actions */}
-            <div className="mt-8 pt-6 border-t border-gray-200">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Quick View</h3>
-              <button
-                type="button"
-                onClick={() => handleSelectDate(todayStr)}
-                className="w-full flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-green-300 hover:shadow-sm transition-all"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">📅</span>
-                  <span className="text-sm text-gray-700">Today&apos;s meals</span>
-                </div>
-                <svg
-                  className="w-5 h-5 text-gray-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+              {/* Quick Actions */}
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Quick View</h3>
+                <button
+                  type="button"
+                  onClick={() => handleSelectDate(todayStr)}
+                  className="w-full flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-xs transition-all"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
-              </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📅</span>
+                    <span className="text-sm text-gray-700">Today&apos;s meals</span>
+                  </div>
+                  <svg
+                    className="w-5 h-5 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Right Pane: Calendar (60%) */}
+        {/* Right Pane: Calendar */}
         <div
-          className={`lg:w-[60%] overflow-y-auto bg-gray-50 ${
-            activeTab === 'calendar' ? 'block' : 'hidden lg:block'
+          className={`${isSharedView ? 'w-full' : 'lg:w-[60%]'} overflow-y-auto bg-gray-50 ${
+            isSharedView || activeTab === 'calendar' ? 'block' : 'hidden lg:block'
           }`}
         >
           <div className="p-4 lg:p-8">

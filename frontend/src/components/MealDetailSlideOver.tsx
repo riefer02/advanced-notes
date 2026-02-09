@@ -9,6 +9,9 @@ import {
 } from '../hooks/useMeals'
 import SlideOver from './ui/SlideOver'
 import type { MealType, MealItem } from '../lib/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 
 interface MealDetailSlideOverProps {
   isOpen: boolean
@@ -208,11 +211,10 @@ export default function MealDetailSlideOver({
             {/* Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-              <input
+              <Input
                 type="date"
                 value={meal.meal_date}
                 onChange={(e) => handleDateChange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -232,31 +234,29 @@ export default function MealDetailSlideOver({
               </div>
               {isEditingTranscription ? (
                 <div className="space-y-2">
-                  <textarea
+                  <Textarea
                     value={editedTranscription}
                     onChange={(e) => setEditedTranscription(e.target.value)}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   <div className="flex gap-2">
-                    <button
-                      type="button"
+                    <Button
+                      size="sm"
                       onClick={handleTranscriptionSave}
                       disabled={updateMealMutation.isPending}
-                      className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
                     >
                       Save
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => {
                         setIsEditingTranscription(false)
                         setEditedTranscription(meal.transcription)
                       }}
-                      className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200"
                     >
                       Cancel
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -281,31 +281,26 @@ export default function MealDetailSlideOver({
                           value={editedItemName}
                           onChange={(e) => setEditedItemName(e.target.value)}
                           placeholder="Item name"
-                          className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="px-2 py-1 border border-gray-300 rounded-sm text-sm focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                         />
                         <input
                           type="text"
                           value={editedItemPortion}
                           onChange={(e) => setEditedItemPortion(e.target.value)}
                           placeholder="Portion (optional)"
-                          className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="px-2 py-1 border border-gray-300 rounded-sm text-sm focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                         />
                         <div className="flex gap-1">
-                          <button
-                            type="button"
+                          <Button
+                            size="sm"
                             onClick={handleUpdateItem}
                             disabled={updateItemMutation.isPending}
-                            className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50"
                           >
                             Save
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingItemId(null)}
-                            className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
-                          >
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setEditingItemId(null)}>
                             Cancel
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     ) : (
@@ -363,28 +358,26 @@ export default function MealDetailSlideOver({
 
                 {/* Add Item Form */}
                 <div className="flex gap-2 mt-3">
-                  <input
+                  <Input
                     type="text"
                     value={newItemName}
                     onChange={(e) => setNewItemName(e.target.value)}
                     placeholder="Add food item..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="flex-1"
                   />
-                  <input
+                  <Input
                     type="text"
                     value={newItemPortion}
                     onChange={(e) => setNewItemPortion(e.target.value)}
                     placeholder="Portion"
-                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-24"
                   />
-                  <button
-                    type="button"
+                  <Button
                     onClick={handleAddItem}
                     disabled={!newItemName.trim() || addItemMutation.isPending}
-                    className="px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Add
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -417,14 +410,14 @@ export default function MealDetailSlideOver({
 
             {/* Delete Button */}
             <div className="border-t pt-4">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                className="w-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
                 onClick={handleDeleteMeal}
                 disabled={deleteMealMutation.isPending}
-                className="w-full px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium disabled:opacity-50"
               >
                 {deleteMealMutation.isPending ? 'Deleting...' : 'Delete Meal'}
-              </button>
+              </Button>
             </div>
           </div>
         )}

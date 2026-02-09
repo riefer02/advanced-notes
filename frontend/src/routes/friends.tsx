@@ -4,17 +4,31 @@ import { useState } from 'react'
 import FriendsList from '../components/FriendsList'
 import FriendSearch from '../components/FriendSearch'
 import ShareManager from '../components/ShareManager'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+
+interface FriendsSearch {
+  tab?: 'friends' | 'shares'
+}
 
 export const Route = createFileRoute('/friends')({
   component: FriendsPage,
+  validateSearch: (search: Record<string, unknown>): FriendsSearch => ({
+    tab: search.tab === 'shares' ? 'shares' : undefined,
+  }),
 })
 
 type Tab = 'friends' | 'shares'
 
+const TABS = [
+  { id: 'friends', label: 'Friends' },
+  { id: 'shares', label: 'Sharing' },
+]
+
 function FriendsPage() {
   const { isLoaded, isSignedIn } = useAuth()
   const { user } = useUser()
-  const [activeTab, setActiveTab] = useState<Tab>('friends')
+  const { tab } = Route.useSearch()
+  const [activeTab, setActiveTab] = useState<Tab>(tab === 'shares' ? 'shares' : 'friends')
 
   if (!isLoaded) {
     return (
@@ -38,31 +52,16 @@ function FriendsPage() {
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Friends & Sharing</h2>
 
           {/* Tabs */}
-          <div className="border-b border-gray-200 mb-6">
-            <div className="flex gap-6">
-              <button
-                type="button"
-                onClick={() => setActiveTab('friends')}
-                className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'friends'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Friends
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('shares')}
-                className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'shares'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Sharing
-              </button>
-            </div>
+          <div className="mb-6">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
+              <TabsList>
+                {TABS.map((t) => (
+                  <TabsTrigger key={t.id} value={t.id}>
+                    {t.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
           </div>
 
           {activeTab === 'friends' && (

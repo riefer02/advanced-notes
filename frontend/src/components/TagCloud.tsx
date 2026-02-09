@@ -23,11 +23,11 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
       <div
         className={`flex items-center gap-2 ${
           isExpanded
-            ? 'flex-wrap p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg border border-blue-100'
+            ? 'flex-wrap p-4 bg-linear-to-br from-blue-50 to-purple-50 rounded-lg border border-blue-100'
             : 'overflow-x-auto pb-2 scrollbar-hide'
         }`}
       >
-        <div className="flex items-center gap-2 mr-2 flex-shrink-0">
+        <div className="flex items-center gap-2 mr-2 shrink-0">
           <span className="text-lg">🏷️</span>
           {isExpanded && <span className="font-semibold text-gray-900">Tags</span>}
         </div>
@@ -39,11 +39,11 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
               key={tag}
               onClick={() => onSelectTag(isSelected ? null : tag)}
               className={`
-                flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium
+                shrink-0 px-3 py-1 rounded-full text-xs font-medium
                 transition-all duration-150 ease-in-out whitespace-nowrap
                 ${
                   isSelected
-                    ? 'bg-blue-600 text-white shadow-sm'
+                    ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-700 border border-gray-200'
                 }
               `}
@@ -57,8 +57,8 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className={`
-            flex-shrink-0 p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors
-            ${!isExpanded && 'sticky right-0 bg-gradient-to-l from-white pl-4'}
+            shrink-0 p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors
+            ${!isExpanded && 'sticky right-0 bg-linear-to-l from-white pl-4'}
           `}
           title={isExpanded ? 'Show less' : 'Show all tags'}
         >
@@ -75,7 +75,7 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
 
       {/* Scroll indicator hint for collapsed view */}
       {!isExpanded && (
-        <div className="absolute right-8 top-0 bottom-2 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none" />
+        <div className="absolute right-8 top-0 bottom-2 w-8 bg-linear-to-l from-white to-transparent pointer-events-none" />
       )}
     </div>
   )

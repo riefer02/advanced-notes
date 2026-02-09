@@ -4,6 +4,7 @@ import { useAuth } from '@clerk/clerk-react'
 import { useTodos, useCreateTodo } from '../hooks/useTodos'
 import TodoList from '../components/TodoList'
 import type { Todo } from '../lib/api'
+import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/todos')({
   component: TodosPage,
@@ -85,10 +86,7 @@ function TodosPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-gray-900">Todos</h2>
           {!isCreating && (
-            <button
-              onClick={() => setIsCreating(true)}
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-            >
+            <Button onClick={() => setIsCreating(true)}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
@@ -98,7 +96,7 @@ function TodosPage() {
                 />
               </svg>
               New Todo
-            </button>
+            </Button>
           )}
         </div>
 
@@ -112,25 +110,25 @@ function TodosPage() {
               onKeyDown={handleKeyDown}
               placeholder="What needs to be done?"
               autoFocus
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <div className="flex justify-end gap-2">
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => {
                   setIsCreating(false)
                   setNewTodoTitle('')
                 }}
-                className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleCreateTodo}
-                disabled={!newTodoTitle.trim() || createTodo.isPending}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!newTodoTitle.trim()}
+                loading={createTodo.isPending}
               >
-                {createTodo.isPending ? 'Adding...' : 'Add Todo'}
-              </button>
+                Add Todo
+              </Button>
             </div>
           </div>
         )}

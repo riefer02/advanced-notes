@@ -5,6 +5,7 @@ import {
   useAcceptNoteTodos,
 } from '../hooks/useTodos'
 import type { Todo } from '../lib/api'
+import { Button } from '@/components/ui/button'
 
 interface SuggestedTodosProps {
   noteId: string
@@ -61,13 +62,15 @@ export default function SuggestedTodos({ noteId }: SuggestedTodosProps) {
           </h3>
         </div>
         {suggestedTodos.length > 1 && (
-          <button
+          <Button
+            variant="link"
+            size="xs"
             onClick={handleAcceptAll}
             disabled={acceptAllTodos.isPending}
-            className="text-xs font-medium text-amber-700 hover:text-amber-900 hover:underline disabled:opacity-50"
+            className="text-amber-700 hover:text-amber-900"
           >
             Accept All
-          </button>
+          </Button>
         )}
       </div>
 
@@ -86,21 +89,22 @@ export default function SuggestedTodos({ noteId }: SuggestedTodosProps) {
                 </p>
               )}
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="xs"
                 onClick={() => handleAccept(todo.id)}
                 disabled={acceptTodo.isPending}
-                className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
               >
                 Accept
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="outline"
+                size="xs"
                 onClick={() => handleDismiss(todo.id)}
                 disabled={dismissTodo.isPending}
-                className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
               >
                 Dismiss
-              </button>
+              </Button>
             </div>
           </div>
         ))}

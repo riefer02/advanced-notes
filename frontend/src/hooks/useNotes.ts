@@ -163,3 +163,13 @@ export function useDeleteAskHistoryItem() {
     },
   })
 }
+
+export function useGenerateSummary() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.generateSummary(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['digests'] })
+    },
+  })
+}

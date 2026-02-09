@@ -31,7 +31,7 @@ function DashboardPage() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Mobile Tabs - Visible only on mobile */}
-      <div className="lg:hidden border-b bg-white flex-shrink-0">
+      <div className="lg:hidden border-b bg-white shrink-0">
         <div className="flex">
           <button
             onClick={() => setActiveTab('transcribe')}

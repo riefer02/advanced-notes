@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { SignInButton, useAuth } from '@clerk/clerk-react'
 import { useEffect } from 'react'
+import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/')({
   component: LandingPage,
@@ -22,26 +23,22 @@ function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50">
       {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+      <header className="border-b bg-white/80 backdrop-blur-xs sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
+              <h1 className="text-2xl font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
                 Chisos
               </h1>
             </div>
             <div className="flex items-center gap-4">
               <SignInButton mode="modal">
-                <button className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
-                  Sign In
-                </button>
+                <Button variant="ghost">Sign In</Button>
               </SignInButton>
               <Link to="/sign-up/$">
-                <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-                  Get Started
-                </button>
+                <Button>Get Started</Button>
               </Link>
             </div>
           </div>
@@ -54,7 +51,7 @@ function LandingPage() {
           <div className="text-center space-y-8">
             <h2 className="text-5xl md:text-6xl font-bold text-gray-900 leading-tight">
               Your Life,
-              <span className="block bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="block bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 Intelligently Organized
               </span>
             </h2>
@@ -66,14 +63,17 @@ function LandingPage() {
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-8">
               <Link to="/sign-up/$">
-                <button className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
+                <Button
+                  size="lg"
+                  className="text-lg px-8 py-4 h-auto bg-linear-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl"
+                >
                   Get Started Free
-                </button>
+                </Button>
               </Link>
               <SignInButton mode="modal">
-                <button className="px-8 py-4 text-lg font-semibold text-gray-700 bg-white border-2 border-gray-300 hover:border-gray-400 rounded-lg transition-all">
+                <Button variant="outline" size="lg" className="text-lg px-8 py-4 h-auto border-2">
                   Sign In
-                </button>
+                </Button>
               </SignInButton>
             </div>
           </div>
@@ -272,14 +272,17 @@ function LandingPage() {
         </section>
 
         {/* CTA */}
-        <section className="bg-gradient-to-r from-blue-600 to-purple-600 py-16">
+        <section className="bg-linear-to-r from-blue-600 to-purple-600 py-16">
           <div className="max-w-3xl mx-auto px-4 text-center">
             <h3 className="text-3xl font-bold text-white mb-4">Ready to get organized?</h3>
             <p className="text-blue-100 mb-8">Free to start. No credit card required.</p>
             <Link to="/sign-up/$">
-              <button className="px-8 py-4 text-lg font-semibold text-blue-600 bg-white rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
+              <Button
+                size="lg"
+                className="text-lg px-8 py-4 h-auto bg-white text-blue-600 hover:bg-white/90 shadow-lg hover:shadow-xl"
+              >
                 Get Started Free
-              </button>
+              </Button>
             </Link>
           </div>
         </section>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import {
   useShares,
   useReceivedShares,
@@ -9,6 +10,9 @@ import {
 } from '../hooks/useSharing'
 import { useFriends } from '../hooks/useFriends'
 import type { ResourceShare, Friendship, UserProfile } from '../lib/api'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
 
 export default function ShareManager({ currentUserId }: { currentUserId: string }) {
   const { data: sharesData, isLoading: loadingShares } = useShares()
@@ -74,22 +78,21 @@ function PendingShareInvitations({ shares }: { shares: ResourceShare[] }) {
               <p className="text-xs text-gray-500 mt-0.5">Permission: {share.permission}</p>
             </div>
             <div className="flex items-center gap-2 ml-3">
-              <button
-                type="button"
+              <Button
+                size="sm"
                 onClick={() => acceptShare.mutate(share.id)}
                 disabled={acceptShare.isPending || declineShare.isPending}
-                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 Accept
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => declineShare.mutate(share.id)}
                 disabled={acceptShare.isPending || declineShare.isPending}
-                className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50 transition-colors"
               >
                 Decline
-              </button>
+              </Button>
             </div>
           </div>
         ))}
@@ -131,7 +134,7 @@ function CreateShareSection({
   return (
     <div>
       <h3 className="text-sm font-semibold text-gray-900 mb-3">Share Something</h3>
-      <div className="p-4 bg-white border border-gray-200 rounded-lg space-y-3">
+      <Card className="p-4 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <select
             value={selectedFriend}
@@ -162,16 +165,11 @@ function CreateShareSection({
             <option value="edit">Can edit</option>
           </select>
         </div>
-        <button
-          type="button"
-          onClick={handleCreate}
-          disabled={!selectedFriend || createShare.isPending}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
+        <Button onClick={handleCreate} disabled={!selectedFriend || createShare.isPending}>
           {createShare.isPending ? 'Sharing...' : 'Share'}
-        </button>
+        </Button>
         {createShare.isError && <p className="text-xs text-red-600">{createShare.error.message}</p>}
-      </div>
+      </Card>
     </div>
   )
 }
@@ -237,6 +235,19 @@ function SharesList({
   )
 }
 
+function getShareViewLink(
+  share: ResourceShare
+): { to: string; search: Record<string, string> } | null {
+  if (share.status !== 'accepted') return null
+  if (share.resource_type === 'vinyl_library') {
+    return { to: '/vinyl', search: { owner: share.owner_id } }
+  }
+  if (share.resource_type === 'meal_calendar') {
+    return { to: '/meals', search: { calendar_owner: share.owner_id } }
+  }
+  return null
+}
+
 function ShareCard({
   share,
   personProfile,
@@ -250,8 +261,10 @@ function ShareCard({
   isRevoking: boolean
   isOwner: boolean
 }) {
+  const viewLink = !isOwner ? getShareViewLink(share) : null
+
   return (
-    <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+    <Card className="flex items-center justify-between p-3">
       <div className="min-w-0">
         <p className="text-sm font-medium text-gray-900 truncate">
           {formatResourceType(share.resource_type)}
@@ -266,28 +279,40 @@ function ShareCard({
         </p>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-xs text-gray-500 capitalize">{share.permission}</span>
-          <span
-            className={`text-xs px-1.5 py-0.5 rounded-full ${
+          <Badge
+            variant={
               share.status === 'accepted'
-                ? 'bg-green-100 text-green-700'
+                ? 'success'
                 : share.status === 'pending'
-                  ? 'bg-yellow-100 text-yellow-700'
-                  : 'bg-gray-100 text-gray-600'
-            }`}
+                  ? 'warning'
+                  : 'neutral'
+            }
           >
             {share.status}
-          </span>
+          </Badge>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onRevoke}
-        disabled={isRevoking}
-        className="ml-3 px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md disabled:opacity-50 transition-colors"
-      >
-        {isOwner ? 'Revoke' : 'Leave'}
-      </button>
-    </div>
+      <div className="flex items-center gap-2 ml-3">
+        {viewLink && (
+          <Link
+            to={viewLink.to}
+            search={viewLink.search}
+            className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+          >
+            View
+          </Link>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRevoke}
+          disabled={isRevoking}
+          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+        >
+          {isOwner ? 'Revoke' : 'Leave'}
+        </Button>
+      </div>
+    </Card>
   )
 }
 

@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { useUploadAvatar, useDeleteAvatar } from '../hooks/useProfile'
 import { compressImage } from '../lib/image-compression'
 import UserAvatar from './UserAvatar'
+import { Button } from '@/components/ui/button'
 
 interface AvatarUploaderProps {
   avatarUrl?: string | null
@@ -61,23 +62,25 @@ export default function AvatarUploader({ avatarUrl, displayName }: AvatarUploade
       />
 
       <div className="flex flex-col gap-1">
-        <button
-          type="button"
+        <Button
+          variant="link"
+          size="sm"
           onClick={() => fileInputRef.current?.click()}
           disabled={isLoading}
-          className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+          className="text-blue-600 hover:text-blue-700 p-0 h-auto"
         >
           Upload photo
-        </button>
+        </Button>
         {avatarUrl && (
-          <button
-            type="button"
+          <Button
+            variant="link"
+            size="sm"
             onClick={() => deleteAvatar.mutate()}
             disabled={isLoading}
-            className="text-sm text-red-500 hover:text-red-600 disabled:opacity-50"
+            className="text-red-500 hover:text-red-600 p-0 h-auto"
           >
             Remove
-          </button>
+          </Button>
         )}
       </div>
     </div>

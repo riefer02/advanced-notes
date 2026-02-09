@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
+import { Link } from '@tanstack/react-router'
 import { useVinylRecords, useVinylStats } from '../hooks/useVinyl'
 import type { VinylRecord } from '../lib/api'
+import { Button } from '@/components/ui/button'
 
 interface VinylLibraryProps {
   onSelectRecord: (recordId: string) => void
@@ -57,22 +59,27 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord, owner }: Vin
           )}
         </div>
         {!isSharedView && (
-          <button
-            type="button"
-            onClick={onAddRecord}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
+          <div className="flex items-center gap-2">
+            <Link
+              to="/friends"
+              search={{ tab: 'shares' }}
+              className="inline-flex items-center justify-center font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:ring-blue-500 px-4 py-2 text-sm rounded-lg"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            Add Record
-          </button>
+              Share
+            </Link>
+            <Button onClick={onAddRecord}>
+              <svg
+                className="w-4 h-4 mr-1.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Add Record
+            </Button>
+          </div>
         )}
       </div>
 
@@ -83,7 +90,7 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord, owner }: Vin
           placeholder="Search artist, album, label..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
 
         <div className="flex flex-wrap gap-2">
@@ -185,13 +192,9 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord, owner }: Vin
               : 'Add your first vinyl record to get started'}
           </p>
           {!hasFilters && (
-            <button
-              type="button"
-              onClick={onAddRecord}
-              className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-            >
+            <Button className="mt-4" onClick={onAddRecord}>
               Add Record
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -220,10 +223,10 @@ function RecordCard({ record, onClick }: { record: VinylRecord; onClick: () => v
     <button
       type="button"
       onClick={onClick}
-      className="text-left group rounded-lg overflow-hidden border border-gray-200 hover:border-indigo-300 hover:shadow-md transition-all bg-white"
+      className="text-left group rounded-lg overflow-hidden border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all bg-white"
     >
       {/* Cover image or placeholder */}
-      <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center group-hover:from-indigo-50 group-hover:to-indigo-100 transition-colors overflow-hidden">
+      <div className="aspect-square bg-linear-to-br from-gray-100 to-gray-200 flex items-center justify-center group-hover:from-blue-50 group-hover:to-blue-100 transition-colors overflow-hidden">
         {record.cover_image_url ? (
           <img
             src={record.cover_image_url}
@@ -231,7 +234,7 @@ function RecordCard({ record, onClick }: { record: VinylRecord; onClick: () => v
             className="w-full h-full object-cover"
           />
         ) : (
-          <span className="text-3xl font-bold text-gray-400 group-hover:text-indigo-400 transition-colors">
+          <span className="text-3xl font-bold text-gray-400 group-hover:text-blue-400 transition-colors">
             {initials}
           </span>
         )}

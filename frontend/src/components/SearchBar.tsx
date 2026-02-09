@@ -55,7 +55,7 @@ const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder="Search notes... (press / to focus)"
-            className={`block w-full rounded-lg border bg-white py-2.5 pl-10 pr-10 text-sm placeholder-gray-500 transition-colors focus:outline-none focus:ring-2 ${
+            className={`block w-full rounded-lg border bg-white py-2.5 pl-10 pr-10 text-sm placeholder-gray-500 transition-colors focus:outline-hidden focus:ring-2 ${
               value
                 ? 'border-blue-300 focus:border-blue-500 focus:ring-blue-200'
                 : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
@@ -95,7 +95,7 @@ const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
             <span className="text-gray-300">•</span>
             <p className="text-xs text-gray-500">
               Press{' '}
-              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded">
+              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-sm">
                 Esc
               </kbd>{' '}
               to clear

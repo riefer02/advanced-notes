@@ -7,6 +7,9 @@ import {
   useUpdateVinylRecord,
 } from '../hooks/useVinyl'
 import { uploadVinylImage, type VinylExtractionResult } from '../lib/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 
 interface VinylAddFormProps {
   isOpen: boolean
@@ -147,36 +150,14 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
           />
 
           {images.length > 0 && !extraction && (
-            <button
+            <Button
               type="button"
               onClick={handleExtract}
-              disabled={extractMutation.isPending}
-              className="w-full px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              loading={extractMutation.isPending}
+              className="w-full"
             >
-              {extractMutation.isPending ? (
-                <span className="inline-flex items-center gap-2">
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="none"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
-                  </svg>
-                  Extracting info...
-                </span>
-              ) : (
-                'Extract Info from Photos'
-              )}
-            </button>
+              {extractMutation.isPending ? 'Extracting info...' : 'Extract Info from Photos'}
+            </Button>
           )}
 
           {extractMutation.isError && (
@@ -221,13 +202,12 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Artist <span className="text-red-500">*</span>
           </label>
-          <input
+          <Input
             type="text"
             value={artist}
             onChange={(e) => setArtist(e.target.value)}
             required
             placeholder="e.g. Pink Floyd"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
 
@@ -235,25 +215,23 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Album Title <span className="text-red-500">*</span>
           </label>
-          <input
+          <Input
             type="text"
             value={albumTitle}
             onChange={(e) => setAlbumTitle(e.target.value)}
             required
             placeholder="e.g. The Dark Side of the Moon"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
-            <input
+            <Input
               type="number"
               value={releaseYear}
               onChange={(e) => setReleaseYear(e.target.value)}
               placeholder="1973"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
           <div>
@@ -261,7 +239,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
             <select
               value={format}
               onChange={(e) => setFormat(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">Select...</option>
               <option value="LP">LP</option>
@@ -277,34 +255,31 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Genre (comma-separated)
           </label>
-          <input
+          <Input
             type="text"
             value={genre}
             onChange={(e) => setGenre(e.target.value)}
             placeholder="Rock, Progressive Rock"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Label</label>
-            <input
+            <Input
               type="text"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="Harvest"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Catalog #</label>
-            <input
+            <Input
               type="text"
               value={catalogNumber}
               onChange={(e) => setCatalogNumber(e.target.value)}
               placeholder="SHVL 804"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
         </div>
@@ -312,22 +287,20 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Country</label>
-            <input
+            <Input
               type="text"
               value={pressingCountry}
               onChange={(e) => setPressingCountry(e.target.value)}
               placeholder="UK"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Color</label>
-            <input
+            <Input
               type="text"
               value={color}
               onChange={(e) => setColor(e.target.value)}
               placeholder="Black"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
         </div>
@@ -337,7 +310,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
           <select
             value={condition}
             onChange={(e) => setCondition(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Select...</option>
             <option value="Mint">Mint (M)</option>
@@ -353,37 +326,31 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
 
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
-          <textarea
+          <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
             placeholder="Original pressing, gatefold sleeve..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
 
         {uploadProgress && (
-          <div className="p-2 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs rounded-lg text-center">
+          <div className="p-2 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-lg text-center">
             {uploadProgress}
           </div>
         )}
 
         <div className="flex gap-2 pt-4 border-t">
-          <button
+          <Button
             type="submit"
             disabled={createMutation.isPending || !!uploadProgress || !artist || !albumTitle}
-            className="flex-1 px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            className="flex-1"
           >
             {createMutation.isPending || uploadProgress ? 'Saving...' : 'Add Record'}
-          </button>
-          <button
-            type="button"
-            onClick={handleClose}
-            disabled={!!uploadProgress}
-            className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
-          >
+          </Button>
+          <Button variant="ghost" type="button" onClick={handleClose} disabled={!!uploadProgress}>
             Cancel
-          </button>
+          </Button>
         </div>
       </form>
     </SlideOver>
