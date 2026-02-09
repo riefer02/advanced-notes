@@ -5,6 +5,9 @@ import ReactMarkdown from 'react-markdown'
 
 import SlideOver from '../ui/SlideOver'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -573,15 +576,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-900" htmlFor="ask-query">
-              Question
-            </label>
-            <textarea
+            <Label htmlFor="ask-query">Question</Label>
+            <Textarea
               id="ask-query"
               value={askQuery}
               onChange={(e) => setAskQuery(e.target.value)}
               placeholder='e.g. "Tell me what I have been eating in February"'
-              className="w-full min-h-[90px] rounded-lg border border-gray-300 p-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
+              className="min-h-[90px]"
             />
             <div className="flex items-center gap-2">
               <Button
@@ -613,9 +614,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
 
           {askError && (
-            <div className="rounded-lg bg-red-50 p-4 border border-red-200">
-              <p className="text-sm text-red-800">{askError}</p>
-            </div>
+            <Alert variant="destructive">
+              <AlertDescription>{askError}</AlertDescription>
+            </Alert>
           )}
 
           {askResult && (
@@ -671,16 +672,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
 
               {askResult.warnings?.length > 0 && (
-                <div className="rounded-lg bg-yellow-50 p-4 border border-yellow-200">
-                  <div className="text-xs font-semibold text-yellow-900 uppercase tracking-wider mb-2">
-                    Warnings
-                  </div>
-                  <ul className="text-sm text-yellow-900 space-y-1 list-disc pl-5">
-                    {askResult.warnings.map((w, i) => (
-                      <li key={i}>{w}</li>
-                    ))}
-                  </ul>
-                </div>
+                <Alert variant="warning">
+                  <AlertDescription>
+                    <div className="text-xs font-semibold text-amber-900 uppercase tracking-wider mb-2">
+                      Warnings
+                    </div>
+                    <ul className="text-sm text-amber-900 space-y-1 list-disc pl-5">
+                      {askResult.warnings.map((w, i) => (
+                        <li key={i}>{w}</li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
               )}
 
               <div className="prose prose-blue max-w-none">

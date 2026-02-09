@@ -12,6 +12,7 @@ import type { MealType, MealItem } from '../lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 
 interface MealDetailSlideOverProps {
   isOpen: boolean
@@ -189,7 +190,7 @@ export default function MealDetailSlideOver({
           <div className="space-y-6">
             {/* Meal Type Selector */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Meal Type</label>
+              <Label className="mb-2">Meal Type</Label>
               <div className="flex gap-2">
                 {MEAL_TYPES.map((type) => (
                   <button
@@ -210,7 +211,7 @@ export default function MealDetailSlideOver({
 
             {/* Date */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+              <Label className="mb-2">Date</Label>
               <Input
                 type="date"
                 value={meal.meal_date}
@@ -221,7 +222,7 @@ export default function MealDetailSlideOver({
             {/* Transcription */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">Transcription</label>
+                <Label>Transcription</Label>
                 {!isEditingTranscription && (
                   <button
                     type="button"
@@ -276,19 +277,17 @@ export default function MealDetailSlideOver({
                   <div key={item.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
                     {editingItemId === item.id ? (
                       <div className="flex-1 flex flex-col gap-2">
-                        <input
+                        <Input
                           type="text"
                           value={editedItemName}
                           onChange={(e) => setEditedItemName(e.target.value)}
                           placeholder="Item name"
-                          className="px-2 py-1 border border-gray-300 rounded-sm text-sm focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                         />
-                        <input
+                        <Input
                           type="text"
                           value={editedItemPortion}
                           onChange={(e) => setEditedItemPortion(e.target.value)}
                           placeholder="Portion (optional)"
-                          className="px-2 py-1 border border-gray-300 rounded-sm text-sm focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                         />
                         <div className="flex gap-1">
                           <Button

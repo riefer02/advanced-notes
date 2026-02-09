@@ -10,6 +10,15 @@ import { uploadVinylImage, type VinylExtractionResult } from '../lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface VinylAddFormProps {
   isOpen: boolean
@@ -136,9 +145,9 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
     <SlideOver isOpen={isOpen} onClose={handleClose} title="Add Vinyl Record">
       <form onSubmit={handleSubmit} className="p-4 space-y-4">
         {createMutation.isError && (
-          <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
-            {createMutation.error.message}
-          </div>
+          <Alert variant="destructive">
+            <AlertDescription>{createMutation.error.message}</AlertDescription>
+          </Alert>
         )}
 
         {/* Photo upload section */}
@@ -161,13 +170,13 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
           )}
 
           {extractMutation.isError && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
-              {extractMutation.error.message}
-            </div>
+            <Alert variant="destructive">
+              <AlertDescription>{extractMutation.error.message}</AlertDescription>
+            </Alert>
           )}
 
           {extraction && (
-            <div className="p-2 bg-green-50 border border-green-200 text-green-700 text-xs rounded-lg flex items-center gap-2">
+            <Alert variant="success" className="py-2 text-xs">
               <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"
@@ -175,11 +184,11 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
                   clipRule="evenodd"
                 />
               </svg>
-              <span>
+              <AlertDescription>
                 Extracted with {Math.round(extraction.confidence * 100)}% confidence. Review and
                 edit below.
-              </span>
-            </div>
+              </AlertDescription>
+            </Alert>
           )}
         </div>
 
@@ -199,9 +208,9 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
 
         {/* Form fields */}
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
+          <Label className="text-xs text-gray-600 mb-1">
             Artist <span className="text-red-500">*</span>
-          </label>
+          </Label>
           <Input
             type="text"
             value={artist}
@@ -212,9 +221,9 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
+          <Label className="text-xs text-gray-600 mb-1">
             Album Title <span className="text-red-500">*</span>
-          </label>
+          </Label>
           <Input
             type="text"
             value={albumTitle}
@@ -226,7 +235,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+            <Label className="text-xs text-gray-600 mb-1">Year</Label>
             <Input
               type="number"
               value={releaseYear}
@@ -235,26 +244,28 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Format</label>
-            <select
-              value={format}
-              onChange={(e) => setFormat(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            <Label className="text-xs text-gray-600 mb-1">Format</Label>
+            <Select
+              value={format || '__none__'}
+              onValueChange={(v) => setFormat(v === '__none__' ? '' : v)}
             >
-              <option value="">Select...</option>
-              <option value="LP">LP</option>
-              <option value='7"'>7&quot;</option>
-              <option value='10"'>10&quot;</option>
-              <option value='12"'>12&quot;</option>
-              <option value="2xLP">2xLP</option>
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Select...</SelectItem>
+                <SelectItem value="LP">LP</SelectItem>
+                <SelectItem value='7"'>7&quot;</SelectItem>
+                <SelectItem value='10"'>10&quot;</SelectItem>
+                <SelectItem value='12"'>12&quot;</SelectItem>
+                <SelectItem value="2xLP">2xLP</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            Genre (comma-separated)
-          </label>
+          <Label className="text-xs text-gray-600 mb-1">Genre (comma-separated)</Label>
           <Input
             type="text"
             value={genre}
@@ -265,7 +276,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Label</label>
+            <Label className="text-xs text-gray-600 mb-1">Label</Label>
             <Input
               type="text"
               value={label}
@@ -274,7 +285,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Catalog #</label>
+            <Label className="text-xs text-gray-600 mb-1">Catalog #</Label>
             <Input
               type="text"
               value={catalogNumber}
@@ -286,7 +297,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Country</label>
+            <Label className="text-xs text-gray-600 mb-1">Country</Label>
             <Input
               type="text"
               value={pressingCountry}
@@ -295,7 +306,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Color</label>
+            <Label className="text-xs text-gray-600 mb-1">Color</Label>
             <Input
               type="text"
               value={color}
@@ -306,26 +317,30 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Condition</label>
-          <select
-            value={condition}
-            onChange={(e) => setCondition(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          <Label className="text-xs text-gray-600 mb-1">Condition</Label>
+          <Select
+            value={condition || '__none__'}
+            onValueChange={(v) => setCondition(v === '__none__' ? '' : v)}
           >
-            <option value="">Select...</option>
-            <option value="Mint">Mint (M)</option>
-            <option value="NM">Near Mint (NM)</option>
-            <option value="VG+">Very Good Plus (VG+)</option>
-            <option value="VG">Very Good (VG)</option>
-            <option value="G+">Good Plus (G+)</option>
-            <option value="G">Good (G)</option>
-            <option value="Fair">Fair (F)</option>
-            <option value="Poor">Poor (P)</option>
-          </select>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Select...</SelectItem>
+              <SelectItem value="Mint">Mint (M)</SelectItem>
+              <SelectItem value="NM">Near Mint (NM)</SelectItem>
+              <SelectItem value="VG+">Very Good Plus (VG+)</SelectItem>
+              <SelectItem value="VG">Very Good (VG)</SelectItem>
+              <SelectItem value="G+">Good Plus (G+)</SelectItem>
+              <SelectItem value="G">Good (G)</SelectItem>
+              <SelectItem value="Fair">Fair (F)</SelectItem>
+              <SelectItem value="Poor">Poor (P)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+          <Label className="text-xs text-gray-600 mb-1">Notes</Label>
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -335,9 +350,9 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
         </div>
 
         {uploadProgress && (
-          <div className="p-2 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-lg text-center">
-            {uploadProgress}
-          </div>
+          <Alert variant="info" className="py-2 text-xs text-center">
+            <AlertDescription>{uploadProgress}</AlertDescription>
+          </Alert>
         )}
 
         <div className="flex gap-2 pt-4 border-t">

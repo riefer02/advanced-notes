@@ -8,6 +8,8 @@ import UsernameInput from '../components/UsernameInput'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -112,12 +114,9 @@ function SettingsPage() {
 
                 {/* Display Name */}
                 <div>
-                  <label
-                    htmlFor="display-name"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
+                  <Label htmlFor="display-name" className="mb-1">
                     Display name
-                  </label>
+                  </Label>
                   <Input
                     id="display-name"
                     type="text"
@@ -136,9 +135,9 @@ function SettingsPage() {
 
                 {/* Bio */}
                 <div>
-                  <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">
+                  <Label htmlFor="bio" className="mb-1">
                     Bio
-                  </label>
+                  </Label>
                   <Textarea
                     id="bio"
                     value={bio}
@@ -153,32 +152,21 @@ function SettingsPage() {
                 {/* Discoverable */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
-                    <label
+                    <Label
                       htmlFor="discoverable-toggle"
                       className="text-sm font-medium text-gray-900 cursor-pointer"
                     >
                       Discoverable
-                    </label>
+                    </Label>
                     <p className="mt-1 text-sm text-gray-500">
                       Allow other users to find you by name, username, or email.
                     </p>
                   </div>
-                  <button
+                  <Switch
                     id="discoverable-toggle"
-                    type="button"
-                    role="switch"
-                    aria-checked={discoverable}
-                    onClick={() => setDiscoverable(!discoverable)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                      discoverable ? 'bg-blue-600' : 'bg-gray-200'
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                        discoverable ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
+                    checked={discoverable}
+                    onCheckedChange={setDiscoverable}
+                  />
                 </div>
 
                 {/* Save Button */}
@@ -215,35 +203,24 @@ function SettingsPage() {
             ) : (
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
-                  <label
+                  <Label
                     htmlFor="auto-accept-todos"
                     className="text-sm font-medium text-gray-900 cursor-pointer"
                   >
                     Auto-accept extracted todos
-                  </label>
+                  </Label>
                   <p className="mt-1 text-sm text-gray-500">
                     When enabled, todos extracted from your voice notes will be automatically added
                     to your todo list. When disabled, they will appear as suggestions that you can
                     review and accept individually.
                   </p>
                 </div>
-                <button
+                <Switch
                   id="auto-accept-todos"
-                  type="button"
-                  role="switch"
-                  aria-checked={settings?.auto_accept_todos ?? false}
-                  onClick={handleAutoAcceptToggle}
+                  checked={settings?.auto_accept_todos ?? false}
+                  onCheckedChange={() => handleAutoAcceptToggle()}
                   disabled={updateSettings.isPending}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                    settings?.auto_accept_todos ? 'bg-blue-600' : 'bg-gray-200'
-                  } ${updateSettings.isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      settings?.auto_accept_todos ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
+                />
               </div>
             )}
           </div>

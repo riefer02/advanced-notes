@@ -5,6 +5,8 @@ import ReactMarkdown from 'react-markdown'
 
 import SlideOver from '../components/ui/SlideOver'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import NoteDetail from '../components/NoteDetail'
 import { fetchNote } from '../lib/api'
 import type { AskHistoryItem, DigestHistoryItem, DigestResult, Note } from '../lib/api'
@@ -140,82 +142,68 @@ function SummariesPage() {
         </div>
 
         {summaryError && (
-          <div className="rounded-lg bg-red-50 p-4 border border-red-200">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-red-800">{summaryError}</p>
+          <Alert variant="destructive">
+            <AlertDescription className="flex items-center justify-between">
+              <span>{summaryError}</span>
               <button
                 onClick={() => setSummaryError(null)}
                 className="text-red-600 hover:text-red-800 text-sm font-medium"
               >
                 Dismiss
               </button>
-            </div>
-          </div>
+            </AlertDescription>
+          </Alert>
         )}
 
         {inlineResult && (
-          <div className="bg-purple-50 border border-purple-200 rounded-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-purple-900">New Summary</h3>
-              <button
-                onClick={() => setInlineResult(null)}
-                className="text-purple-600 hover:text-purple-800 text-sm font-medium"
-              >
-                Dismiss
-              </button>
-            </div>
-            <div className="prose prose-purple max-w-none text-sm mb-4">
-              <ReactMarkdown>{inlineResult.summary}</ReactMarkdown>
-            </div>
-            {inlineResult.key_themes.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-sm font-semibold text-purple-800 uppercase tracking-wider mb-2">
-                  Key Themes
-                </h4>
-                <ul className="space-y-1 text-sm text-gray-800 list-disc pl-5">
-                  {inlineResult.key_themes.map((theme, i) => (
-                    <li key={i}>{theme}</li>
-                  ))}
-                </ul>
+          <Alert variant="accent" className="rounded-xl p-6">
+            <AlertDescription>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-purple-900">New Summary</h3>
+                <button
+                  onClick={() => setInlineResult(null)}
+                  className="text-purple-600 hover:text-purple-800 text-sm font-medium"
+                >
+                  Dismiss
+                </button>
               </div>
-            )}
-            {inlineResult.action_items.length > 0 && (
-              <div className="pt-4 border-t border-purple-200">
-                <h4 className="text-sm font-semibold text-purple-800 uppercase tracking-wider mb-2">
-                  Action Items
-                </h4>
-                <ul className="space-y-1 text-sm text-gray-800 list-disc pl-5">
-                  {inlineResult.action_items.map((item, i) => (
-                    <li key={i}>{item}</li>
-                  ))}
-                </ul>
+              <div className="prose prose-purple max-w-none text-sm mb-4">
+                <ReactMarkdown>{inlineResult.summary}</ReactMarkdown>
               </div>
-            )}
-          </div>
+              {inlineResult.key_themes.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-sm font-semibold text-purple-800 uppercase tracking-wider mb-2">
+                    Key Themes
+                  </h4>
+                  <ul className="space-y-1 text-sm text-gray-800 list-disc pl-5">
+                    {inlineResult.key_themes.map((theme, i) => (
+                      <li key={i}>{theme}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {inlineResult.action_items.length > 0 && (
+                <div className="pt-4 border-t border-purple-200">
+                  <h4 className="text-sm font-semibold text-purple-800 uppercase tracking-wider mb-2">
+                    Action Items
+                  </h4>
+                  <ul className="space-y-1 text-sm text-gray-800 list-disc pl-5">
+                    {inlineResult.action_items.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </AlertDescription>
+          </Alert>
         )}
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setTab('digests')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-              tab === 'digests'
-                ? 'bg-purple-50 text-purple-800 border-purple-200'
-                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            Digests
-          </button>
-          <button
-            onClick={() => setTab('ask')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-              tab === 'ask'
-                ? 'bg-blue-50 text-blue-800 border-blue-200'
-                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            Ask History
-          </button>
-        </div>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+          <TabsList>
+            <TabsTrigger value="digests">Digests</TabsTrigger>
+            <TabsTrigger value="ask">Ask History</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {tab === 'digests' ? (
           <DigestList
@@ -305,12 +293,14 @@ function SummariesPage() {
             <div className="text-xs text-gray-500">
               {new Date(selectedAsk.created_at).toLocaleString()}
             </div>
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
-              <div className="text-xs font-semibold text-blue-900 uppercase tracking-wider mb-1">
-                Question
-              </div>
-              <div className="text-sm text-blue-900">{selectedAsk.query}</div>
-            </div>
+            <Alert variant="info">
+              <AlertDescription>
+                <div className="text-xs font-semibold text-blue-900 uppercase tracking-wider mb-1">
+                  Question
+                </div>
+                <div className="text-sm text-blue-900">{selectedAsk.query}</div>
+              </AlertDescription>
+            </Alert>
             <div className="prose prose-blue max-w-none">
               <ReactMarkdown>{selectedAsk.answer_markdown}</ReactMarkdown>
             </div>

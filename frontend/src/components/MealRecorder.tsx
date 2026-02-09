@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useTranscribeMeal } from '../hooks/useMeals'
 import type { MealTranscriptionResponse, MealType } from '../lib/api'
 import { Button } from '@/components/ui/button'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 
 const MEAL_TYPE_LABELS: Record<MealType, string> = {
   breakfast: 'Breakfast',
@@ -244,14 +245,14 @@ export default function MealRecorder({ onMealCreated }: MealRecorderProps) {
 
       {/* Error State */}
       {transcribeMutation.isError && (
-        <div className="rounded-lg bg-red-50 p-4 border border-red-200">
-          <h3 className="text-sm font-semibold text-red-800">Error</h3>
-          <p className="text-sm text-red-700 mt-1">
+        <Alert variant="destructive">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
             {transcribeMutation.error instanceof Error
               ? transcribeMutation.error.message
               : 'Meal recording failed'}
-          </p>
-        </div>
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* Success Result */}

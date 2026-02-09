@@ -9,6 +9,7 @@ import type { Friendship, UserProfile } from '../lib/api'
 import UserAvatar from './UserAvatar'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 export default function FriendsList({ currentUserId }: { currentUserId: string }) {
   const { data: friendsData, isLoading: loadingFriends } = useFriends()
@@ -99,8 +100,8 @@ function RequestCard({
   const profile = friendship.requester_profile
 
   return (
-    <div className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-      <div className="flex items-center gap-3 min-w-0">
+    <Alert variant="warning" className="flex items-center justify-between">
+      <AlertDescription className="flex items-center gap-3 min-w-0">
         <UserAvatar
           avatarUrl={profile?.avatar_url}
           displayName={profile?.display_name ?? 'Unknown'}
@@ -114,7 +115,7 @@ function RequestCard({
             <p className="text-xs text-gray-500 truncate">@{profile.username}</p>
           )}
         </div>
-      </div>
+      </AlertDescription>
       <div className="flex items-center gap-2 ml-3">
         <Button size="sm" onClick={onAccept} disabled={isAccepting || isDeclining}>
           Accept
@@ -123,7 +124,7 @@ function RequestCard({
           Decline
         </Button>
       </div>
-    </div>
+    </Alert>
   )
 }
 

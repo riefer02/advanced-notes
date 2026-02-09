@@ -5,6 +5,7 @@ import SearchBar from './SearchBar'
 import TagCloud from './TagCloud'
 import SlideOver from './ui/SlideOver'
 import NoteDetail from './NoteDetail'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useNotes, useSearchNotes, useNotesByTag, useDeleteNote } from '../hooks/useNotes'
 
 export default function NotesPanel() {
@@ -106,8 +107,8 @@ export default function NotesPanel() {
 
         {/* Active Filter Context */}
         {(searchQuery || selectedTag || selectedFolder) && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm">
+          <Alert variant="info" className="flex items-center justify-between">
+            <AlertDescription className="flex items-center gap-2 text-sm">
               {searchQuery ? (
                 <>
                   <svg className="h-4 w-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
@@ -160,7 +161,7 @@ export default function NotesPanel() {
                   </span>
                 </>
               ) : null}
-            </div>
+            </AlertDescription>
             <button
               onClick={() => {
                 setSearchQuery('')
@@ -179,7 +180,7 @@ export default function NotesPanel() {
                 />
               </svg>
             </button>
-          </div>
+          </Alert>
         )}
 
         {/* Content Area */}

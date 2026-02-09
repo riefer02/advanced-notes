@@ -3,6 +3,10 @@ import { useState, useEffect } from 'react'
 import { type FeedbackType } from '../lib/api'
 import { useSubmitFeedback } from '../hooks/useFeedback'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 export const Route = createFileRoute('/feedback')({
   component: FeedbackPage,
@@ -63,30 +67,32 @@ function FeedbackPage() {
   if (showSuccess) {
     return (
       <div className="p-6 max-w-2xl mx-auto">
-        <div className="bg-green-50 border border-green-200 rounded-xl p-8 text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg
-              className="w-8 h-8 text-green-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-          </div>
-          <h2 className="text-xl font-semibold text-green-900 mb-2">
-            Thank you for your feedback!
-          </h2>
-          <p className="text-green-700 mb-6">
-            We appreciate you taking the time to help us improve Chisos.
-          </p>
-          <Button onClick={handleNewFeedback}>Submit More Feedback</Button>
-        </div>
+        <Alert variant="success" className="rounded-xl p-8 text-center">
+          <AlertDescription>
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg
+                className="w-8 h-8 text-green-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-green-900 mb-2">
+              Thank you for your feedback!
+            </h2>
+            <p className="text-green-700 mb-6">
+              We appreciate you taking the time to help us improve Chisos.
+            </p>
+            <Button onClick={handleNewFeedback}>Submit More Feedback</Button>
+          </AlertDescription>
+        </Alert>
       </div>
     )
   }
@@ -103,7 +109,7 @@ function FeedbackPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Feedback Type */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Feedback Type</label>
+          <Label className="mb-2">Feedback Type</Label>
           <div className="flex gap-3">
             {[
               { value: 'bug', label: 'Bug Report', icon: '🐛' },
@@ -129,10 +135,10 @@ function FeedbackPage() {
 
         {/* Title */}
         <div>
-          <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+          <Label htmlFor="title" className="mb-2">
             Title <span className="text-red-500">*</span>
-          </label>
-          <input
+          </Label>
+          <Input
             type="text"
             id="title"
             value={title}
@@ -145,16 +151,15 @@ function FeedbackPage() {
                   : 'What would you like to share?'
             }
             maxLength={255}
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
 
         {/* Description */}
         <div>
-          <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+          <Label htmlFor="description" className="mb-2">
             Description <span className="text-gray-400">(optional)</span>
-          </label>
-          <textarea
+          </Label>
+          <Textarea
             id="description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -167,16 +172,16 @@ function FeedbackPage() {
             }
             rows={5}
             maxLength={5000}
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+            className="resize-none"
           />
           <p className="text-xs text-gray-500 mt-1">{description.length}/5000 characters</p>
         </div>
 
         {/* Rating */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <Label className="mb-2">
             How would you rate your experience? <span className="text-gray-400">(optional)</span>
-          </label>
+          </Label>
           <div className="flex gap-2">
             {[1, 2, 3, 4, 5].map((value) => (
               <button
@@ -199,13 +204,13 @@ function FeedbackPage() {
 
         {/* Error */}
         {submitMutation.isError && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-800">
+          <Alert variant="destructive">
+            <AlertDescription>
               {submitMutation.error instanceof Error
                 ? submitMutation.error.message
                 : 'Failed to submit feedback'}
-            </p>
-          </div>
+            </AlertDescription>
+          </Alert>
         )}
 
         {/* Submit */}

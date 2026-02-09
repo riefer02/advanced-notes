@@ -13,6 +13,14 @@ import type { ResourceShare, Friendship, UserProfile } from '../lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 export default function ShareManager({ currentUserId }: { currentUserId: string }) {
   const { data: sharesData, isLoading: loadingShares } = useShares()
@@ -66,17 +74,14 @@ function PendingShareInvitations({ shares }: { shares: ResourceShare[] }) {
       </h3>
       <div className="space-y-2">
         {shares.map((share) => (
-          <div
-            key={share.id}
-            className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg"
-          >
-            <div className="min-w-0">
+          <Alert key={share.id} variant="info" className="flex items-center justify-between">
+            <AlertDescription className="min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">
                 {share.owner_profile?.display_name ?? 'Someone'} wants to share their{' '}
                 {formatResourceType(share.resource_type)}
               </p>
               <p className="text-xs text-gray-500 mt-0.5">Permission: {share.permission}</p>
-            </div>
+            </AlertDescription>
             <div className="flex items-center gap-2 ml-3">
               <Button
                 size="sm"
@@ -94,7 +99,7 @@ function PendingShareInvitations({ shares }: { shares: ResourceShare[] }) {
                 Decline
               </Button>
             </div>
-          </div>
+          </Alert>
         ))}
       </div>
     </div>
@@ -136,34 +141,40 @@ function CreateShareSection({
       <h3 className="text-sm font-semibold text-gray-900 mb-3">Share Something</h3>
       <Card className="p-4 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <select
-            value={selectedFriend}
-            onChange={(e) => setSelectedFriend(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+          <Select
+            value={selectedFriend || '__none__'}
+            onValueChange={(v) => setSelectedFriend(v === '__none__' ? '' : v)}
           >
-            <option value="">Select friend...</option>
-            {friendOptions.map((f) => (
-              <option key={f.userId} value={f.userId}>
-                {f.displayName}
-              </option>
-            ))}
-          </select>
-          <select
-            value={resourceType}
-            onChange={(e) => setResourceType(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-          >
-            <option value="vinyl_library">Vinyl Library</option>
-            <option value="meal_calendar">Meal Calendar</option>
-          </select>
-          <select
-            value={permission}
-            onChange={(e) => setPermission(e.target.value as 'view' | 'edit')}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-          >
-            <option value="view">View only</option>
-            <option value="edit">Can edit</option>
-          </select>
+            <SelectTrigger>
+              <SelectValue placeholder="Select friend..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Select friend...</SelectItem>
+              {friendOptions.map((f) => (
+                <SelectItem key={f.userId} value={f.userId}>
+                  {f.displayName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={resourceType} onValueChange={(v) => setResourceType(v)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="vinyl_library">Vinyl Library</SelectItem>
+              <SelectItem value="meal_calendar">Meal Calendar</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={permission} onValueChange={(v) => setPermission(v as 'view' | 'edit')}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="view">View only</SelectItem>
+              <SelectItem value="edit">Can edit</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <Button onClick={handleCreate} disabled={!selectedFriend || createShare.isPending}>
           {createShare.isPending ? 'Sharing...' : 'Share'}

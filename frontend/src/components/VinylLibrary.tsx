@@ -3,6 +3,14 @@ import { Link } from '@tanstack/react-router'
 import { useVinylRecords, useVinylStats } from '../hooks/useVinyl'
 import type { VinylRecord } from '../lib/api'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface VinylLibraryProps {
   onSelectRecord: (recordId: string) => void
@@ -85,72 +93,84 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord, owner }: Vin
 
       {/* Search + Filters */}
       <div className="space-y-3">
-        <input
+        <Input
           type="text"
           placeholder="Search artist, album, label..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
 
         <div className="flex flex-wrap gap-2">
-          <select
-            value={genre ?? ''}
-            onChange={(e) => setGenre(e.target.value || undefined)}
-            className="px-2 py-1.5 border border-gray-300 rounded-md text-xs bg-white"
+          <Select
+            value={genre ?? '__all__'}
+            onValueChange={(v) => setGenre(v === '__all__' ? undefined : v)}
           >
-            <option value="">All Genres</option>
-            <option value="Rock">Rock</option>
-            <option value="Jazz">Jazz</option>
-            <option value="Soul">Soul</option>
-            <option value="Electronic">Electronic</option>
-            <option value="Hip Hop">Hip Hop</option>
-            <option value="Classical">Classical</option>
-            <option value="Country">Country</option>
-            <option value="Blues">Blues</option>
-            <option value="Folk">Folk</option>
-            <option value="Punk">Punk</option>
-            <option value="Metal">Metal</option>
-            <option value="Pop">Pop</option>
-          </select>
+            <SelectTrigger size="sm" className="text-xs">
+              <SelectValue placeholder="All Genres" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Genres</SelectItem>
+              <SelectItem value="Rock">Rock</SelectItem>
+              <SelectItem value="Jazz">Jazz</SelectItem>
+              <SelectItem value="Soul">Soul</SelectItem>
+              <SelectItem value="Electronic">Electronic</SelectItem>
+              <SelectItem value="Hip Hop">Hip Hop</SelectItem>
+              <SelectItem value="Classical">Classical</SelectItem>
+              <SelectItem value="Country">Country</SelectItem>
+              <SelectItem value="Blues">Blues</SelectItem>
+              <SelectItem value="Folk">Folk</SelectItem>
+              <SelectItem value="Punk">Punk</SelectItem>
+              <SelectItem value="Metal">Metal</SelectItem>
+              <SelectItem value="Pop">Pop</SelectItem>
+            </SelectContent>
+          </Select>
 
-          <select
-            value={decade ?? ''}
-            onChange={(e) => setDecade(e.target.value ? Number(e.target.value) : undefined)}
-            className="px-2 py-1.5 border border-gray-300 rounded-md text-xs bg-white"
+          <Select
+            value={decade?.toString() ?? '__all__'}
+            onValueChange={(v) => setDecade(v === '__all__' ? undefined : Number(v))}
           >
-            <option value="">All Decades</option>
-            {DECADE_OPTIONS.map((d) => (
-              <option key={d} value={d}>
-                {d}s
-              </option>
-            ))}
-          </select>
+            <SelectTrigger size="sm" className="text-xs">
+              <SelectValue placeholder="All Decades" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Decades</SelectItem>
+              {DECADE_OPTIONS.map((d) => (
+                <SelectItem key={d} value={d.toString()}>
+                  {d}s
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          <select
-            value={format ?? ''}
-            onChange={(e) => setFormat(e.target.value || undefined)}
-            className="px-2 py-1.5 border border-gray-300 rounded-md text-xs bg-white"
+          <Select
+            value={format ?? '__all__'}
+            onValueChange={(v) => setFormat(v === '__all__' ? undefined : v)}
           >
-            <option value="">All Formats</option>
-            {FORMAT_OPTIONS.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger size="sm" className="text-xs">
+              <SelectValue placeholder="All Formats" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Formats</SelectItem>
+              {FORMAT_OPTIONS.map((f) => (
+                <SelectItem key={f} value={f}>
+                  {f}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="px-2 py-1.5 border border-gray-300 rounded-md text-xs bg-white"
-          >
-            {SORT_OPTIONS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v)}>
+            <SelectTrigger size="sm" className="text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {hasFilters && (
             <button
