@@ -307,7 +307,10 @@ Backend (`backend/.env`):
 - `DATABASE_URL` - PostgreSQL connection string (prod); omit for SQLite (dev)
 - `AUDIO_CLIPS_ENABLED` - Feature flag for S3 audio storage
 - `S3_BUCKET`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` - S3 storage (required for audio clips and vinyl images)
-- `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `ADMIN_EMAIL` - Email notifications (optional)
+- `SES_REGION` - AWS SES region (default: us-east-2)
+- `SES_SENDER_EMAIL` - Verified SES sender address (falls back to ADMIN_EMAIL)
+- `SES_ACCESS_KEY_ID`, `SES_SECRET_ACCESS_KEY` - SES credentials (fall back to AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY)
+- `ADMIN_EMAIL` - Recipient for feedback notifications
 
 Frontend (`frontend/.env.local`):
 - `VITE_CLERK_PUBLISHABLE_KEY` - Clerk public key
