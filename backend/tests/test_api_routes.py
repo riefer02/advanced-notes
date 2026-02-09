@@ -107,6 +107,9 @@ class _FakeUsageTracking:
     def get_usage_history(self, user_id, limit=50, offset=0, service_type=None):  # noqa: ANN001
         return []
 
+    def get_monthly_aggregate_cost(self):
+        return 0.0
+
 
 class _FakeEmailService:
     """Fake email service for tests."""
@@ -115,6 +118,15 @@ class _FakeEmailService:
         return False
 
     def send_feedback_notification(self, **kwargs):
+        return False
+
+    def send_new_user_notification(self, **kwargs):
+        return False
+
+    def send_cost_threshold_alert(self, **kwargs):
+        return False
+
+    def send_error_notification(self, **kwargs):
         return False
 
 

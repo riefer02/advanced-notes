@@ -12,10 +12,12 @@ All routes require authentication and are user-scoped.
 """
 
 import base64
+import logging
 import re
 import secrets
 import string
 from contextlib import suppress
+from datetime import UTC, datetime
 from functools import wraps
 
 from flask import Blueprint, g, jsonify, request
@@ -32,6 +34,37 @@ from .services.folder_utils import extract_folder_paths
 from .services.models import NoteMetadata
 
 bp = Blueprint("api", __name__)
+
+logger = logging.getLogger(__name__)
+
+# Dedup state for cost alerts — resets on deploy (acceptable for personal project)
+_cost_alert_sent_for_month: str | None = None
+
+
+def _maybe_send_cost_alert(svc) -> None:  # noqa: ANN001
+    """Send a cost threshold alert if monthly spend exceeds the configured limit."""
+    global _cost_alert_sent_for_month  # noqa: PLW0603
+
+    threshold = Config.MONTHLY_COST_ALERT_THRESHOLD_USD
+    if threshold <= 0:
+        return
+
+    now = datetime.now(UTC)
+    current_month = now.strftime("%Y-%m")
+    if _cost_alert_sent_for_month == current_month:
+        return
+
+    try:
+        cost = svc.usage_tracking.get_monthly_aggregate_cost()
+        if cost >= threshold:
+            svc.email.send_cost_threshold_alert(
+                current_cost=cost,
+                threshold=threshold,
+                period=current_month,
+            )
+            _cost_alert_sent_for_month = current_month
+    except Exception:
+        logger.debug("Cost alert check failed", exc_info=True)
 
 
 # ============================================================================
@@ -244,6 +277,7 @@ def summarize_notes():
                 total_tokens=summarization_result.usage.total_tokens,
                 endpoint="/api/summarize",
             )
+            _maybe_send_cost_alert(svc)
 
         # 5. Save to database (store the structured result as JSON string)
         digest_json = digest_result.model_dump_json()
@@ -370,6 +404,7 @@ def transcribe():
                 audio_seconds=float(audio_duration),
                 endpoint="/api/transcribe",
             )
+            _maybe_send_cost_alert(svc)
 
         # Step 2: Get AI categorization (user-scoped folders)
         folder_tree = svc.storage.get_folder_tree(user_id)
@@ -389,6 +424,7 @@ def transcribe():
                 total_tokens=cat_result.usage.total_tokens,
                 endpoint="/api/transcribe",
             )
+            _maybe_send_cost_alert(svc)
 
         # Step 3: Save to database (user-scoped)
         note_metadata = NoteMetadata(
@@ -1088,6 +1124,7 @@ def ask_notes():
                 total_tokens=ask_result.usage.total_tokens,
                 endpoint="/api/ask",
             )
+            _maybe_send_cost_alert(svc)
 
         # Persist ask history (compact)
         import json as _json
@@ -1715,6 +1752,7 @@ def transcribe_meal():
                 audio_seconds=float(audio_duration),
                 endpoint="/api/meals/transcribe",
             )
+            _maybe_send_cost_alert(svc)
 
         # Step 2: Extract meal data using AI
         current_date = date.today().isoformat()
@@ -2393,6 +2431,7 @@ def extract_vinyl_from_photos():
             model=svc.vinyl_extractor.model,
             endpoint="/api/vinyl/extract-photos",
         )
+        _maybe_send_cost_alert(svc)
 
         return jsonify(result.model_dump())
 
@@ -2742,6 +2781,7 @@ def extract_vinyl_metadata(record_id: str):
             model=svc.vinyl_extractor.model,
             endpoint="/api/vinyl/<id>/extract",
         )
+        _maybe_send_cost_alert(svc)
 
         return jsonify(result.model_dump())
 
@@ -3030,6 +3070,12 @@ def get_my_profile():
             display_name = getattr(g, "user_name", None) or _derive_display_name(email, user_id)
             username = _generate_username(display_name, svc.storage)
             profile = svc.storage.create_user_profile(
+                user_id=user_id,
+                display_name=display_name,
+                email=email,
+                username=username,
+            )
+            svc.email.send_new_user_notification(
                 user_id=user_id,
                 display_name=display_name,
                 email=email,

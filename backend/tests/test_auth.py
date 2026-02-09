@@ -150,11 +150,19 @@ def test_require_auth_with_test_user_header():
                 pass
             def get_usage_history(self, *a, **k):
                 return []
+            def get_monthly_aggregate_cost(self):
+                return 0.0
 
         class _FakeEmailService:
             def is_configured(self):
                 return False
             def send_feedback_notification(self, **kwargs):
+                return False
+            def send_new_user_notification(self, **kwargs):
+                return False
+            def send_cost_threshold_alert(self, **kwargs):
+                return False
+            def send_error_notification(self, **kwargs):
                 return False
 
         services = Services(
@@ -239,11 +247,19 @@ def test_require_auth_returns_401_without_token():
                 pass
             def get_usage_history(self, *a, **k):
                 return []
+            def get_monthly_aggregate_cost(self):
+                return 0.0
 
         class _FakeEmailService:
             def is_configured(self):
                 return False
             def send_feedback_notification(self, **kwargs):
+                return False
+            def send_new_user_notification(self, **kwargs):
+                return False
+            def send_cost_threshold_alert(self, **kwargs):
+                return False
+            def send_error_notification(self, **kwargs):
                 return False
 
         services = Services(

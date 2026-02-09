@@ -1,4 +1,5 @@
 import os
+from contextlib import suppress
 
 from flask import Flask
 from flask_cors import CORS
@@ -46,5 +47,21 @@ def create_app(*, services: Services | None = None, testing: bool = False):
     from .routes import bp as api_bp
 
     app.register_blueprint(api_bp, url_prefix="/api")
+
+    @app.errorhandler(500)
+    def handle_500(error):
+        from datetime import UTC, datetime
+
+        from flask import request as _req
+
+        svc_container = app.extensions.get("services")
+        if svc_container:
+            with suppress(Exception):
+                svc_container.email.send_error_notification(
+                    error_message=str(error),
+                    endpoint=_req.path,
+                    timestamp=datetime.now(UTC).isoformat(),
+                )
+        return {"error": "Internal server error"}, 500
 
     return app

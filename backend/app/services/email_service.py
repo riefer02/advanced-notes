@@ -1,21 +1,24 @@
 """
 Email notification service for the application.
 
-Sends email notifications using Python's native smtplib with best-effort delivery.
+Sends email notifications via AWS SES with best-effort delivery.
 Email failures do not block the main application flow.
 """
 
 from __future__ import annotations
 
 import logging
-import smtplib
-import ssl
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import time
+
+import boto3
+from botocore.exceptions import ClientError
 
 from ..config import Config
 
 logger = logging.getLogger(__name__)
+
+_last_error_email_at: float = 0.0
+_ERROR_EMAIL_COOLDOWN_SECONDS: float = 600.0  # 10 minutes
 
 
 class EmailService:
@@ -27,7 +30,7 @@ class EmailService:
     """
 
     def is_configured(self) -> bool:
-        """Check if SMTP is properly configured."""
+        """Check if SES is properly configured."""
         return Config.email_enabled()
 
     def send_feedback_notification(
@@ -94,7 +97,7 @@ class EmailService:
         body: str,
     ) -> bool:
         """
-        Low-level SMTP send with STARTTLS/SSL/NONE support.
+        Send an email via AWS SES.
 
         Args:
             to_address: Recipient email address.
@@ -111,48 +114,111 @@ class EmailService:
         if not self.is_configured():
             return False
 
-        # After is_configured() check, these are guaranteed non-None
-        smtp_host = Config.SMTP_HOST
-        smtp_username = Config.SMTP_USERNAME
-        smtp_password = Config.SMTP_PASSWORD
-        if not smtp_host or not smtp_username or not smtp_password:
-            return False
+        sender = Config.SES_SENDER_EMAIL or Config.ADMIN_EMAIL
 
         try:
-            msg = MIMEMultipart()
-            msg["From"] = smtp_username
-            msg["To"] = to_address
-            msg["Subject"] = subject
-            msg.attach(MIMEText(body, "plain"))
-
-            security = Config.SMTP_SECURITY.upper()
-
-            if security == "SSL":
-                context = ssl.create_default_context()
-                with smtplib.SMTP_SSL(
-                    smtp_host, Config.SMTP_PORT, context=context, timeout=Config.SMTP_TIMEOUT
-                ) as server:
-                    server.login(smtp_username, smtp_password)
-                    server.sendmail(smtp_username, to_address, msg.as_string())
-
-            elif security == "STARTTLS":
-                context = ssl.create_default_context()
-                with smtplib.SMTP(smtp_host, Config.SMTP_PORT, timeout=Config.SMTP_TIMEOUT) as server:
-                    server.starttls(context=context)
-                    server.login(smtp_username, smtp_password)
-                    server.sendmail(smtp_username, to_address, msg.as_string())
-
-            else:  # NONE
-                with smtplib.SMTP(smtp_host, Config.SMTP_PORT, timeout=Config.SMTP_TIMEOUT) as server:
-                    server.login(smtp_username, smtp_password)
-                    server.sendmail(smtp_username, to_address, msg.as_string())
-
+            client = boto3.client(
+                "ses",
+                region_name=Config.SES_REGION,
+                aws_access_key_id=Config.SES_ACCESS_KEY_ID,
+                aws_secret_access_key=Config.SES_SECRET_ACCESS_KEY,
+            )
+            client.send_email(
+                Source=sender,
+                Destination={"ToAddresses": [to_address]},
+                Message={
+                    "Subject": {"Data": subject, "Charset": "UTF-8"},
+                    "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
+                },
+            )
             logger.info(f"Email sent successfully to {to_address}: {subject}")
             return True
 
-        except smtplib.SMTPException as e:
-            logger.error(f"SMTP error sending email: {e}")
+        except ClientError as e:
+            logger.error(f"SES error sending email: {e}")
             return False
         except Exception as e:
             logger.error(f"Unexpected error sending email: {e}")
             return False
+
+    # ------------------------------------------------------------------
+    # Admin notification helpers
+    # ------------------------------------------------------------------
+
+    def send_new_user_notification(
+        self,
+        user_id: str,
+        display_name: str | None = None,
+        email: str | None = None,
+        username: str | None = None,
+    ) -> bool:
+        """Send admin notification for a new user signup."""
+        body = "\n".join([
+            "New user signed up",
+            "",
+            f"User ID: {user_id}",
+            f"Display Name: {display_name or '(none)'}",
+            f"Email: {email or '(none)'}",
+            f"Username: {username or '(none)'}",
+        ])
+        return self._send_email(
+            to_address=Config.ADMIN_EMAIL,
+            subject="[Chisos] New User Signup",
+            body=body,
+        )
+
+    def send_cost_threshold_alert(
+        self,
+        current_cost: float,
+        threshold: float,
+        period: str,
+    ) -> bool:
+        """Send admin alert when monthly API cost exceeds threshold."""
+        body = "\n".join([
+            f"Monthly API cost has reached ${current_cost:.2f}",
+            "",
+            f"Threshold: ${threshold:.2f}",
+            f"Billing period: {period}",
+        ])
+        return self._send_email(
+            to_address=Config.ADMIN_EMAIL,
+            subject=f"[Chisos] Monthly cost alert: ${current_cost:.2f}",
+            body=body,
+        )
+
+    def send_error_notification(
+        self,
+        error_message: str,
+        endpoint: str,
+        timestamp: str,
+    ) -> bool:
+        """
+        Send admin notification for a 500 server error.
+
+        Rate-limited to one email per 10 minutes.
+        """
+        global _last_error_email_at  # noqa: PLW0603
+
+        now = time.monotonic()
+        if now - _last_error_email_at < _ERROR_EMAIL_COOLDOWN_SECONDS:
+            logger.debug("Error email rate-limited, skipping")
+            return False
+
+        truncated = error_message[:2000]
+        body = "\n".join([
+            "A 500 error occurred",
+            "",
+            f"Endpoint: {endpoint}",
+            f"Timestamp: {timestamp}",
+            "",
+            "Error:",
+            truncated,
+        ])
+        sent = self._send_email(
+            to_address=Config.ADMIN_EMAIL,
+            subject="[Chisos] Server Error (500)",
+            body=body,
+        )
+        if sent:
+            _last_error_email_at = now
+        return sent

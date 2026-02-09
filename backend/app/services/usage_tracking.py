@@ -348,6 +348,27 @@ class UsageTrackingService:
             warning=warning,
         )
 
+    def get_monthly_aggregate_cost(self) -> float:
+        """
+        Sum estimated_cost_usd across ALL users for the current billing period.
+
+        Used for admin cost alerting (not per-user).
+        """
+        period_start, period_end = self._get_period_bounds()
+
+        with self._get_session() as session:
+            from sqlalchemy import func as sqlfunc
+
+            result = (
+                session.query(sqlfunc.sum(TokenUsage.estimated_cost_usd))
+                .filter(
+                    TokenUsage.created_at >= period_start,
+                    TokenUsage.created_at < period_end,
+                )
+                .scalar()
+            )
+            return float(result or 0.0)
+
     def get_usage_history(
         self,
         user_id: str,
