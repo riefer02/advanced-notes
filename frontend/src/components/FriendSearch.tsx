@@ -8,10 +8,17 @@ import { Card } from '@/components/ui/card'
 
 export default function FriendSearch() {
   const [query, setQuery] = useState('')
+  const [sentIds, setSentIds] = useState<Set<string>>(new Set())
   const { data, isLoading } = useUserSearch(query)
   const sendRequest = useSendFriendRequest()
 
   const users = data?.users ?? []
+
+  const handleSendRequest = (userId: string) => {
+    sendRequest.mutate(userId, {
+      onSuccess: () => setSentIds((prev) => new Set(prev).add(userId)),
+    })
+  }
 
   return (
     <div className="space-y-4">
@@ -42,8 +49,9 @@ export default function FriendSearch() {
             <UserSearchResult
               key={user.id}
               user={user}
-              onSendRequest={() => sendRequest.mutate(user.user_id)}
-              isSending={sendRequest.isPending}
+              onSendRequest={() => handleSendRequest(user.user_id)}
+              isSending={sendRequest.isPending && sendRequest.variables === user.user_id}
+              isSent={sentIds.has(user.user_id)}
             />
           ))}
         </div>
@@ -56,10 +64,12 @@ function UserSearchResult({
   user,
   onSendRequest,
   isSending,
+  isSent,
 }: {
   user: UserProfile
   onSendRequest: () => void
   isSending: boolean
+  isSent: boolean
 }) {
   return (
     <Card className="flex items-center justify-between p-3">
@@ -78,9 +88,9 @@ function UserSearchResult({
         size="sm"
         className="ml-3 text-blue-700 bg-blue-50 hover:bg-blue-100"
         onClick={onSendRequest}
-        disabled={isSending}
+        disabled={isSending || isSent}
       >
-        {isSending ? 'Sending...' : 'Add Friend'}
+        {isSent ? 'Pending' : isSending ? 'Sending...' : 'Add Friend'}
       </Button>
     </Card>
   )

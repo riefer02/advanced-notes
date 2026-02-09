@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useAuth } from '@clerk/clerk-react'
 import { useUserSettings, useUpdateUserSettings } from '../hooks/useSettings'
@@ -27,14 +27,16 @@ function SettingsPage() {
   const [bio, setBio] = useState('')
   const [discoverable, setDiscoverable] = useState(true)
   const [hasChanges, setHasChanges] = useState(false)
+  const initializedRef = useRef(false)
 
-  // Sync form state from profile data
+  // Sync form state from profile data (only on first load)
   useEffect(() => {
-    if (profile) {
+    if (profile && !initializedRef.current) {
       setDisplayName(profile.display_name)
       setUsername(profile.username ?? '')
       setBio(profile.bio ?? '')
       setDiscoverable(profile.discoverable)
+      initializedRef.current = true
     }
   }, [profile])
 
