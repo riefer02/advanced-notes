@@ -19,6 +19,8 @@ interface MealDetailSlideOverProps {
   onClose: () => void
   mealId: string | null
   onDeleted?: () => void
+  calendarOwner?: string
+  currentUserId?: string
 }
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -42,8 +44,11 @@ export default function MealDetailSlideOver({
   onClose,
   mealId,
   onDeleted,
+  calendarOwner,
+  currentUserId,
 }: MealDetailSlideOverProps) {
-  const { data: meal, isLoading } = useMeal(mealId)
+  const { data: meal, isLoading } = useMeal(mealId, calendarOwner)
+  const isOwner = !currentUserId || !meal || meal.user_id === currentUserId
 
   const updateMealMutation = useUpdateMeal()
   const deleteMealMutation = useDeleteMeal()
@@ -196,12 +201,13 @@ export default function MealDetailSlideOver({
                   <button
                     key={type}
                     type="button"
-                    onClick={() => handleMealTypeChange(type)}
+                    onClick={() => isOwner && handleMealTypeChange(type)}
+                    disabled={!isOwner}
                     className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
                       meal.meal_type === type
                         ? 'bg-blue-600 text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    } ${!isOwner ? 'cursor-default' : ''}`}
                   >
                     {MEAL_TYPE_ICONS[type]} {MEAL_TYPE_LABELS[type]}
                   </button>
@@ -216,6 +222,7 @@ export default function MealDetailSlideOver({
                 type="date"
                 value={meal.meal_date}
                 onChange={(e) => handleDateChange(e.target.value)}
+                disabled={!isOwner}
               />
             </div>
 
@@ -223,7 +230,7 @@ export default function MealDetailSlideOver({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label>Transcription</Label>
-                {!isEditingTranscription && (
+                {!isEditingTranscription && isOwner && (
                   <button
                     type="button"
                     onClick={() => setIsEditingTranscription(true)}
@@ -310,74 +317,80 @@ export default function MealDetailSlideOver({
                             <span className="text-xs text-gray-500 ml-2">({item.portion})</span>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => startEditingItem(item)}
-                          className="p-1 text-gray-400 hover:text-gray-600"
-                          aria-label="Edit item"
-                        >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="p-1 text-red-400 hover:text-red-600"
-                          aria-label="Delete item"
-                        >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
-                        </button>
+                        {isOwner && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => startEditingItem(item)}
+                              className="p-1 text-gray-400 hover:text-gray-600"
+                              aria-label="Edit item"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                                />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteItem(item.id)}
+                              className="p-1 text-red-400 hover:text-red-600"
+                              aria-label="Delete item"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
                 ))}
 
                 {/* Add Item Form */}
-                <div className="flex gap-2 mt-3">
-                  <Input
-                    type="text"
-                    value={newItemName}
-                    onChange={(e) => setNewItemName(e.target.value)}
-                    placeholder="Add food item..."
-                    className="flex-1"
-                  />
-                  <Input
-                    type="text"
-                    value={newItemPortion}
-                    onChange={(e) => setNewItemPortion(e.target.value)}
-                    placeholder="Portion"
-                    className="w-24"
-                  />
-                  <Button
-                    onClick={handleAddItem}
-                    disabled={!newItemName.trim() || addItemMutation.isPending}
-                  >
-                    Add
-                  </Button>
-                </div>
+                {isOwner && (
+                  <div className="flex gap-2 mt-3">
+                    <Input
+                      type="text"
+                      value={newItemName}
+                      onChange={(e) => setNewItemName(e.target.value)}
+                      placeholder="Add food item..."
+                      className="flex-1"
+                    />
+                    <Input
+                      type="text"
+                      value={newItemPortion}
+                      onChange={(e) => setNewItemPortion(e.target.value)}
+                      placeholder="Portion"
+                      className="w-24"
+                    />
+                    <Button
+                      onClick={handleAddItem}
+                      disabled={!newItemName.trim() || addItemMutation.isPending}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -408,16 +421,18 @@ export default function MealDetailSlideOver({
             </div>
 
             {/* Delete Button */}
-            <div className="border-t pt-4">
-              <Button
-                variant="ghost"
-                className="w-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
-                onClick={handleDeleteMeal}
-                disabled={deleteMealMutation.isPending}
-              >
-                {deleteMealMutation.isPending ? 'Deleting...' : 'Delete Meal'}
-              </Button>
-            </div>
+            {isOwner && (
+              <div className="border-t pt-4">
+                <Button
+                  variant="ghost"
+                  className="w-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                  onClick={handleDeleteMeal}
+                  disabled={deleteMealMutation.isPending}
+                >
+                  {deleteMealMutation.isPending ? 'Deleting...' : 'Delete Meal'}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>

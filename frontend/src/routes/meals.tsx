@@ -7,6 +7,7 @@ import DayMealsSlideOver from '../components/DayMealsSlideOver'
 import MealDetailSlideOver from '../components/MealDetailSlideOver'
 import SharedContentBanner from '../components/SharedContentBanner'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useShares } from '../hooks/useSharing'
 
 interface MealsSearch {
   calendar_owner?: string
@@ -25,9 +26,20 @@ const MOBILE_TABS = [
 ] as const
 
 function MealsPage() {
-  const { isLoaded, isSignedIn } = useAuth()
+  const { isLoaded, isSignedIn, userId } = useAuth()
   const { calendar_owner: calendarOwner } = Route.useSearch()
   const isSharedView = !!calendarOwner
+  const { data: sharesData } = useShares()
+  const canEdit =
+    !calendarOwner ||
+    sharesData?.received?.some(
+      (s) =>
+        s.owner_id === calendarOwner &&
+        s.resource_type === 'meal_calendar' &&
+        s.permission === 'edit' &&
+        s.status === 'accepted'
+    ) ||
+    false
 
   // Calendar state
   const now = new Date()
@@ -115,7 +127,12 @@ function MealsPage() {
       {/* Shared Content Banner */}
       {isSharedView && calendarOwner && (
         <div className="px-4 pt-4 lg:px-8 lg:pt-6">
-          <SharedContentBanner ownerId={calendarOwner} backTo="/meals" backLabel="Meal Calendar" />
+          <SharedContentBanner
+            ownerId={calendarOwner}
+            backTo="/meals"
+            backLabel="Meal Calendar"
+            canEdit={canEdit}
+          />
         </div>
       )}
 
@@ -133,7 +150,7 @@ function MealsPage() {
       )}
 
       {/* Mobile Tabs */}
-      {!isSharedView && (
+      {(!isSharedView || canEdit) && (
         <div className="lg:hidden bg-white shrink-0 px-4 pt-2">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'record' | 'calendar')}>
             <TabsList className="w-full">
@@ -149,15 +166,15 @@ function MealsPage() {
 
       {/* Desktop Split-Pane Layout */}
       <div className="flex-1 lg:flex overflow-hidden">
-        {/* Left Pane: Record Controls (40%) — hidden in shared view */}
-        {!isSharedView && (
+        {/* Left Pane: Record Controls (40%) — hidden in view-only shared view */}
+        {(!isSharedView || canEdit) && (
           <div
             className={`lg:w-[40%] lg:border-r lg:border-gray-200 bg-white lg:bg-gray-50 overflow-y-auto ${
               activeTab === 'record' ? 'block' : 'hidden lg:block'
             }`}
           >
             <div className="p-4 lg:p-8 max-w-xl mx-auto">
-              <MealRecorder onMealCreated={handleMealCreated} />
+              <MealRecorder onMealCreated={handleMealCreated} calendarOwner={calendarOwner} />
 
               {/* Quick Actions */}
               <div className="mt-8 pt-6 border-t border-gray-200">
@@ -192,8 +209,8 @@ function MealsPage() {
 
         {/* Right Pane: Calendar */}
         <div
-          className={`${isSharedView ? 'w-full' : 'lg:w-[60%]'} overflow-y-auto bg-gray-50 ${
-            isSharedView || activeTab === 'calendar' ? 'block' : 'hidden lg:block'
+          className={`${isSharedView && !canEdit ? 'w-full' : 'lg:w-[60%]'} overflow-y-auto bg-gray-50 ${
+            (isSharedView && !canEdit) || activeTab === 'calendar' ? 'block' : 'hidden lg:block'
           }`}
         >
           <div className="p-4 lg:p-8">
@@ -216,6 +233,7 @@ function MealsPage() {
         onClose={handleCloseDayMeals}
         date={selectedDate}
         onSelectMeal={handleSelectMeal}
+        calendarOwner={calendarOwner}
       />
 
       {/* Meal Detail SlideOver */}
@@ -224,6 +242,8 @@ function MealsPage() {
         onClose={handleCloseMealDetail}
         mealId={selectedMealId}
         onDeleted={handleMealDeleted}
+        calendarOwner={calendarOwner}
+        currentUserId={userId ?? undefined}
       />
     </div>
   )

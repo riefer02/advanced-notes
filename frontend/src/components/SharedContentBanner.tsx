@@ -6,12 +6,14 @@ interface SharedContentBannerProps {
   ownerId: string
   backTo: '/vinyl' | '/meals'
   backLabel: string
+  canEdit?: boolean
 }
 
 export default function SharedContentBanner({
   ownerId,
   backTo,
   backLabel,
+  canEdit,
 }: SharedContentBannerProps) {
   const { data: profile } = useUserProfile(ownerId)
 
@@ -35,6 +37,7 @@ export default function SharedContentBanner({
         </svg>
         <AlertDescription className="text-sm text-blue-800 truncate">
           Viewing <strong>{displayName}&apos;s</strong> {backLabel.toLowerCase()}
+          {canEdit && <span className="text-blue-600 ml-1">(you can add meals)</span>}
         </AlertDescription>
       </div>
       <Link
