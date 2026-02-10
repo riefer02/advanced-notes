@@ -846,7 +846,10 @@ export interface MealsCalendarResponse {
 /**
  * Transcribe audio and extract meal data
  */
-export async function transcribeMeal(audioBlob: Blob): Promise<MealTranscriptionResponse> {
+export async function transcribeMeal(
+  audioBlob: Blob,
+  calendarOwner?: string
+): Promise<MealTranscriptionResponse> {
   const mimeToExt: Record<string, string> = {
     'audio/webm': 'webm',
     'audio/mp4': 'mp4',
@@ -865,7 +868,12 @@ export async function transcribeMeal(audioBlob: Blob): Promise<MealTranscription
 
   const headers = await getAuthHeaders()
 
-  const response = await fetch(`${API_BASE_URL}/api/meals/transcribe`, {
+  let transcribeUrl = `${API_BASE_URL}/api/meals/transcribe`
+  if (calendarOwner) {
+    transcribeUrl += `?calendar_owner=${encodeURIComponent(calendarOwner)}`
+  }
+
+  const response = await fetch(transcribeUrl, {
     method: 'POST',
     headers,
     body: formData,
@@ -909,8 +917,10 @@ export async function fetchMealsCalendar(
 /**
  * Get a specific meal by ID
  */
-export async function fetchMeal(mealId: string): Promise<MealEntry> {
-  return apiRequest<MealEntry>('GET', `/api/meals/${mealId}`)
+export async function fetchMeal(mealId: string, calendarOwner?: string): Promise<MealEntry> {
+  return apiRequest<MealEntry>('GET', `/api/meals/${mealId}`, {
+    params: calendarOwner ? { calendar_owner: calendarOwner } : undefined,
+  })
 }
 
 /**

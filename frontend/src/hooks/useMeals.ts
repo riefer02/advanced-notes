@@ -43,10 +43,10 @@ export function useMealsCalendar(year: number, month: number, calendarOwner?: st
   })
 }
 
-export function useMeal(mealId: string | null) {
+export function useMeal(mealId: string | null, calendarOwner?: string) {
   return useQuery({
-    queryKey: ['meal', mealId],
-    queryFn: () => fetchMeal(mealId!),
+    queryKey: ['meal', mealId, calendarOwner],
+    queryFn: () => fetchMeal(mealId!, calendarOwner),
     enabled: !!mealId,
   })
 }
@@ -55,11 +55,11 @@ export function useMeal(mealId: string | null) {
 // Mutation Hooks
 // ============================================================================
 
-export function useTranscribeMeal() {
+export function useTranscribeMeal(calendarOwner?: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (audioBlob: Blob) => transcribeMeal(audioBlob),
+    mutationFn: (audioBlob: Blob) => transcribeMeal(audioBlob, calendarOwner),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['meals'] })
       queryClient.invalidateQueries({ queryKey: ['mealsCalendar'] })

@@ -8,6 +8,7 @@ interface DayMealsSlideOverProps {
   onClose: () => void
   date: string | null
   onSelectMeal: (mealId: string) => void
+  calendarOwner?: string
 }
 
 const MEAL_TYPE_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -38,11 +39,13 @@ export default function DayMealsSlideOver({
   onClose,
   date,
   onSelectMeal,
+  calendarOwner,
 }: DayMealsSlideOverProps) {
   const { data, isLoading } = useMeals({
     start_date: date || '',
     end_date: date || '',
     limit: 50,
+    calendar_owner: calendarOwner,
   })
 
   const mealsByType = useMemo(() => {

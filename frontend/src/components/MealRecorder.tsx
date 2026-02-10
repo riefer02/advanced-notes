@@ -20,9 +20,10 @@ const MEAL_TYPE_ICONS: Record<MealType, string> = {
 
 interface MealRecorderProps {
   onMealCreated?: (mealId: string) => void
+  calendarOwner?: string
 }
 
-export default function MealRecorder({ onMealCreated }: MealRecorderProps) {
+export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecorderProps) {
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [lastResult, setLastResult] = useState<MealTranscriptionResponse | null>(null)
@@ -31,7 +32,7 @@ export default function MealRecorder({ onMealCreated }: MealRecorderProps) {
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<number | null>(null)
 
-  const transcribeMutation = useTranscribeMeal()
+  const transcribeMutation = useTranscribeMeal(calendarOwner)
 
   useEffect(() => {
     if (transcribeMutation.isSuccess && transcribeMutation.data) {
