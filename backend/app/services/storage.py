@@ -2723,6 +2723,58 @@ class NoteStorage:
                 "total_artists": artist_count,
             }
 
+    def get_todo_counts(self, user_id: str) -> dict:
+        """Return grouped counts of todos by status."""
+        with self._session_scope() as session:
+            rows = (
+                session.query(TodoORM.status, func.count(TodoORM.id))
+                .filter(TodoORM.user_id == user_id)
+                .group_by(TodoORM.status)
+                .all()
+            )
+            counts = dict(rows)
+            return {
+                "suggested": counts.get("suggested", 0),
+                "accepted": counts.get("accepted", 0),
+                "completed": counts.get("completed", 0),
+            }
+
+    def get_meal_counts(self, user_id: str, year: int, month: int) -> dict:
+        """Return meal counts for the given month and for today."""
+        from datetime import date as date_type
+
+        today = date_type(year, month, datetime.utcnow().day)
+        month_start = date_type(year, month, 1)
+        if month == 12:
+            next_month_start = date_type(year + 1, 1, 1)
+        else:
+            next_month_start = date_type(year, month + 1, 1)
+
+        with self._session_scope() as session:
+            this_month = int(
+                session.query(func.count(MealEntryORM.id))
+                .filter(
+                    MealEntryORM.user_id == user_id,
+                    MealEntryORM.meal_date >= month_start,
+                    MealEntryORM.meal_date < next_month_start,
+                )
+                .scalar() or 0
+            )
+
+            today_count = int(
+                session.query(func.count(MealEntryORM.id))
+                .filter(
+                    MealEntryORM.user_id == user_id,
+                    MealEntryORM.meal_date == today,
+                )
+                .scalar() or 0
+            )
+
+            return {
+                "this_month": this_month,
+                "today": today_count,
+            }
+
     def upsert_vinyl_embedding(
         self,
         user_id: str,

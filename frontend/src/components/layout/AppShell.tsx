@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { SignedIn, useAuth, UserButton } from '@clerk/clerk-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -216,6 +217,18 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ]
 
+interface AppShellContextValue {
+  openAsk: () => void
+}
+
+const AppShellContext = createContext<AppShellContextValue | null>(null)
+
+export function useAppShell() {
+  const ctx = useContext(AppShellContext)
+  if (!ctx) throw new Error('useAppShell must be used within AppShell')
+  return ctx
+}
+
 function getIsActive(pathname: string, to: string) {
   return pathname === to || pathname.startsWith(`${to}/`)
 }
@@ -377,8 +390,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const appShellCtx = useMemo<AppShellContextValue>(() => ({ openAsk: () => setShowAsk(true) }), [])
+
   return (
-    <>
+    <AppShellContext.Provider value={appShellCtx}>
       <div className="min-h-screen bg-gray-50 flex">
         {/* Desktop rail */}
         <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-gray-200 lg:bg-white">
@@ -553,7 +568,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuItem asChild>
-                    <Link to="/dashboard">Record a Note</Link>
+                    <Link to="/notes">Record a Note</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setShowAsk(true)}>Ask Notes</DropdownMenuItem>
                   <DropdownMenuItem asChild>
@@ -801,6 +816,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onClose={() => setCommandPaletteOpen(false)}
         onOpenAsk={() => setShowAsk(true)}
       />
-    </>
+    </AppShellContext.Provider>
   )
 }
