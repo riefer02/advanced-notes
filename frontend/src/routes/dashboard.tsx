@@ -83,28 +83,28 @@ function DashboardPage() {
             Quick Actions
           </h2>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/notes">
+            <Link to="/notes">
+              <Button variant="outline" size="sm">
                 <Mic className="h-4 w-4 mr-1.5" />
                 Record a Note
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/meals">
+              </Button>
+            </Link>
+            <Link to="/meals">
+              <Button variant="outline" size="sm">
                 <UtensilsCrossed className="h-4 w-4 mr-1.5" />
                 Log a Meal
-              </Link>
-            </Button>
+              </Button>
+            </Link>
             <Button variant="outline" size="sm" onClick={openAsk}>
               <MessageSquare className="h-4 w-4 mr-1.5" />
               Ask Notes
             </Button>
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/summaries">
+            <Link to="/summaries">
+              <Button variant="outline" size="sm">
                 <FileText className="h-4 w-4 mr-1.5" />
                 Create Summary
-              </Link>
-            </Button>
+              </Button>
+            </Link>
           </div>
         </div>
 
