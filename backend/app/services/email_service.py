@@ -11,6 +11,7 @@ import logging
 import time
 
 import boto3
+from botocore.config import Config as BotoConfig
 from botocore.exceptions import ClientError
 
 from ..config import Config
@@ -122,6 +123,11 @@ class EmailService:
                 region_name=Config.SES_REGION,
                 aws_access_key_id=Config.SES_ACCESS_KEY_ID,
                 aws_secret_access_key=Config.SES_SECRET_ACCESS_KEY,
+                config=BotoConfig(
+                    connect_timeout=5,
+                    read_timeout=5,
+                    retries={"max_attempts": 1},
+                ),
             )
             client.send_email(
                 Source=sender,
