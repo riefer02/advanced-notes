@@ -46,6 +46,8 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+        env:
+          VITE_SITE_URL: http://localhost:5173
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
