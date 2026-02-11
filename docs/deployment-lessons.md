@@ -70,3 +70,33 @@ Ensure code that uses `notes_fts` or other specific features checks `storage.dia
 **Rule for Future:**
 Test DB-specific logic carefully. If using SQLite for dev and Postgres for prod, ensure all dialect-specific code is strictly guarded.
 
+## 5. External Service Calls Must Have Timeouts (The "SES Deadlock")
+
+### The Issue
+After adding email notifications via AWS SES, the boto3 SES client was created with **default timeouts (60s connect, 60s read)**. When SES was unreachable from Railway's network, a single email attempt blocked a gunicorn worker for 120+ seconds. With only 4 sync workers, a handful of stuck requests caused **complete application deadlock** — no workers available to serve any traffic, including health checks. Railway killed the process, but the same pattern repeated on restart.
+
+The trigger: the `_maybe_send_cost_alert()` function ran after every AI endpoint (transcription, summarization, etc.). When the monthly cost threshold was reached, it attempted an SES email that hung indefinitely.
+
+### The Fix
+**Always set aggressive timeouts and retry limits on external service clients:**
+
+```python
+# SES — best-effort notifications, fail fast
+config=BotoConfig(connect_timeout=5, read_timeout=5, retries={"max_attempts": 1})
+
+# S3 — needed for core functionality, slightly more tolerant
+config=BotoConfig(connect_timeout=10, read_timeout=30, retries={"max_attempts": 2})
+```
+
+**Added gunicorn safety net:**
+```bash
+gunicorn -w 4 --timeout 120 --graceful-timeout 30
+```
+This kills and respawns any worker silent for >120s, preventing a single hung request from permanently consuming a worker.
+
+### Rules for Future
+1. **Every boto3/HTTP client MUST have explicit timeouts.** Never rely on library defaults (often 60s+). Best-effort services (email, analytics) should use 5s; core services (S3, DB) can use 10-30s.
+2. **Best-effort calls (email, logging, analytics) must never block request handling.** Wrap in try/except, set short timeouts, and consider fire-and-forget patterns for non-critical work.
+3. **Gunicorn sync workers are a finite resource.** With `N` workers, `N` simultaneous hung requests = total outage. Always set `--timeout` to cap the maximum time any single request can monopolize a worker.
+4. **Test external service failure modes**, not just the happy path. What happens when SES is unreachable? When S3 returns 500? When DNS resolution hangs?
+

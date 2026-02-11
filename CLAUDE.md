@@ -72,6 +72,8 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 
 **S3 File Uploads**: Browser clients upload files to the backend via multipart form data. The backend uploads to S3 server-side (`put_object_bytes`). Never use presigned PUT URLs for browser uploads (CORS issues). Presigned GET URLs are generated at response time for viewing. See `docs/audio-clips-s3.md` for the full pattern.
 
+**External Service Timeouts (CRITICAL)**: Every boto3/HTTP client MUST have explicit timeouts. With 4 sync gunicorn workers, a single hung external call (SES, S3, etc.) without a timeout can deadlock the entire app. Best-effort services (email, analytics): `connect_timeout=5, read_timeout=5, retries=1`. Core services (S3): `connect_timeout=10, read_timeout=30, retries=2`. See `docs/deployment-lessons.md` §5 for the full incident writeup.
+
 **Feature Modules**: Each major feature has its own set of files following the same pattern:
 - ORM models in `database.py`
 - Pydantic DTOs in `services/models.py`
@@ -295,7 +297,7 @@ GitHub Actions workflows run automatically on PRs and pushes to `main`:
 
 Production runs on Railway via `backend/Procfile`:
 ```
-web: python migrate.py && gunicorn -w 4 -b 0.0.0.0:$PORT wsgi:app
+web: python migrate.py && gunicorn -w 4 -b 0.0.0.0:$PORT --timeout 120 --graceful-timeout 30 wsgi:app
 ```
 Migrations run automatically before the app starts. Entry point is `backend/wsgi.py`.
 

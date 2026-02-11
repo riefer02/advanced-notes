@@ -79,6 +79,7 @@ def _require_s3_config() -> tuple[str, str | None, str | None, str | None, str |
 def _client():
     # Import boto3 lazily so tests can monkeypatch this module without boto3 installed.
     import boto3  # type: ignore
+    from botocore.config import Config as BotoConfig  # type: ignore
 
     bucket, region, access_key, secret_key, endpoint_url = _require_s3_config()
     # region can be None for some S3-compatible setups, but AWS S3 expects it.
@@ -89,6 +90,11 @@ def _client():
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
             endpoint_url=endpoint_url,
+            config=BotoConfig(
+                connect_timeout=10,
+                read_timeout=30,
+                retries={"max_attempts": 2},
+            ),
         ),
         bucket,
     )
