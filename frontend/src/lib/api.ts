@@ -1451,3 +1451,18 @@ export async function declineShare(shareId: string): Promise<ResourceShare> {
 export async function revokeShare(shareId: string): Promise<void> {
   await apiRequest<{ success: boolean }>('DELETE', `/api/shares/${shareId}`)
 }
+
+// ============================================================================
+// Dashboard
+// ============================================================================
+
+export interface DashboardStats {
+  notes: { total: number }
+  todos: { suggested: number; accepted: number; completed: number }
+  meals: { this_month: number; today: number }
+  vinyl: { total_records: number; total_artists: number }
+}
+
+export async function fetchDashboardStats(): Promise<DashboardStats> {
+  return apiRequest<DashboardStats>('GET', '/api/dashboard/stats')
+}

@@ -18,7 +18,7 @@ interface CommandPaletteProps {
 }
 
 const QUICK_ACTIONS = [
-  { label: 'Record a Note', to: '/dashboard' as const, icon: Mic },
+  { label: 'Record a Note', to: '/notes' as const, icon: Mic },
   { label: 'Ask Notes', action: 'ask' as const, icon: MessageSquare },
   { label: 'Create Summary', to: '/summaries' as const, icon: FileText },
   { label: 'Log a Meal', to: '/meals' as const, icon: UtensilsCrossed },

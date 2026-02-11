@@ -1533,3 +1533,74 @@ def test_delete_note_user_scoped(client, storage):
 
     resp = client.delete(f"/api/notes/{note_id}", headers={"X-Test-User-Id": "user-a"})
     assert resp.status_code == 404
+
+
+# ============================================================================
+# DASHBOARD STATS ENDPOINT TESTS
+# ============================================================================
+
+
+def test_dashboard_stats_empty(client):
+    """GET /api/dashboard/stats - returns zeroes when user has no data."""
+    resp = client.get("/api/dashboard/stats", headers={"X-Test-User-Id": "user-empty"})
+    assert resp.status_code == 200
+    data = resp.get_json()
+
+    assert data["notes"]["total"] == 0
+    assert data["todos"]["suggested"] == 0
+    assert data["todos"]["accepted"] == 0
+    assert data["todos"]["completed"] == 0
+    assert data["meals"]["this_month"] == 0
+    assert data["meals"]["today"] == 0
+    assert data["vinyl"]["total_records"] == 0
+    assert data["vinyl"]["total_artists"] == 0
+
+
+def test_dashboard_stats_with_data(client, storage):
+    """GET /api/dashboard/stats - returns correct counts after creating data."""
+    from app.services.models import MealEntryMetadata
+
+    user = "user-dash"
+
+    # Create 2 notes
+    for i in range(2):
+        storage.save_note(
+            user_id=user,
+            content=f"Note {i}",
+            metadata=NoteMetadata(title=f"Note {i}", folder_path="inbox", tags=[]),
+        )
+
+    # Create todos: 1 suggested, 2 accepted, 1 completed
+    storage.create_todo(user_id=user, title="Suggested", status="suggested")
+    storage.create_todo(user_id=user, title="Accepted 1", status="accepted")
+    storage.create_todo(user_id=user, title="Accepted 2", status="accepted")
+    storage.create_todo(user_id=user, title="Done", status="completed")
+
+    # Create a meal for today
+    from datetime import date
+
+    today = date.today()
+    storage.save_meal_entry(
+        user_id=user,
+        transcription="Had eggs for breakfast",
+        metadata=MealEntryMetadata(
+            meal_type="breakfast",
+            meal_date=today.isoformat(),
+        ),
+    )
+
+    # Create a vinyl record
+    storage.save_vinyl_record(user_id=user, artist="Radiohead", album_title="OK Computer")
+
+    resp = client.get("/api/dashboard/stats", headers={"X-Test-User-Id": user})
+    assert resp.status_code == 200
+    data = resp.get_json()
+
+    assert data["notes"]["total"] == 2
+    assert data["todos"]["suggested"] == 1
+    assert data["todos"]["accepted"] == 2
+    assert data["todos"]["completed"] == 1
+    assert data["meals"]["this_month"] >= 1
+    assert data["meals"]["today"] == 1
+    assert data["vinyl"]["total_records"] == 1
+    assert data["vinyl"]["total_artists"] == 1
