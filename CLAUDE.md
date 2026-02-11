@@ -96,7 +96,7 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 - No `tailwind.config.ts` — Tailwind v4 configures entirely via CSS
 
 **Installed components** (in `frontend/src/components/ui/`):
-button, card, badge, tabs, input, textarea, dropdown-menu, alert, label, select, switch, separator, SlideOver (custom)
+button, card, badge, tabs, input, textarea, dropdown-menu, alert, label, select, switch, separator, dialog, command, SlideOver (custom)
 
 **Adding a new shadcn component:**
 ```bash
@@ -110,6 +110,7 @@ After install, **add `React.forwardRef`** to any component that Radix uses with 
 3. Use in components: `className="bg-warning text-warning-foreground"`
 
 **Key conventions:**
+- **Always use existing shadcn/ui components** (Button, Input, Card, etc.) instead of raw HTML elements like `<button>`, `<input>`, `<div role="dialog">`. This keeps styling consistent and avoids reinventing padding, borders, focus rings, etc. If a shadcn component exists for the job, use it.
 - Import from `@/components/ui/<name>` (path alias `@/` → `src/`)
 - Use `cn()` from `@/lib/utils` for className merging (clsx + tailwind-merge)
 - Use CVA (`class-variance-authority`) for component variants

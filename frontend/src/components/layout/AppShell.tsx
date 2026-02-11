@@ -2,8 +2,10 @@ import { Link, useRouterState } from '@tanstack/react-router'
 import { SignedIn, useAuth, UserButton } from '@clerk/clerk-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { Search } from 'lucide-react'
 
 import SlideOver from '../ui/SlideOver'
+import { CommandPalette } from '../CommandPalette'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -20,7 +22,7 @@ import type { AskResponse, Note } from '../../lib/api'
 import { useFriendRequests } from '../../hooks/useFriends'
 import { useReceivedShares } from '../../hooks/useSharing'
 
-type NavItem = {
+export type NavItem = {
   to:
     | '/dashboard'
     | '/summaries'
@@ -35,7 +37,7 @@ type NavItem = {
   icon: (props: { className?: string }) => JSX.Element
 }
 
-const NAV_ITEMS: NavItem[] = [
+export const NAV_ITEMS: NavItem[] = [
   {
     to: '/dashboard',
     label: 'Dashboard',
@@ -248,6 +250,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const drawerPanelRef = useRef<HTMLDivElement>(null)
   const lastFocusedRef = useRef<HTMLElement | null>(null)
 
+  // Command palette state
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+
   // Ask Notes state
   const [showAsk, setShowAsk] = useState(false)
   const [askQuery, setAskQuery] = useState('')
@@ -318,6 +323,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
     document.body.style.overflow = 'unset'
   }, [isDrawerOpen])
+
+  // Cmd+K / Ctrl+K to open command palette
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setCommandPaletteOpen((prev) => !prev)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   const handleAskQuery = useCallback(async (query: string) => {
     const q = query.trim()
@@ -507,6 +524,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setCommandPaletteOpen(true)}
+                className="hidden sm:flex items-center gap-1.5 text-muted-foreground"
+              >
+                <Search className="h-3.5 w-3.5" />
+                <kbd className="pointer-events-none text-xs">
+                  {typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent)
+                    ? '⌘K'
+                    : 'Ctrl+K'}
+                </kbd>
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button aria-label="Quick actions">
@@ -765,6 +794,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <NoteDetail note={selectedSourceNote} onDelete={handleDeleteSourceNote} />
         ) : null}
       </SlideOver>
+
+      {/* Command Palette (Cmd+K) */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onOpenAsk={() => setShowAsk(true)}
+      />
     </>
   )
 }
