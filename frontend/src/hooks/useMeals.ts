@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
   fetchMeals,
   fetchMealsCalendar,
@@ -13,6 +13,20 @@ import {
   type MealItem,
   type MealType,
 } from '../lib/api'
+
+// ============================================================================
+// Invalidation Helpers
+// ============================================================================
+
+function invalidateMealQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ['meals'] })
+  queryClient.invalidateQueries({ queryKey: ['mealsCalendar'] })
+}
+
+function invalidateDeletedMealQueries(queryClient: QueryClient, mealId: string) {
+  queryClient.removeQueries({ queryKey: ['meal', mealId] })
+  invalidateMealQueries(queryClient)
+}
 
 // ============================================================================
 // Query Hooks
@@ -60,10 +74,7 @@ export function useTranscribeMeal(calendarOwner?: string) {
 
   return useMutation({
     mutationFn: (audioBlob: Blob) => transcribeMeal(audioBlob, calendarOwner),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meals'] })
-      queryClient.invalidateQueries({ queryKey: ['mealsCalendar'] })
-    },
+    onSuccess: () => invalidateMealQueries(queryClient),
   })
 }
 
@@ -85,8 +96,7 @@ export function useUpdateMeal() {
     }) => updateMeal(mealId, data),
     onSuccess: (updatedMeal: MealEntry) => {
       queryClient.setQueryData(['meal', updatedMeal.id], updatedMeal)
-      queryClient.invalidateQueries({ queryKey: ['meals'] })
-      queryClient.invalidateQueries({ queryKey: ['mealsCalendar'] })
+      invalidateMealQueries(queryClient)
     },
   })
 }
@@ -96,11 +106,7 @@ export function useDeleteMeal() {
 
   return useMutation({
     mutationFn: (mealId: string) => deleteMeal(mealId),
-    onSuccess: (_data, mealId) => {
-      queryClient.removeQueries({ queryKey: ['meal', mealId] })
-      queryClient.invalidateQueries({ queryKey: ['meals'] })
-      queryClient.invalidateQueries({ queryKey: ['mealsCalendar'] })
-    },
+    onSuccess: (_data, mealId) => invalidateDeletedMealQueries(queryClient, mealId),
   })
 }
 
@@ -111,7 +117,6 @@ export function useAddMealItem() {
     mutationFn: ({ mealId, data }: { mealId: string; data: { name: string; portion?: string } }) =>
       addMealItem(mealId, data),
     onSuccess: (newItem: MealItem) => {
-      // Invalidate the specific meal query to refetch with new item
       queryClient.invalidateQueries({ queryKey: ['meal', newItem.meal_entry_id] })
       queryClient.invalidateQueries({ queryKey: ['mealsCalendar'] })
     },

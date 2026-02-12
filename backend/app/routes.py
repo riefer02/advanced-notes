@@ -286,7 +286,132 @@ def summarize_notes():
         return jsonify({**digest_result.model_dump(), "digest_id": digest_id})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
+
+
+class _AudioTranscriptionError(Exception):
+    """Raised by _transcribe_audio_clip for errors that should return an HTTP response."""
+
+    def __init__(self, message: str, status: int = 400):
+        super().__init__(message)
+        self.status = status
+
+
+def _transcribe_audio_clip(
+    user_id: str,
+    svc,  # noqa: ANN001
+    endpoint: str,
+) -> tuple[str, dict, str, str]:
+    """Shared audio upload + transcription lifecycle.
+
+    Handles: request parsing, pending clip creation, S3 upload,
+    transcription, error cleanup, usage recording, marking clip ready.
+
+    Returns:
+        (transcription_text, meta, audio_clip_id, audio_storage_key)
+
+    Raises:
+        _AudioTranscriptionError: For validation/format errors (caller converts to api_error).
+    """
+    from uuid import uuid4
+
+    # Read audio from request
+    content_type = None
+    if "file" in request.files:
+        file = request.files["file"]
+        data = file.read()
+        content_type = file.content_type
+    else:
+        data = request.get_data()
+        content_type = request.content_type
+
+    if not data:
+        raise _AudioTranscriptionError("No audio data provided", 400)
+
+    _cleanup_stale_pending_audio_clips(user_id, svc)
+
+    # Create pending clip → upload to S3 → transcribe → record usage → mark ready.
+    audio_clip_id = str(uuid4())
+    resolved_mime = content_type or "application/octet-stream"
+    audio_storage_key = s3_audio.object_key_for_clip(
+        user_id=user_id,
+        clip_id=audio_clip_id,
+        mime_type=resolved_mime,
+    )
+
+    svc.storage.create_audio_clip_pending(
+        user_id,
+        clip_id=audio_clip_id,
+        note_id=None,
+        mime_type=resolved_mime,
+        bytes=len(data),
+        duration_ms=None,
+        storage_key=audio_storage_key,
+        bucket=None,
+    )
+
+    try:
+        s3_audio.put_object_bytes(
+            storage_key=audio_storage_key,
+            content_type=resolved_mime,
+            data=data,
+        )
+    except Exception:
+        svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
+        raise
+
+    # Transcribe audio
+    try:
+        text, meta = transcribe_bytes(data, content_type)
+    except ValueError as e:
+        with suppress(Exception):
+            s3_audio.delete_object(storage_key=audio_storage_key)
+        svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
+        raise _AudioTranscriptionError(str(e), 400) from e
+    except Exception as e:
+        error_msg = str(e)
+        if "corrupted" in error_msg.lower() or "unsupported" in error_msg.lower():
+            with suppress(Exception):
+                s3_audio.delete_object(storage_key=audio_storage_key)
+            svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
+            raise _AudioTranscriptionError(
+                "Audio format not supported or corrupted. Please try recording again.",
+                400,
+            ) from e
+        with suppress(Exception):
+            s3_audio.delete_object(storage_key=audio_storage_key)
+        svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
+        raise
+
+    # Record transcription usage
+    audio_duration = meta.get("duration")
+    if audio_duration is not None:
+        svc.usage_tracking.record_usage(
+            user_id=user_id,
+            service_type="transcription",
+            model=meta.get("model", "gpt-4o-mini-transcribe"),
+            audio_seconds=float(audio_duration),
+            endpoint=endpoint,
+        )
+        _maybe_send_cost_alert(svc)
+
+    # Compute duration and mark clip ready
+    duration_ms = None
+    try:
+        dur = meta.get("duration")
+        if dur is not None:
+            duration_ms = int(float(dur) * 1000.0)
+    except Exception:
+        duration_ms = None
+
+    svc.storage.mark_audio_clip_ready(
+        user_id,
+        audio_clip_id,
+        note_id=None,
+        duration_ms=duration_ms,
+    )
+
+    return text, meta, audio_clip_id, audio_storage_key
 
 
 @bp.post("/transcribe")
@@ -314,99 +439,20 @@ def transcribe():
             }
         }
     """
-    user_id = g.user_id  # Get authenticated user ID
+    user_id = g.user_id
     svc = get_services()
 
-    # Check for file upload
-    content_type = None
-    if "file" in request.files:
-        file = request.files["file"]
-        data = file.read()
-        content_type = file.content_type
-    else:
-        # Raw bytes in body
-        data = request.get_data()
-        content_type = request.content_type
-
-    if not data:
-        return jsonify({"error": "No audio data provided"}), 400
+    try:
+        text, meta, audio_clip_id, audio_storage_key = _transcribe_audio_clip(
+            user_id, svc, "/api/transcribe"
+        )
+    except _AudioTranscriptionError as e:
+        return api_error(str(e), e.status)
+    except Exception as e:
+        return api_error(str(e), 500)
 
     try:
-        _cleanup_stale_pending_audio_clips(user_id, svc)
-
-        # Create a pending audio clip row first (so we never have silent S3 orphans without DB metadata).
-        # Then upload bytes to S3; we only mark the clip ready after the full flow succeeds.
-        from uuid import uuid4
-
-        audio_clip_id = str(uuid4())
-        resolved_mime = content_type or "application/octet-stream"
-        audio_storage_key = s3_audio.object_key_for_clip(
-            user_id=user_id,
-            clip_id=audio_clip_id,
-            mime_type=resolved_mime,
-        )
-
-        svc.storage.create_audio_clip_pending(
-            user_id,
-            clip_id=audio_clip_id,
-            note_id=None,
-            mime_type=resolved_mime,
-            bytes=len(data),
-            duration_ms=None,
-            storage_key=audio_storage_key,
-            bucket=None,
-        )
-
-        try:
-            s3_audio.put_object_bytes(
-                storage_key=audio_storage_key,
-                content_type=resolved_mime,
-                data=data,
-            )
-        except Exception:
-            # Upload failed: mark clip failed and bubble up.
-            svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
-            raise
-
-        # Step 1: Transcribe audio
-        try:
-            text, meta = transcribe_bytes(data, content_type)
-        except ValueError as e:
-            # Validation errors (empty audio, too small, etc.)
-            with suppress(Exception):
-                s3_audio.delete_object(storage_key=audio_storage_key)
-            svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
-            return jsonify({"error": str(e)}), 400
-        except Exception as e:
-            # OpenAI API errors
-            error_msg = str(e)
-            if "corrupted" in error_msg.lower() or "unsupported" in error_msg.lower():
-                with suppress(Exception):
-                    s3_audio.delete_object(storage_key=audio_storage_key)
-                svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
-                return jsonify(
-                    {
-                        "error": "Audio format not supported or corrupted. Please try recording again."
-                    }
-                ), 400
-            with suppress(Exception):
-                s3_audio.delete_object(storage_key=audio_storage_key)
-            svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
-            raise
-
-        # Record transcription usage
-        audio_duration = meta.get("duration")
-        if audio_duration is not None:
-            svc.usage_tracking.record_usage(
-                user_id=user_id,
-                service_type="transcription",
-                model=meta.get("model", "gpt-4o-mini-transcribe"),
-                audio_seconds=float(audio_duration),
-                endpoint="/api/transcribe",
-            )
-            _maybe_send_cost_alert(svc)
-
-        # Step 2: Get AI categorization (user-scoped folders)
+        # Get AI categorization (user-scoped folders)
         folder_tree = svc.storage.get_folder_tree(user_id)
 
         existing_folders = extract_folder_paths(folder_tree)
@@ -426,7 +472,7 @@ def transcribe():
             )
             _maybe_send_cost_alert(svc)
 
-        # Step 3: Save to database (user-scoped)
+        # Save to database (user-scoped)
         note_metadata = NoteMetadata(
             title=categorization_result.filename.replace(".md", "").replace("-", " ").title(),
             folder_path=categorization_result.folder_path,
@@ -438,23 +484,15 @@ def transcribe():
 
         note_id = svc.storage.save_note(user_id=user_id, content=text, metadata=note_metadata)
 
-        # Persist audio clip metadata linked to the new note + mark ready.
-        duration_ms = None
-        try:
-            dur = meta.get("duration")
-            if dur is not None:
-                duration_ms = int(float(dur) * 1000.0)
-        except Exception:
-            duration_ms = None
-
+        # Update audio clip to link to the new note
         svc.storage.mark_audio_clip_ready(
             user_id,
             audio_clip_id,
             note_id=note_id,
-            duration_ms=duration_ms,
+            duration_ms=None,
         )
 
-        # Step 3.5: Upsert embedding for semantic search (best-effort)
+        # Upsert embedding for semantic search (best-effort)
         svc.embeddings.upsert_for_note(
             storage=svc.storage,
             user_id=user_id,
@@ -464,12 +502,11 @@ def transcribe():
             tags=note_metadata.tags,
         )
 
-        # Step 3.6: Create todos from AI extraction (best-effort)
+        # Create todos from AI extraction (best-effort)
         created_todos = []
         try:
             extracted_todos = getattr(categorization_result, "todos", []) or []
             if extracted_todos:
-                # Check user settings for auto-accept preference
                 user_settings = svc.storage.get_user_settings(user_id)
                 todo_status = "accepted" if user_settings.auto_accept_todos else "suggested"
 
@@ -485,10 +522,8 @@ def transcribe():
                     )
                     created_todos.append(todo.model_dump())
         except Exception as e:
-            # Do not fail the transcription flow if todo creation fails.
             print(f"Todo creation failed for note {note_id}: {e}")
 
-        # Step 4: Return comprehensive response
         return jsonify(
             {
                 "text": text,
@@ -511,18 +546,7 @@ def transcribe():
         )
 
     except Exception as e:
-        # Best-effort cleanup if we already staged an S3 object.
-        try:
-            if "audio_storage_key" in locals():
-                s3_audio.delete_object(storage_key=audio_storage_key)
-        except Exception:
-            pass
-        try:
-            if "audio_clip_id" in locals():
-                svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
-        except Exception:
-            pass
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -747,7 +771,7 @@ def list_notes():
         )
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/notes/<note_id>")
@@ -766,12 +790,12 @@ def get_note(note_id: str):
         note = svc.storage.get_note(user_id, note_id)
 
         if not note:
-            return jsonify({"error": "Note not found"}), 404
+            return api_error("Note not found", 404)
 
         return jsonify(note.model_dump())
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.put("/notes/<note_id>")
@@ -798,12 +822,12 @@ def update_note(note_id: str):
         data = request.get_json()
 
         if not data:
-            return jsonify({"error": "No data provided"}), 400
+            return api_error("No data provided", 400)
 
         # Get existing note (user-scoped)
         note = svc.storage.get_note(user_id, note_id)
         if not note:
-            return jsonify({"error": "Note not found"}), 404
+            return api_error("Note not found", 404)
 
         # Update fields
         content = data.get("content", note.content)
@@ -820,7 +844,7 @@ def update_note(note_id: str):
         success = svc.storage.update_note(user_id, note_id, content, metadata)
 
         if not success:
-            return jsonify({"error": "Failed to update note"}), 500
+            return api_error("Failed to update note", 500)
 
         # Return updated note
         updated_note = svc.storage.get_note(user_id, note_id)
@@ -839,7 +863,7 @@ def update_note(note_id: str):
         return jsonify(updated_note.model_dump())
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.delete("/notes/<note_id>")
@@ -873,12 +897,12 @@ def delete_note(note_id: str):
                 svc.storage.delete_audio_clips_for_note(user_id, note_id)
             except Exception as e:
                 # If we can't delete clip rows, abort the note deletion to avoid a confusing half-state.
-                return jsonify({"error": f"Failed to delete note audio clips: {e}"}), 500
+                return api_error(f"Failed to delete note audio clips: {e}", 500)
 
         success = svc.storage.delete_note(user_id, note_id)
 
         if not success:
-            return jsonify({"error": "Note not found"}), 404
+            return api_error("Note not found", 404)
 
         payload = {"success": True, "message": f"Note {note_id} deleted successfully"}
         if warning:
@@ -886,7 +910,7 @@ def delete_note(note_id: str):
         return jsonify(payload)
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -912,7 +936,7 @@ def get_folders():
         return jsonify({"folders": folder_tree.model_dump()})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/folders/<path:folder_path>/stats")
@@ -933,7 +957,7 @@ def get_folder_stats(folder_path: str):
         return jsonify(stats.model_dump())
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -959,7 +983,7 @@ def get_tags():
         return jsonify({"tags": tags})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/tags/<tag>/notes")
@@ -980,7 +1004,7 @@ def get_notes_by_tag(tag: str):
         return jsonify({"tag": tag, "notes": [note.model_dump() for note in notes]})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -1007,14 +1031,14 @@ def search_notes():
         query = request.args.get("q")
 
         if not query:
-            return jsonify({"error": "Query parameter 'q' is required"}), 400
+            return api_error("Query parameter 'q' is required", 400)
 
         results = svc.storage.search_notes(user_id, query)
 
         return jsonify({"query": query, "results": [result.model_dump() for result in results]})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -1047,7 +1071,7 @@ def ask_notes():
 
     query = (data.get("query") or "").strip()
     if not query:
-        return jsonify({"error": "Body field 'query' is required"}), 400
+        return api_error("Body field 'query' is required", 400)
 
     max_results = int(data.get("max_results", 12) or 12)
     max_results = max(1, min(max_results, 50))
@@ -1170,7 +1194,7 @@ def ask_notes():
             }
         return jsonify(response)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -1195,7 +1219,7 @@ def list_digests():
             }
         )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/digests/<digest_id>")
@@ -1206,10 +1230,10 @@ def get_digest(digest_id: str):
     try:
         digest = svc.storage.get_digest(user_id, digest_id)
         if not digest:
-            return jsonify({"error": "Digest not found"}), 404
+            return api_error("Digest not found", 404)
         return jsonify(digest.model_dump())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.delete("/digests/<digest_id>")
@@ -1220,10 +1244,10 @@ def delete_digest(digest_id: str):
     try:
         success = svc.storage.delete_digest(user_id, digest_id)
         if not success:
-            return jsonify({"error": "Digest not found"}), 404
+            return api_error("Digest not found", 404)
         return jsonify({"success": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -1248,7 +1272,7 @@ def list_ask_history():
             }
         )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/ask-history/<ask_id>")
@@ -1259,10 +1283,10 @@ def get_ask_history(ask_id: str):
     try:
         item = svc.storage.get_ask_history(user_id, ask_id)
         if not item:
-            return jsonify({"error": "Ask history item not found"}), 404
+            return api_error("Ask history item not found", 404)
         return jsonify(item.model_dump())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.delete("/ask-history/<ask_id>")
@@ -1273,10 +1297,10 @@ def delete_ask_history(ask_id: str):
     try:
         success = svc.storage.delete_ask_history(user_id, ask_id)
         if not success:
-            return jsonify({"error": "Ask history item not found"}), 404
+            return api_error("Ask history item not found", 404)
         return jsonify({"success": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -1300,7 +1324,7 @@ def get_settings():
         settings = svc.storage.get_user_settings(user_id)
         return jsonify(settings.model_dump())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.put("/settings")
@@ -1329,7 +1353,7 @@ def update_settings():
         )
         return jsonify(settings.model_dump())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -1377,7 +1401,7 @@ def list_todos():
             }
         )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/todos/<todo_id>")
@@ -1395,10 +1419,10 @@ def get_todo(todo_id: str):
     try:
         todo = svc.storage.get_todo(user_id, todo_id)
         if not todo:
-            return jsonify({"error": "Todo not found"}), 404
+            return api_error("Todo not found", 404)
         return jsonify(todo.model_dump())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/todos")
@@ -1423,11 +1447,11 @@ def create_todo():
     try:
         data = request.get_json()
         if not data:
-            return jsonify({"error": "No data provided"}), 400
+            return api_error("No data provided", 400)
 
         title = data.get("title", "").strip()
         if not title:
-            return jsonify({"error": "Title is required"}), 400
+            return api_error("Title is required", 400)
 
         todo = svc.storage.create_todo(
             user_id=user_id,
@@ -1441,7 +1465,7 @@ def create_todo():
 
         return jsonify(todo.model_dump()), 201
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.put("/todos/<todo_id>")
@@ -1473,11 +1497,11 @@ def update_todo(todo_id: str):
         )
 
         if not todo:
-            return jsonify({"error": "Todo not found"}), 404
+            return api_error("Todo not found", 404)
 
         return jsonify(todo.model_dump())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.delete("/todos/<todo_id>")
@@ -1495,10 +1519,10 @@ def delete_todo(todo_id: str):
     try:
         success = svc.storage.delete_todo(user_id, todo_id)
         if not success:
-            return jsonify({"error": "Todo not found"}), 404
+            return api_error("Todo not found", 404)
         return jsonify({"success": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/todos/<todo_id>/accept")
@@ -1516,10 +1540,10 @@ def accept_todo(todo_id: str):
     try:
         todo = svc.storage.accept_todo(user_id, todo_id)
         if not todo:
-            return jsonify({"error": "Todo not found"}), 404
+            return api_error("Todo not found", 404)
         return jsonify(todo.model_dump())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/todos/<todo_id>/complete")
@@ -1537,10 +1561,10 @@ def complete_todo(todo_id: str):
     try:
         todo = svc.storage.complete_todo(user_id, todo_id)
         if not todo:
-            return jsonify({"error": "Todo not found"}), 404
+            return api_error("Todo not found", 404)
         return jsonify(todo.model_dump())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/todos/<todo_id>/dismiss")
@@ -1558,10 +1582,10 @@ def dismiss_todo(todo_id: str):
     try:
         success = svc.storage.dismiss_todo(user_id, todo_id)
         if not success:
-            return jsonify({"error": "Todo not found"}), 404
+            return api_error("Todo not found", 404)
         return jsonify({"success": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -1585,7 +1609,7 @@ def get_note_todos(note_id: str):
         todos = svc.storage.list_todos_for_note(user_id, note_id)
         return jsonify({"todos": [t.model_dump() for t in todos]})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/notes/<note_id>/todos/accept")
@@ -1608,7 +1632,7 @@ def accept_note_todos(note_id: str):
         todo_ids = data.get("todo_ids", [])
 
         if not todo_ids:
-            return jsonify({"error": "No todo_ids provided"}), 400
+            return api_error("No todo_ids provided", 400)
 
         # Verify all todos belong to this note
         todos_for_note = svc.storage.list_todos_for_note(user_id, note_id)
@@ -1616,12 +1640,12 @@ def accept_note_todos(note_id: str):
         invalid_ids = [tid for tid in todo_ids if tid not in valid_ids]
 
         if invalid_ids:
-            return jsonify({"error": f"Todos not found for this note: {invalid_ids}"}), 400
+            return api_error(f"Todos not found for this note: {invalid_ids}", 400)
 
         accepted = svc.storage.accept_todos_bulk(user_id, todo_ids)
         return jsonify({"accepted": accepted})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -1672,96 +1696,24 @@ def transcribe_meal():
     ):
         return api_error("Not authorized to add meals to this calendar", 403)
 
-    # Check for file upload
-    content_type = None
-    if "file" in request.files:
-        file = request.files["file"]
-        data = file.read()
-        content_type = file.content_type
-    else:
-        data = request.get_data()
-        content_type = request.content_type
-
-    if not data:
-        return api_error("No audio data provided", 400)
+    try:
+        text, meta, audio_clip_id, audio_storage_key = _transcribe_audio_clip(
+            user_id, svc, "/api/meals/transcribe"
+        )
+    except _AudioTranscriptionError as e:
+        return api_error(str(e), e.status)
+    except Exception as e:
+        return api_error(str(e), 500)
 
     try:
-        _cleanup_stale_pending_audio_clips(user_id, svc)
-
-        from uuid import uuid4
-
-        audio_clip_id = str(uuid4())
-        resolved_mime = content_type or "application/octet-stream"
-        audio_storage_key = s3_audio.object_key_for_clip(
-            user_id=user_id,
-            clip_id=audio_clip_id,
-            mime_type=resolved_mime,
-        )
-
-        svc.storage.create_audio_clip_pending(
-            user_id,
-            clip_id=audio_clip_id,
-            note_id=None,
-            mime_type=resolved_mime,
-            bytes=len(data),
-            duration_ms=None,
-            storage_key=audio_storage_key,
-            bucket=None,
-        )
-
-        try:
-            s3_audio.put_object_bytes(
-                storage_key=audio_storage_key,
-                content_type=resolved_mime,
-                data=data,
-            )
-        except Exception:
-            svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
-            raise
-
-        # Step 1: Transcribe audio
-        try:
-            text, meta = transcribe_bytes(data, content_type)
-        except ValueError as e:
-            with suppress(Exception):
-                s3_audio.delete_object(storage_key=audio_storage_key)
-            svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
-            return api_error(str(e), 400)
-        except Exception as e:
-            error_msg = str(e)
-            if "corrupted" in error_msg.lower() or "unsupported" in error_msg.lower():
-                with suppress(Exception):
-                    s3_audio.delete_object(storage_key=audio_storage_key)
-                svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
-                return api_error(
-                    "Audio format not supported or corrupted. Please try recording again.",
-                    400,
-                )
-            with suppress(Exception):
-                s3_audio.delete_object(storage_key=audio_storage_key)
-            svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
-            raise
-
-        # Record transcription usage
-        audio_duration = meta.get("duration")
-        if audio_duration is not None:
-            svc.usage_tracking.record_usage(
-                user_id=user_id,
-                service_type="transcription",
-                model=meta.get("model", "gpt-4o-mini-transcribe"),
-                audio_seconds=float(audio_duration),
-                endpoint="/api/meals/transcribe",
-            )
-            _maybe_send_cost_alert(svc)
-
-        # Step 2: Extract meal data using AI
+        # Extract meal data using AI
         current_date = date.today().isoformat()
         extraction_result = svc.meal_extractor.extract(text, current_date)
 
         # Resolve meal date
         meal_date = extraction_result.meal_date or current_date
 
-        # Step 3: Save meal entry to database
+        # Save meal entry to database
         from .services.models import MealEntryMetadata
 
         meal_metadata = MealEntryMetadata(
@@ -1789,23 +1741,7 @@ def transcribe_meal():
             food_items=food_items,
         )
 
-        # Mark audio clip ready
-        duration_ms = None
-        try:
-            dur = meta.get("duration")
-            if dur is not None:
-                duration_ms = int(float(dur) * 1000.0)
-        except Exception:
-            duration_ms = None
-
-        svc.storage.mark_audio_clip_ready(
-            user_id,
-            audio_clip_id,
-            note_id=None,
-            duration_ms=duration_ms,
-        )
-
-        # Step 4: Generate embedding for meal (best-effort)
+        # Generate embedding for meal (best-effort)
         try:
             import hashlib
 
@@ -1849,17 +1785,7 @@ def transcribe_meal():
         )
 
     except Exception as e:
-        try:
-            if "audio_storage_key" in locals():
-                s3_audio.delete_object(storage_key=audio_storage_key)
-        except Exception:
-            pass
-        try:
-            if "audio_clip_id" in locals():
-                svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
-        except Exception:
-            pass
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/meals")
@@ -1922,7 +1848,7 @@ def list_meals():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/meals/calendar")
@@ -1973,7 +1899,7 @@ def get_meals_calendar():
         return jsonify({"calendar": serialized, "year": year_int, "month": month_int})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/meals/<meal_id>")
@@ -2012,7 +1938,7 @@ def get_meal(meal_id: str):
         return jsonify(meal.model_dump())
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.put("/meals/<meal_id>")
@@ -2056,7 +1982,7 @@ def update_meal(meal_id: str):
         return jsonify(updated_meal.model_dump() if updated_meal else {})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.delete("/meals/<meal_id>")
@@ -2080,7 +2006,7 @@ def delete_meal(meal_id: str):
         return jsonify({"success": True})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/meals/<meal_id>/items")
@@ -2120,7 +2046,7 @@ def add_meal_item(meal_id: str):
         return jsonify(item.model_dump()), 201
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.put("/meals/<meal_id>/items/<item_id>")
@@ -2154,7 +2080,7 @@ def update_meal_item(meal_id: str, item_id: str):
         return jsonify(item.model_dump())
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.delete("/meals/<meal_id>/items/<item_id>")
@@ -2178,7 +2104,7 @@ def delete_meal_item(meal_id: str, item_id: str):
         return jsonify({"success": True})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -2263,7 +2189,7 @@ def create_vinyl_record():
         return jsonify(record.model_dump() if record else {"id": record_id}), 201
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/vinyl")
@@ -2324,7 +2250,7 @@ def list_vinyl_records():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/vinyl/stats")
@@ -2345,7 +2271,7 @@ def get_vinyl_stats():
         stats = svc.storage.get_vinyl_collection_stats(target_user)
         return jsonify(stats)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/vinyl/search")
@@ -2388,7 +2314,7 @@ def search_vinyl():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/vinyl/extract-photos")
@@ -2436,7 +2362,7 @@ def extract_vinyl_from_photos():
         return jsonify(result.model_dump())
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/vinyl/<record_id>")
@@ -2459,7 +2385,7 @@ def get_vinyl_record(record_id: str):
             return api_error("Vinyl record not found", 404)
         return jsonify(_enrich_vinyl_record(record.model_dump()))
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.put("/vinyl/<record_id>")
@@ -2556,7 +2482,7 @@ def update_vinyl_record(record_id: str):
         return jsonify(updated.model_dump() if updated else {})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.delete("/vinyl/<record_id>")
@@ -2592,7 +2518,7 @@ def delete_vinyl_record(record_id: str):
         return jsonify(payload)
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/vinyl/<record_id>/images")
@@ -2666,7 +2592,7 @@ def create_vinyl_image(record_id: str):
         return jsonify({"image": (updated or image).model_dump()})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/vinyl/<record_id>/images/<image_id>/url")
@@ -2696,7 +2622,7 @@ def get_vinyl_image_url(record_id: str, image_id: str):
         return jsonify({"url": dl.url, "expires_at": dl.expires_at})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.delete("/vinyl/<record_id>/images/<image_id>")
@@ -2735,7 +2661,7 @@ def delete_vinyl_image(record_id: str, image_id: str):
         return jsonify(payload)
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/vinyl/<record_id>/extract")
@@ -2786,7 +2712,7 @@ def extract_vinyl_metadata(record_id: str):
         return jsonify(result.model_dump())
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -2820,7 +2746,7 @@ def get_usage():
         usage = svc.usage_tracking.get_current_usage(user_id)
         return jsonify(usage.model_dump())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/usage/history")
@@ -2860,7 +2786,7 @@ def get_usage_history():
             }
         )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -2944,7 +2870,7 @@ def create_feedback():
         return jsonify(feedback.model_dump()), 201
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/feedback")
@@ -2978,7 +2904,7 @@ def list_feedback():
         )
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -3083,7 +3009,7 @@ def get_my_profile():
             )
         return jsonify(_enrich_profile(profile.model_dump()))
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.put("/profile")
@@ -3129,7 +3055,7 @@ def update_my_profile():
             return api_error("Profile not found", 404)
         return jsonify(_enrich_profile(profile.model_dump()))
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.put("/profile/avatar")
@@ -3164,7 +3090,7 @@ def upload_avatar():
             return api_error("Profile not found", 404)
         return jsonify(_enrich_profile(profile.model_dump()))
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.delete("/profile/avatar")
@@ -3186,7 +3112,7 @@ def delete_avatar():
         profile = svc.storage.update_user_profile_avatar(user_id, None)
         return jsonify(_enrich_profile(profile.model_dump()))
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/profile/username-available")
@@ -3230,7 +3156,7 @@ def get_user_profile(target_user_id):
             return api_error("Profile not found", 404)
         return jsonify(_enrich_profile(profile.model_dump()))
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -3263,7 +3189,7 @@ def list_friends():
 
         return jsonify({"friends": result})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/friends/requests")
@@ -3286,7 +3212,7 @@ def list_friend_requests():
 
         return jsonify({"requests": result})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/friends/sent")
@@ -3309,7 +3235,7 @@ def list_sent_requests():
 
         return jsonify({"sent": result})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/friends/request")
@@ -3341,7 +3267,7 @@ def send_friend_request():
         friendship = svc.storage.create_friendship(user_id, target_id)
         return jsonify(friendship.model_dump()), 201
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/friends/<friendship_id>/accept")
@@ -3363,7 +3289,7 @@ def accept_friend_request(friendship_id):
         updated = svc.storage.update_friendship_status(friendship_id, "accepted")
         return jsonify(updated.model_dump())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/friends/<friendship_id>/decline")
@@ -3385,7 +3311,7 @@ def decline_friend_request(friendship_id):
         updated = svc.storage.update_friendship_status(friendship_id, "declined")
         return jsonify(updated.model_dump())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.delete("/friends/<friendship_id>")
@@ -3407,7 +3333,7 @@ def remove_friend(friendship_id):
         svc.storage.delete_friendship(friendship_id)
         return jsonify({"deleted": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/friends/search")
@@ -3425,7 +3351,7 @@ def search_friends():
         profiles = svc.storage.search_user_profiles(q, exclude_user_id=user_id, limit=20)
         return jsonify({"users": [_enrich_profile(p.model_dump()) for p in profiles]})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================
@@ -3467,7 +3393,7 @@ def create_share():
         share = svc.storage.create_resource_share(user_id, shared_with_id, resource_type, permission)
         return jsonify(share.model_dump()), 201
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/shares")
@@ -3501,7 +3427,7 @@ def list_shares():
             "received": [enrich(s, "recipient") for s in received],
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.get("/shares/received")
@@ -3524,7 +3450,7 @@ def list_received_shares():
 
         return jsonify({"received": result})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/shares/<share_id>/accept")
@@ -3546,7 +3472,7 @@ def accept_share(share_id):
         updated = svc.storage.update_share_status(share_id, "accepted")
         return jsonify(updated.model_dump())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.post("/shares/<share_id>/decline")
@@ -3568,7 +3494,7 @@ def decline_share(share_id):
         updated = svc.storage.update_share_status(share_id, "declined")
         return jsonify(updated.model_dump())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 @bp.delete("/shares/<share_id>")
@@ -3588,7 +3514,7 @@ def revoke_share(share_id):
         svc.storage.update_share_status(share_id, "revoked")
         return jsonify({"deleted": True})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500)
 
 
 # ============================================================================

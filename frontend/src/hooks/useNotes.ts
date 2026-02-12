@@ -2,8 +2,18 @@
  * TanStack Query hooks for data fetching and mutations
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import * as api from '../lib/api'
+
+// ============================================================================
+// Invalidation Helpers
+// ============================================================================
+
+function invalidateNoteQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ['folders'] })
+  queryClient.invalidateQueries({ queryKey: ['notes'] })
+  queryClient.invalidateQueries({ queryKey: ['tags'] })
+}
 
 // ============================================================================
 // Query Hooks
@@ -91,12 +101,7 @@ export function useTranscribeAudio() {
 
   return useMutation({
     mutationFn: (audioBlob: Blob) => api.transcribeAudio(audioBlob),
-    onSuccess: () => {
-      // Invalidate folders and notes to trigger refetch
-      queryClient.invalidateQueries({ queryKey: ['folders'] })
-      queryClient.invalidateQueries({ queryKey: ['notes'] })
-      queryClient.invalidateQueries({ queryKey: ['tags'] })
-    },
+    onSuccess: () => invalidateNoteQueries(queryClient),
   })
 }
 
@@ -109,12 +114,7 @@ export function useDeleteNote() {
 
   return useMutation({
     mutationFn: (noteId: string) => api.deleteNote(noteId),
-    onSuccess: () => {
-      // Invalidate to trigger refetch
-      queryClient.invalidateQueries({ queryKey: ['folders'] })
-      queryClient.invalidateQueries({ queryKey: ['notes'] })
-      queryClient.invalidateQueries({ queryKey: ['tags'] })
-    },
+    onSuccess: () => invalidateNoteQueries(queryClient),
   })
 }
 

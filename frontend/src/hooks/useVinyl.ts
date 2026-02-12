@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
   fetchVinylRecords,
   fetchVinylRecord,
@@ -11,6 +11,20 @@ import {
   extractVinylFromPhotos,
   type VinylRecord,
 } from '../lib/api'
+
+// ============================================================================
+// Invalidation Helpers
+// ============================================================================
+
+function invalidateVinylQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ['vinyl'] })
+  queryClient.invalidateQueries({ queryKey: ['vinylStats'] })
+}
+
+function invalidateDeletedVinylQueries(queryClient: QueryClient, recordId: string) {
+  queryClient.removeQueries({ queryKey: ['vinyl', recordId] })
+  invalidateVinylQueries(queryClient)
+}
 
 // ============================================================================
 // Query Hooks
@@ -78,10 +92,7 @@ export function useCreateVinylRecord() {
       condition?: string
       notes?: string
     }) => createVinylRecord(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vinyl'] })
-      queryClient.invalidateQueries({ queryKey: ['vinylStats'] })
-    },
+    onSuccess: () => invalidateVinylQueries(queryClient),
   })
 }
 
@@ -98,8 +109,7 @@ export function useUpdateVinylRecord() {
     }) => updateVinylRecord(recordId, data),
     onSuccess: (updatedRecord: VinylRecord) => {
       queryClient.setQueryData(['vinyl', updatedRecord.id], updatedRecord)
-      queryClient.invalidateQueries({ queryKey: ['vinyl'] })
-      queryClient.invalidateQueries({ queryKey: ['vinylStats'] })
+      invalidateVinylQueries(queryClient)
     },
   })
 }
@@ -109,11 +119,7 @@ export function useDeleteVinylRecord() {
 
   return useMutation({
     mutationFn: (recordId: string) => deleteVinylRecord(recordId),
-    onSuccess: (_data, recordId) => {
-      queryClient.removeQueries({ queryKey: ['vinyl', recordId] })
-      queryClient.invalidateQueries({ queryKey: ['vinyl'] })
-      queryClient.invalidateQueries({ queryKey: ['vinylStats'] })
-    },
+    onSuccess: (_data, recordId) => invalidateDeletedVinylQueries(queryClient, recordId),
   })
 }
 

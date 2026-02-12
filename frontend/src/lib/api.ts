@@ -110,6 +110,40 @@ export async function apiRequest<T>(
   return response.json()
 }
 
+/**
+ * Generic typed API upload helper for FormData (file upload) requests.
+ *
+ * Handles auth headers + error parsing. Does NOT set Content-Type
+ * (browser sets it with the correct multipart boundary).
+ */
+export async function apiUpload<T>(
+  endpoint: string,
+  formData: FormData,
+  method: 'POST' | 'PUT' = 'POST'
+): Promise<T> {
+  const headers = new Headers(await getAuthHeaders())
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method,
+    headers,
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    let errorMessage: string
+    try {
+      const errorJson = JSON.parse(errorText)
+      errorMessage = errorJson.error || `Upload failed: ${response.status}`
+    } catch {
+      errorMessage = errorText || `Upload failed: ${response.status}`
+    }
+    throw new Error(errorMessage)
+  }
+
+  return response.json()
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -312,56 +346,37 @@ export interface TodosResponse {
 // ============================================================================
 
 /**
+ * Map audio MIME types to file extensions for FormData uploads.
+ */
+const AUDIO_MIME_TO_EXT: Record<string, string> = {
+  'audio/webm': 'webm',
+  'audio/mp4': 'mp4',
+  'audio/mpeg': 'mp3',
+  'audio/wav': 'wav',
+  'audio/ogg': 'ogg',
+  'audio/m4a': 'm4a',
+}
+
+function audioFormData(audioBlob: Blob, filenamePrefix: string): FormData {
+  const baseType = audioBlob.type.split(';')[0].trim()
+  const extension = AUDIO_MIME_TO_EXT[baseType] || 'webm'
+  const formData = new FormData()
+  formData.append('file', audioBlob, `${filenamePrefix}.${extension}`)
+  return formData
+}
+
+/**
  * Transcribe audio and get AI categorization
  */
 export async function transcribeAudio(audioBlob: Blob): Promise<TranscriptionResponse> {
-  // Map MIME types to file extensions
-  const mimeToExt: Record<string, string> = {
-    'audio/webm': 'webm',
-    'audio/mp4': 'mp4',
-    'audio/mpeg': 'mp3',
-    'audio/wav': 'wav',
-    'audio/ogg': 'ogg',
-    'audio/m4a': 'm4a',
-  }
-
-  // Get file extension from blob type, default to webm
-  const baseType = audioBlob.type.split(';')[0].trim()
-  const extension = mimeToExt[baseType] || 'webm'
-  const filename = `recording.${extension}`
-
-  const formData = new FormData()
-  formData.append('file', audioBlob, filename)
-
-  const headers = await getAuthHeaders()
-
-  const response = await fetch(`${API_BASE_URL}/api/transcribe`, {
-    method: 'POST',
-    headers,
-    body: formData,
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(error || 'Transcription failed')
-  }
-
-  return response.json()
+  return apiUpload<TranscriptionResponse>('/api/transcribe', audioFormData(audioBlob, 'recording'))
 }
 
 /**
  * Get folder hierarchy tree
  */
 export async function fetchFolders(): Promise<FolderNode> {
-  const headers = await getAuthHeaders()
-
-  const response = await fetch(`${API_BASE_URL}/api/folders`, { headers })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch folders')
-  }
-
-  const data: FolderTree = await response.json()
+  const data = await apiRequest<FolderTree>('GET', '/api/folders')
   return data.folders
 }
 
@@ -369,52 +384,23 @@ export async function fetchFolders(): Promise<FolderNode> {
  * Get notes (optionally filtered by folder)
  */
 export async function fetchNotes(folder?: string, limit = 50, offset = 0): Promise<NotesResponse> {
-  const params = new URLSearchParams({
-    limit: limit.toString(),
-    offset: offset.toString(),
+  return apiRequest<NotesResponse>('GET', '/api/notes', {
+    params: { folder, limit, offset },
   })
-
-  if (folder) {
-    params.set('folder', folder)
-  }
-
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/notes?${params}`, { headers })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch notes')
-  }
-
-  return response.json()
 }
 
 /**
  * Get a specific note by ID
  */
 export async function fetchNote(noteId: string): Promise<Note> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/notes/${noteId}`, { headers })
-
-  if (!response.ok) {
-    throw new Error('Note not found')
-  }
-
-  return response.json()
+  return apiRequest<Note>('GET', `/api/notes/${noteId}`)
 }
 
 /**
  * Delete a note
  */
 export async function deleteNote(noteId: string): Promise<void> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/notes/${noteId}`, {
-    method: 'DELETE',
-    headers,
-  })
-
-  if (!response.ok) {
-    throw new Error('Failed to delete note')
-  }
+  await apiRequest<{ success: boolean }>('DELETE', `/api/notes/${noteId}`)
 }
 
 /**
@@ -425,15 +411,7 @@ export async function searchNotes(query: string): Promise<SearchResult[]> {
     return []
   }
 
-  const params = new URLSearchParams({ q: query })
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/search?${params}`, { headers })
-
-  if (!response.ok) {
-    throw new Error('Search failed')
-  }
-
-  const data: SearchResponse = await response.json()
+  const data = await apiRequest<SearchResponse>('GET', '/api/search', { params: { q: query } })
   return data.results
 }
 
@@ -441,14 +419,7 @@ export async function searchNotes(query: string): Promise<SearchResult[]> {
  * Get all tags
  */
 export async function fetchTags(): Promise<string[]> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/tags`, { headers })
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch tags')
-  }
-
-  const data: TagsResponse = await response.json()
+  const data = await apiRequest<TagsResponse>('GET', '/api/tags')
   return data.tags
 }
 
@@ -456,17 +427,11 @@ export async function fetchTags(): Promise<string[]> {
  * Get notes filtered by tag
  */
 export async function fetchNotesByTag(tag: string, limit = 50): Promise<Note[]> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(
-    `${API_BASE_URL}/api/tags/${encodeURIComponent(tag)}/notes?limit=${limit}`,
-    { headers }
+  const data = await apiRequest<{ notes: Note[] }>(
+    'GET',
+    `/api/tags/${encodeURIComponent(tag)}/notes`,
+    { params: { limit } }
   )
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch notes by tag')
-  }
-
-  const data = await response.json()
   return data.notes
 }
 
@@ -481,23 +446,7 @@ export interface DigestResult {
 }
 
 export async function generateSummary(): Promise<DigestResult> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/summarize`, {
-    method: 'POST',
-    headers,
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    try {
-      const errorJson = JSON.parse(errorText)
-      throw new Error(errorJson.error || 'Summarization failed')
-    } catch {
-      throw new Error('Summarization failed')
-    }
-  }
-
-  return response.json()
+  return apiRequest<DigestResult>('POST', '/api/summarize')
 }
 
 /**
@@ -508,86 +457,33 @@ export async function askNotes(
   maxResults = 12,
   debug = false
 ): Promise<AskResponse> {
-  const headers = new Headers(await getAuthHeaders())
-  headers.set('Content-Type', 'application/json')
-
-  const response = await fetch(`${API_BASE_URL}/api/ask`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ query, max_results: maxResults, debug }),
+  return apiRequest<AskResponse>('POST', '/api/ask', {
+    body: { query, max_results: maxResults, debug },
   })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    try {
-      const errorJson = JSON.parse(errorText)
-      throw new Error(errorJson.error || 'Ask failed')
-    } catch {
-      throw new Error('Ask failed')
-    }
-  }
-
-  return response.json()
 }
 
 export async function fetchDigests(limit = 50, offset = 0): Promise<DigestsResponse> {
-  const params = new URLSearchParams({ limit: limit.toString(), offset: offset.toString() })
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/digests?${params}`, { headers })
-  if (!response.ok) {
-    throw new Error('Failed to fetch digests')
-  }
-  return response.json()
+  return apiRequest<DigestsResponse>('GET', '/api/digests', { params: { limit, offset } })
 }
 
 export async function fetchDigest(digestId: string): Promise<DigestHistoryItem> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/digests/${digestId}`, { headers })
-  if (!response.ok) {
-    throw new Error('Digest not found')
-  }
-  return response.json()
+  return apiRequest<DigestHistoryItem>('GET', `/api/digests/${digestId}`)
 }
 
 export async function deleteDigest(digestId: string): Promise<void> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/digests/${digestId}`, {
-    method: 'DELETE',
-    headers,
-  })
-  if (!response.ok) {
-    throw new Error('Failed to delete digest')
-  }
+  await apiRequest<{ success: boolean }>('DELETE', `/api/digests/${digestId}`)
 }
 
 export async function fetchAskHistory(limit = 50, offset = 0): Promise<AskHistoryResponse> {
-  const params = new URLSearchParams({ limit: limit.toString(), offset: offset.toString() })
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/ask-history?${params}`, { headers })
-  if (!response.ok) {
-    throw new Error('Failed to fetch ask history')
-  }
-  return response.json()
+  return apiRequest<AskHistoryResponse>('GET', '/api/ask-history', { params: { limit, offset } })
 }
 
 export async function fetchAskHistoryItem(askId: string): Promise<AskHistoryItem> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/ask-history/${askId}`, { headers })
-  if (!response.ok) {
-    throw new Error('Ask history item not found')
-  }
-  return response.json()
+  return apiRequest<AskHistoryItem>('GET', `/api/ask-history/${askId}`)
 }
 
 export async function deleteAskHistoryItem(askId: string): Promise<void> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/ask-history/${askId}`, {
-    method: 'DELETE',
-    headers,
-  })
-  if (!response.ok) {
-    throw new Error('Failed to delete ask history item')
-  }
+  await apiRequest<{ success: boolean }>('DELETE', `/api/ask-history/${askId}`)
 }
 
 // ============================================================================
@@ -595,29 +491,13 @@ export async function deleteAskHistoryItem(askId: string): Promise<void> {
 // ============================================================================
 
 export async function fetchUserSettings(): Promise<UserSettings> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/settings`, { headers })
-  if (!response.ok) {
-    throw new Error('Failed to fetch settings')
-  }
-  return response.json()
+  return apiRequest<UserSettings>('GET', '/api/settings')
 }
 
 export async function updateUserSettings(settings: {
   auto_accept_todos?: boolean
 }): Promise<UserSettings> {
-  const headers = new Headers(await getAuthHeaders())
-  headers.set('Content-Type', 'application/json')
-
-  const response = await fetch(`${API_BASE_URL}/api/settings`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(settings),
-  })
-  if (!response.ok) {
-    throw new Error('Failed to update settings')
-  }
-  return response.json()
+  return apiRequest<UserSettings>('PUT', '/api/settings', { body: settings })
 }
 
 // ============================================================================
@@ -630,28 +510,11 @@ export async function fetchTodos(params?: {
   limit?: number
   offset?: number
 }): Promise<TodosResponse> {
-  const searchParams = new URLSearchParams()
-  if (params?.status) searchParams.set('status', params.status)
-  if (params?.note_id) searchParams.set('note_id', params.note_id)
-  if (params?.limit !== undefined) searchParams.set('limit', params.limit.toString())
-  if (params?.offset !== undefined) searchParams.set('offset', params.offset.toString())
-
-  const headers = await getAuthHeaders()
-  const url = `${API_BASE_URL}/api/todos${searchParams.toString() ? '?' + searchParams.toString() : ''}`
-  const response = await fetch(url, { headers })
-  if (!response.ok) {
-    throw new Error('Failed to fetch todos')
-  }
-  return response.json()
+  return apiRequest<TodosResponse>('GET', '/api/todos', { params })
 }
 
 export async function fetchTodo(todoId: string): Promise<Todo> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/todos/${todoId}`, { headers })
-  if (!response.ok) {
-    throw new Error('Todo not found')
-  }
-  return response.json()
+  return apiRequest<Todo>('GET', `/api/todos/${todoId}`)
 }
 
 export async function createTodo(data: {
@@ -659,18 +522,7 @@ export async function createTodo(data: {
   description?: string
   note_id?: string
 }): Promise<Todo> {
-  const headers = new Headers(await getAuthHeaders())
-  headers.set('Content-Type', 'application/json')
-
-  const response = await fetch(`${API_BASE_URL}/api/todos`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(data),
-  })
-  if (!response.ok) {
-    throw new Error('Failed to create todo')
-  }
-  return response.json()
+  return apiRequest<Todo>('POST', '/api/todos', { body: data })
 }
 
 export async function updateTodo(
@@ -680,91 +532,36 @@ export async function updateTodo(
     description?: string
   }
 ): Promise<Todo> {
-  const headers = new Headers(await getAuthHeaders())
-  headers.set('Content-Type', 'application/json')
-
-  const response = await fetch(`${API_BASE_URL}/api/todos/${todoId}`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(data),
-  })
-  if (!response.ok) {
-    throw new Error('Failed to update todo')
-  }
-  return response.json()
+  return apiRequest<Todo>('PUT', `/api/todos/${todoId}`, { body: data })
 }
 
 export async function deleteTodo(todoId: string): Promise<void> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/todos/${todoId}`, {
-    method: 'DELETE',
-    headers,
-  })
-  if (!response.ok) {
-    throw new Error('Failed to delete todo')
-  }
+  await apiRequest<{ success: boolean }>('DELETE', `/api/todos/${todoId}`)
 }
 
 export async function acceptTodo(todoId: string): Promise<Todo> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/todos/${todoId}/accept`, {
-    method: 'POST',
-    headers,
-  })
-  if (!response.ok) {
-    throw new Error('Failed to accept todo')
-  }
-  return response.json()
+  return apiRequest<Todo>('POST', `/api/todos/${todoId}/accept`)
 }
 
 export async function completeTodo(todoId: string): Promise<Todo> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/todos/${todoId}/complete`, {
-    method: 'POST',
-    headers,
-  })
-  if (!response.ok) {
-    throw new Error('Failed to complete todo')
-  }
-  return response.json()
+  return apiRequest<Todo>('POST', `/api/todos/${todoId}/complete`)
 }
 
 export async function dismissTodo(todoId: string): Promise<void> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/todos/${todoId}/dismiss`, {
-    method: 'POST',
-    headers,
-  })
-  if (!response.ok) {
-    throw new Error('Failed to dismiss todo')
-  }
+  await apiRequest<{ success: boolean }>('POST', `/api/todos/${todoId}/dismiss`)
 }
 
 export async function fetchNoteTodos(noteId: string): Promise<{ todos: Todo[] }> {
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/notes/${noteId}/todos`, { headers })
-  if (!response.ok) {
-    throw new Error('Failed to fetch note todos')
-  }
-  return response.json()
+  return apiRequest<{ todos: Todo[] }>('GET', `/api/notes/${noteId}/todos`)
 }
 
 export async function acceptNoteTodos(
   noteId: string,
   todoIds: string[]
 ): Promise<{ accepted: number }> {
-  const headers = new Headers(await getAuthHeaders())
-  headers.set('Content-Type', 'application/json')
-
-  const response = await fetch(`${API_BASE_URL}/api/notes/${noteId}/todos/accept`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ todo_ids: todoIds }),
+  return apiRequest<{ accepted: number }>('POST', `/api/notes/${noteId}/todos/accept`, {
+    body: { todo_ids: todoIds },
   })
-  if (!response.ok) {
-    throw new Error('Failed to accept todos')
-  }
-  return response.json()
 }
 
 // ============================================================================
@@ -850,41 +647,10 @@ export async function transcribeMeal(
   audioBlob: Blob,
   calendarOwner?: string
 ): Promise<MealTranscriptionResponse> {
-  const mimeToExt: Record<string, string> = {
-    'audio/webm': 'webm',
-    'audio/mp4': 'mp4',
-    'audio/mpeg': 'mp3',
-    'audio/wav': 'wav',
-    'audio/ogg': 'ogg',
-    'audio/m4a': 'm4a',
-  }
-
-  const baseType = audioBlob.type.split(';')[0].trim()
-  const extension = mimeToExt[baseType] || 'webm'
-  const filename = `meal-recording.${extension}`
-
-  const formData = new FormData()
-  formData.append('file', audioBlob, filename)
-
-  const headers = await getAuthHeaders()
-
-  let transcribeUrl = `${API_BASE_URL}/api/meals/transcribe`
-  if (calendarOwner) {
-    transcribeUrl += `?calendar_owner=${encodeURIComponent(calendarOwner)}`
-  }
-
-  const response = await fetch(transcribeUrl, {
-    method: 'POST',
-    headers,
-    body: formData,
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(error || 'Meal transcription failed')
-  }
-
-  return response.json()
+  const endpoint = calendarOwner
+    ? `/api/meals/transcribe?calendar_owner=${encodeURIComponent(calendarOwner)}`
+    : '/api/meals/transcribe'
+  return apiUpload<MealTranscriptionResponse>(endpoint, audioFormData(audioBlob, 'meal-recording'))
 }
 
 /**
@@ -1151,18 +917,7 @@ export async function uploadVinylImage(
   const formData = new FormData()
   formData.append('file', file)
   formData.append('image_type', imageType)
-
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/vinyl/${recordId}/images`, {
-    method: 'POST',
-    headers,
-    body: formData,
-  })
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: 'Image upload failed' }))
-    throw new Error(err.error || 'Image upload failed')
-  }
-  return response.json()
+  return apiUpload<VinylImageUploadResponse>(`/api/vinyl/${recordId}/images`, formData)
 }
 
 export async function getVinylImageUrl(
@@ -1188,20 +943,7 @@ export async function extractVinylMetadata(recordId: string): Promise<VinylExtra
 export async function extractVinylFromPhotos(files: File[]): Promise<VinylExtractionResult> {
   const formData = new FormData()
   files.forEach((f) => formData.append('images', f))
-
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${API_BASE_URL}/api/vinyl/extract-photos`, {
-    method: 'POST',
-    headers,
-    body: formData,
-  })
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: 'Extraction failed' }))
-    throw new Error(err.error || 'Extraction failed')
-  }
-
-  return response.json()
+  return apiUpload<VinylExtractionResult>('/api/vinyl/extract-photos', formData)
 }
 
 // ============================================================================
@@ -1341,29 +1083,9 @@ export async function fetchUserProfile(userId: string): Promise<UserProfile> {
 }
 
 export async function uploadAvatar(file: File): Promise<UserProfile> {
-  const headers = new Headers(await getAuthHeaders())
   const formData = new FormData()
   formData.append('file', file)
-
-  const response = await fetch(`${API_BASE_URL}/api/profile/avatar`, {
-    method: 'PUT',
-    headers,
-    body: formData,
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    let errorMessage: string
-    try {
-      const errorJson = JSON.parse(errorText)
-      errorMessage = errorJson.error || `Upload failed: ${response.status}`
-    } catch {
-      errorMessage = errorText || `Upload failed: ${response.status}`
-    }
-    throw new Error(errorMessage)
-  }
-
-  return response.json()
+  return apiUpload<UserProfile>('/api/profile/avatar', formData, 'PUT')
 }
 
 export async function deleteAvatar(): Promise<UserProfile> {
