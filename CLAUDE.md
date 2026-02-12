@@ -74,6 +74,46 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 
 **External Service Timeouts (CRITICAL)**: Every boto3/HTTP client MUST have explicit timeouts. With 4 sync gunicorn workers, a single hung external call (SES, S3, etc.) without a timeout can deadlock the entire app. Best-effort services (email, analytics): `connect_timeout=5, read_timeout=5, retries=1`. Core services (S3): `connect_timeout=10, read_timeout=30, retries=2`. See `docs/deployment-lessons.md` §5 for the full incident writeup.
 
+**Backend Error Responses**: Always use the `api_error(message, status_code)` helper in `routes.py` for error responses. Never use raw `jsonify({"error": ...}), status` — the helper ensures consistent JSON error format across all endpoints.
+```python
+# Good
+return api_error("Not found", 404)
+
+# Bad — do NOT do this
+return jsonify({"error": "Not found"}), 404
+```
+
+**Frontend API Calls**: All API functions in `api.ts` must use the generic helpers — never raw `fetch()`:
+- `apiRequest<T>(method, endpoint, options?)` — for JSON requests (GET, POST, PUT, DELETE). Handles auth headers, error parsing, and JSON serialization automatically. Supports `params` (query string), `body` (JSON payload), and `headers` options.
+- `apiUpload<T>(endpoint, formData, method?)` — for file uploads via `FormData`. Handles auth headers and error parsing. Method defaults to POST (use PUT for updates like avatar upload).
+- `audioFormData(audioBlob, filenamePrefix)` — shared helper for building audio upload FormData with correct MIME type detection.
+```typescript
+// Good — JSON request
+return apiRequest<Note>('GET', `/api/notes/${noteId}`)
+
+// Good — JSON request with params
+return apiRequest<NotesResponse>('GET', '/api/notes', { params: { folder, limit } })
+
+// Good — JSON request with body
+return apiRequest<AskResponse>('POST', '/api/ask', { body: { query, max_results } })
+
+// Good — file upload
+return apiUpload<TranscriptionResponse>('/api/transcribe', audioFormData(audioBlob, 'recording'))
+
+// Bad — do NOT use raw fetch()
+const response = await fetch(`${API_BASE_URL}/api/notes`, { headers: await getAuthHeaders() })
+```
+
+**Query Invalidation Helpers**: Each hook file (`useMeals.ts`, `useNotes.ts`, `useVinyl.ts`, `useTodos.ts`) has `invalidateXQueries(queryClient)` and optionally `invalidateDeletedXQueries(queryClient, id)` helpers at the top. All mutation `onSuccess` handlers must use these helpers instead of inline `queryClient.invalidateQueries()` calls. When adding a new feature's hooks, follow this pattern:
+```typescript
+function invalidateXQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ['x'] })
+  queryClient.invalidateQueries({ queryKey: ['xRelated'] })
+}
+```
+
+**Shared Audio Transcription**: The `_transcribe_audio_clip(user_id, svc, endpoint)` helper in `routes.py` handles the full audio lifecycle (request parsing → pending clip → S3 upload → transcription → error cleanup → usage recording → mark ready). Both `transcribe()` and `transcribe_meal()` use it. Any future transcription endpoint should use this helper and only add post-transcription logic (e.g. categorization, extraction). Raises `_AudioTranscriptionError` for validation failures.
+
 **Feature Modules**: Each major feature has its own set of files following the same pattern:
 - ORM models in `database.py`
 - Pydantic DTOs in `services/models.py`
@@ -223,11 +263,13 @@ cd frontend && npm run format:check  # Check formatting
 ### Adding a New API Endpoint
 1. Add route in `backend/app/routes.py` with `@bp.get/post/put/delete` and `@require_auth`
 2. If endpoint calls OpenAI, add `@require_quota("transcription")` or `@require_quota("ai_calls")` decorator
-3. Add storage method in `backend/app/services/storage.py` (follow user_id pattern)
-4. Add Pydantic models in `backend/app/services/models.py` if needed
-5. If tracking usage, call `svc.usage_tracking.record_usage(...)` after successful API call
-6. Add API function in `frontend/src/lib/api.ts`
-7. Add TanStack Query hook in `frontend/src/hooks/` if needed
+3. Use `api_error(message, status)` for ALL error responses — never raw `jsonify({"error": ...})`
+4. If the endpoint involves audio transcription, use `_transcribe_audio_clip()` helper
+5. Add storage method in `backend/app/services/storage.py` (follow user_id pattern)
+6. Add Pydantic models in `backend/app/services/models.py` if needed
+7. If tracking usage, call `svc.usage_tracking.record_usage(...)` after successful API call
+8. Add API function in `frontend/src/lib/api.ts` using `apiRequest<T>()` or `apiUpload<T>()` — never raw `fetch()`
+9. Add TanStack Query hook in `frontend/src/hooks/` with invalidation helpers at the top of the file
 
 ### Adding a New Service
 1. Create service class in `backend/app/services/`
@@ -236,9 +278,9 @@ cd frontend && npm run format:check  # Check formatting
 
 ### Adding a New Frontend Component
 1. Create component in `frontend/src/components/`
-2. Use `QueryStateRenderer` for loading/error states
+2. Use `QueryStateRenderer` for loading/error states (with `ListLoadingSkeleton` and `EmptyState`)
 3. Use `EmptyState` for empty content states
-4. Add TanStack Query hooks in `frontend/src/hooks/`
+4. Add TanStack Query hooks in `frontend/src/hooks/` — include `invalidateXQueries()` helpers, use `apiRequest`/`apiUpload` in the API layer
 5. Use shadcn/ui primitives (Button, Input, Alert, Card, etc.) instead of raw HTML elements
 6. Import from `@/components/ui/<name>`
 
