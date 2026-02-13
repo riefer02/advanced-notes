@@ -7,17 +7,18 @@ import {
   deleteAvatar,
   checkUsernameAvailable,
 } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 
 export function useMyProfile() {
   return useQuery({
-    queryKey: ['profile'],
+    queryKey: queryKeys.profile.me,
     queryFn: fetchMyProfile,
   })
 }
 
 export function useUserProfile(userId: string | undefined) {
   return useQuery({
-    queryKey: ['profile', userId],
+    queryKey: queryKeys.profile.user(userId!),
     queryFn: () => fetchUserProfile(userId!),
     enabled: !!userId,
   })
@@ -34,7 +35,7 @@ export function useUpdateProfile() {
       discoverable?: boolean
     }) => updateProfile(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile.me })
     },
   })
 }
@@ -45,7 +46,7 @@ export function useUploadAvatar() {
   return useMutation({
     mutationFn: (file: File) => uploadAvatar(file),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile.me })
     },
   })
 }
@@ -56,14 +57,14 @@ export function useDeleteAvatar() {
   return useMutation({
     mutationFn: () => deleteAvatar(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile.me })
     },
   })
 }
 
 export function useCheckUsername(username: string) {
   return useQuery({
-    queryKey: ['username-available', username],
+    queryKey: queryKeys.profile.usernameAvailable(username),
     queryFn: () => checkUsernameAvailable(username),
     enabled: username.length >= 3,
     staleTime: 10_000,

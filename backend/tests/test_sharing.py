@@ -8,59 +8,21 @@ from pathlib import Path
 
 import pytest
 
-from app import create_app
-from app.services.container import Services
-from app.services.storage import NoteStorage
 from app.services.models import MealEntryMetadata
 from app.services.vinyl_extractor import VinylExtractionResult
-
+from tests.helpers import auth as _auth
+from tests.helpers import make_app
 
 # ============================================================================
-# TEST FAKES (copied from test_vinyl.py pattern)
+# FEATURE-SPECIFIC FAKES
 # ============================================================================
 
 
-class _FakeAsker:
-    def answer(self, question, plan, notes):
-        class _Result:
-            answer_markdown = "test answer"
-            cited_note_ids = []
-            followups = []
-        return _Result()
+class _SharingVinylExtractor:
+    """Returns real extraction results (needed for vinyl sharing tests)."""
 
-
-class _FakeCategorizer:
-    def categorize(self, transcription, existing_folders):
-        raise AssertionError("not expected")
-
-
-class _FakeSummarizer:
-    def summarize(self, notes_content):
-        raise AssertionError("not expected")
-
-
-class _FakeEmbeddings:
-    model = "test-embedding-model"
-    def embed_text(self, text):
-        return [0.0] * 1536
-    def embed_query(self, text):
-        return [0.0] * 1536
-    def upsert_for_note(self, storage, user_id, note_id, title, content, tags=None):
-        return True
-
-
-class _FakePlanner:
-    def plan(self, question, known_tags, known_folders, result_limit):
-        raise AssertionError("not expected")
-
-
-class _FakeMealExtractor:
-    def extract(self, transcription, current_date=None):
-        raise AssertionError("not expected")
-
-
-class _FakeVinylExtractor:
     model = "gpt-4.1-mini"
+
     def extract(self, image_urls):
         return VinylExtractionResult(
             artist="Test Artist",
@@ -74,35 +36,6 @@ class _FakeVinylExtractor:
         )
 
 
-class _FakeUsageTracking:
-    def record_usage(self, **kwargs):
-        return "test-usage-id"
-    def check_quota(self, user_id, service_type):
-        class _QuotaCheck:
-            allowed = True
-            warning = False
-        return _QuotaCheck()
-    def get_current_usage(self, user_id):
-        pass
-    def get_usage_history(self, *a, **k):
-        return []
-    def get_monthly_aggregate_cost(self):
-        return 0.0
-
-
-class _FakeEmailService:
-    def is_configured(self):
-        return False
-    def send_feedback_notification(self, **kwargs):
-        return False
-    def send_new_user_notification(self, **kwargs):
-        return False
-    def send_cost_threshold_alert(self, **kwargs):
-        return False
-    def send_error_notification(self, **kwargs):
-        return False
-
-
 # ============================================================================
 # FIXTURES
 # ============================================================================
@@ -114,39 +47,17 @@ CHARLIE = "test-sharing-charlie"
 
 @pytest.fixture()
 def app(tmp_path: Path, monkeypatch):
-    monkeypatch.delenv("S3_BUCKET", raising=False)
-    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
-    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
-
-    from app.config import Config
-    monkeypatch.setattr(Config, "S3_BUCKET", None)
-
-    test_db = tmp_path / "sharing_test.db"
-    storage = NoteStorage(db_path=test_db)
-    services = Services(
-        storage=storage,
-        embeddings=_FakeEmbeddings(),
-        planner=_FakePlanner(),
-        asker=_FakeAsker(),
-        categorizer=_FakeCategorizer(),
-        summarizer=_FakeSummarizer(),
-        meal_extractor=_FakeMealExtractor(),
-        vinyl_extractor=_FakeVinylExtractor(),
-        usage_tracking=_FakeUsageTracking(),
-        email=_FakeEmailService(),
+    return make_app(
+        tmp_path,
+        monkeypatch=monkeypatch,
+        db_name="sharing_test.db",
+        s3_disabled=True,
+        vinyl_extractor=_SharingVinylExtractor(),
     )
-
-    app = create_app(testing=True, services=services)
-    yield app
-
-
-@pytest.fixture()
-def client(app):
-    return app.test_client()
 
 
 def auth(user_id):
-    return {"X-Test-User-Id": user_id}
+    return _auth(user_id)
 
 
 def _create_meal(app, user_id, meal_date="2026-02-08"):

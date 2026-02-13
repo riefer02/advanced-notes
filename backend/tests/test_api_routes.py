@@ -132,10 +132,10 @@ class _FakeEmailService:
 
 def test_transcribe_uploads_audio_to_s3_and_links_clip(client, app, monkeypatch):  # noqa: ANN001
     # Avoid OpenAI dependency + complex downstream services; verify S3 upload + response shape.
-    from app import routes as _routes
+    from app.routes import _helpers as _route_helpers
     from app.services import s3_audio as _s3_audio
 
-    monkeypatch.setattr(_routes, "transcribe_bytes", lambda *a, **k: ("hello", {"duration": 1.0, "model": "test"}))
+    monkeypatch.setattr(_route_helpers, "transcribe_bytes", lambda *a, **k: ("hello", {"duration": 1.0, "model": "test"}))
 
     class _CatSuggestion:
         action = "create"
@@ -205,10 +205,10 @@ def test_transcribe_uploads_audio_to_s3_and_links_clip(client, app, monkeypatch)
 
 def test_transcribe_cleans_up_when_transcription_fails(client, app, monkeypatch):  # noqa: ANN001
     # Ensure we delete the uploaded object and mark the clip failed when transcription errors out.
-    from app import routes as _routes
+    from app.routes import _helpers as _route_helpers
     from app.services import s3_audio as _s3_audio
 
-    monkeypatch.setattr(_routes, "transcribe_bytes", lambda *a, **k: (_ for _ in ()).throw(ValueError("bad audio")))
+    monkeypatch.setattr(_route_helpers, "transcribe_bytes", lambda *a, **k: (_ for _ in ()).throw(ValueError("bad audio")))
 
     deleted: list[str] = []
 

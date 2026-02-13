@@ -44,7 +44,7 @@ def create_app(*, services: Services | None = None, testing: bool = False):
     elif not app.config.get("TESTING"):
         app.extensions["services"] = create_services()
 
-    from .routes import bp as api_bp
+    from .routes import api as api_bp
 
     app.register_blueprint(api_bp, url_prefix="/api")
 

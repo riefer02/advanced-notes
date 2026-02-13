@@ -13,18 +13,19 @@ import {
   type MealItem,
   type MealType,
 } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 
 // ============================================================================
 // Invalidation Helpers
 // ============================================================================
 
 function invalidateMealQueries(queryClient: QueryClient) {
-  queryClient.invalidateQueries({ queryKey: ['meals'] })
-  queryClient.invalidateQueries({ queryKey: ['mealsCalendar'] })
+  queryClient.invalidateQueries({ queryKey: queryKeys.meals.all })
+  queryClient.invalidateQueries({ queryKey: queryKeys.meals.calendarPrefix })
 }
 
 function invalidateDeletedMealQueries(queryClient: QueryClient, mealId: string) {
-  queryClient.removeQueries({ queryKey: ['meal', mealId] })
+  queryClient.removeQueries({ queryKey: queryKeys.meals.detail(mealId) })
   invalidateMealQueries(queryClient)
 }
 
@@ -43,7 +44,7 @@ interface MealsParams {
 
 export function useMeals(params: MealsParams) {
   return useQuery({
-    queryKey: ['meals', params],
+    queryKey: queryKeys.meals.list(params),
     queryFn: () => fetchMeals(params),
     enabled: !!params.start_date && !!params.end_date,
   })
@@ -51,7 +52,7 @@ export function useMeals(params: MealsParams) {
 
 export function useMealsCalendar(year: number, month: number, calendarOwner?: string) {
   return useQuery({
-    queryKey: ['mealsCalendar', year, month, calendarOwner],
+    queryKey: queryKeys.meals.calendar(year, month, calendarOwner),
     queryFn: () => fetchMealsCalendar(year, month, calendarOwner),
     enabled: !!year && !!month,
   })
@@ -59,7 +60,7 @@ export function useMealsCalendar(year: number, month: number, calendarOwner?: st
 
 export function useMeal(mealId: string | null, calendarOwner?: string) {
   return useQuery({
-    queryKey: ['meal', mealId, calendarOwner],
+    queryKey: queryKeys.meals.detail(mealId, calendarOwner),
     queryFn: () => fetchMeal(mealId!, calendarOwner),
     enabled: !!mealId,
   })
@@ -95,7 +96,7 @@ export function useUpdateMeal() {
       }
     }) => updateMeal(mealId, data),
     onSuccess: (updatedMeal: MealEntry) => {
-      queryClient.setQueryData(['meal', updatedMeal.id], updatedMeal)
+      queryClient.setQueryData(queryKeys.meals.detail(updatedMeal.id), updatedMeal)
       invalidateMealQueries(queryClient)
     },
   })
@@ -117,8 +118,8 @@ export function useAddMealItem() {
     mutationFn: ({ mealId, data }: { mealId: string; data: { name: string; portion?: string } }) =>
       addMealItem(mealId, data),
     onSuccess: (newItem: MealItem) => {
-      queryClient.invalidateQueries({ queryKey: ['meal', newItem.meal_entry_id] })
-      queryClient.invalidateQueries({ queryKey: ['mealsCalendar'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.meals.detail(newItem.meal_entry_id) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.meals.calendarPrefix })
     },
   })
 }
@@ -137,7 +138,9 @@ export function useUpdateMealItem() {
       data: { name?: string; portion?: string }
     }) => updateMealItem(mealId, itemId, data),
     onSuccess: (updatedItem: MealItem) => {
-      queryClient.invalidateQueries({ queryKey: ['meal', updatedItem.meal_entry_id] })
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.meals.detail(updatedItem.meal_entry_id),
+      })
     },
   })
 }
@@ -149,8 +152,8 @@ export function useDeleteMealItem() {
     mutationFn: ({ mealId, itemId }: { mealId: string; itemId: string }) =>
       deleteMealItem(mealId, itemId),
     onSuccess: (_data, { mealId }) => {
-      queryClient.invalidateQueries({ queryKey: ['meal', mealId] })
-      queryClient.invalidateQueries({ queryKey: ['mealsCalendar'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.meals.detail(mealId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.meals.calendarPrefix })
     },
   })
 }

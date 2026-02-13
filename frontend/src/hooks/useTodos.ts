@@ -12,6 +12,7 @@ import {
   acceptNoteTodos,
   type Todo,
 } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 
 interface TodosParams {
   status?: 'suggested' | 'accepted' | 'completed'
@@ -28,10 +29,10 @@ interface TodosParams {
  * Shared invalidation logic for todo mutations that return an updated todo.
  */
 function invalidateTodoQueries(queryClient: QueryClient, updatedTodo: Todo) {
-  queryClient.setQueryData(['todo', updatedTodo.id], updatedTodo)
-  queryClient.invalidateQueries({ queryKey: ['todos'] })
+  queryClient.setQueryData(queryKeys.todos.detail(updatedTodo.id), updatedTodo)
+  queryClient.invalidateQueries({ queryKey: queryKeys.todos.all })
   if (updatedTodo.note_id) {
-    queryClient.invalidateQueries({ queryKey: ['noteTodos', updatedTodo.note_id] })
+    queryClient.invalidateQueries({ queryKey: queryKeys.todos.forNote(updatedTodo.note_id) })
   }
 }
 
@@ -39,21 +40,21 @@ function invalidateTodoQueries(queryClient: QueryClient, updatedTodo: Todo) {
  * Shared invalidation logic for todo delete mutations.
  */
 function invalidateDeletedTodoQueries(queryClient: QueryClient, todoId: string) {
-  queryClient.removeQueries({ queryKey: ['todo', todoId] })
-  queryClient.invalidateQueries({ queryKey: ['todos'] })
-  queryClient.invalidateQueries({ queryKey: ['noteTodos'] })
+  queryClient.removeQueries({ queryKey: queryKeys.todos.detail(todoId) })
+  queryClient.invalidateQueries({ queryKey: queryKeys.todos.all })
+  queryClient.invalidateQueries({ queryKey: queryKeys.todos.forNotePrefix })
 }
 
 export function useTodos(params?: TodosParams) {
   return useQuery({
-    queryKey: ['todos', params],
+    queryKey: queryKeys.todos.list(params),
     queryFn: () => fetchTodos(params),
   })
 }
 
 export function useTodo(todoId: string) {
   return useQuery({
-    queryKey: ['todo', todoId],
+    queryKey: queryKeys.todos.detail(todoId),
     queryFn: () => fetchTodo(todoId),
     enabled: !!todoId,
   })
@@ -61,7 +62,7 @@ export function useTodo(todoId: string) {
 
 export function useTodosForNote(noteId: string) {
   return useQuery({
-    queryKey: ['noteTodos', noteId],
+    queryKey: queryKeys.todos.forNote(noteId),
     queryFn: () => fetchNoteTodos(noteId),
     enabled: !!noteId,
   })
@@ -74,7 +75,7 @@ export function useCreateTodo() {
     mutationFn: (data: { title: string; description?: string; note_id?: string }) =>
       createTodo(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['todos'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.todos.all })
     },
   })
 }
@@ -137,8 +138,8 @@ export function useAcceptNoteTodos() {
     mutationFn: ({ noteId, todoIds }: { noteId: string; todoIds: string[] }) =>
       acceptNoteTodos(noteId, todoIds),
     onSuccess: (_data, { noteId }) => {
-      queryClient.invalidateQueries({ queryKey: ['todos'] })
-      queryClient.invalidateQueries({ queryKey: ['noteTodos', noteId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.todos.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.todos.forNote(noteId) })
     },
   })
 }

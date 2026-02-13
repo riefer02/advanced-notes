@@ -11,18 +11,19 @@ import {
   extractVinylFromPhotos,
   type VinylRecord,
 } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 
 // ============================================================================
 // Invalidation Helpers
 // ============================================================================
 
 function invalidateVinylQueries(queryClient: QueryClient) {
-  queryClient.invalidateQueries({ queryKey: ['vinyl'] })
-  queryClient.invalidateQueries({ queryKey: ['vinylStats'] })
+  queryClient.invalidateQueries({ queryKey: queryKeys.vinyl.all })
+  queryClient.invalidateQueries({ queryKey: queryKeys.vinyl.statsPrefix })
 }
 
 function invalidateDeletedVinylQueries(queryClient: QueryClient, recordId: string) {
-  queryClient.removeQueries({ queryKey: ['vinyl', recordId] })
+  queryClient.removeQueries({ queryKey: queryKeys.vinyl.detail(recordId) })
   invalidateVinylQueries(queryClient)
 }
 
@@ -43,14 +44,14 @@ interface VinylListParams {
 
 export function useVinylRecords(params?: VinylListParams) {
   return useQuery({
-    queryKey: ['vinyl', params],
+    queryKey: queryKeys.vinyl.list(params),
     queryFn: () => fetchVinylRecords(params),
   })
 }
 
 export function useVinylRecord(recordId: string | null, owner?: string) {
   return useQuery({
-    queryKey: ['vinyl', recordId, owner],
+    queryKey: queryKeys.vinyl.detail(recordId, owner),
     queryFn: () => fetchVinylRecord(recordId!, owner),
     enabled: !!recordId,
   })
@@ -58,14 +59,14 @@ export function useVinylRecord(recordId: string | null, owner?: string) {
 
 export function useVinylStats(owner?: string) {
   return useQuery({
-    queryKey: ['vinylStats', owner],
+    queryKey: queryKeys.vinyl.stats(owner),
     queryFn: () => fetchVinylStats(owner),
   })
 }
 
 export function useVinylSearch(query: string, owner?: string) {
   return useQuery({
-    queryKey: ['vinylSearch', query, owner],
+    queryKey: queryKeys.vinyl.search(query, owner),
     queryFn: () => searchVinylRecords(query, undefined, undefined, owner),
     enabled: query.length >= 2,
   })
@@ -108,7 +109,7 @@ export function useUpdateVinylRecord() {
       data: Parameters<typeof updateVinylRecord>[1]
     }) => updateVinylRecord(recordId, data),
     onSuccess: (updatedRecord: VinylRecord) => {
-      queryClient.setQueryData(['vinyl', updatedRecord.id], updatedRecord)
+      queryClient.setQueryData(queryKeys.vinyl.detail(updatedRecord.id), updatedRecord)
       invalidateVinylQueries(queryClient)
     },
   })

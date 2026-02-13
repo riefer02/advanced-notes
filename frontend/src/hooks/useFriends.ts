@@ -9,31 +9,32 @@ import {
   removeFriend,
   searchUsers,
 } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 
 export function useFriends() {
   return useQuery({
-    queryKey: ['friends'],
+    queryKey: queryKeys.friends.all,
     queryFn: fetchFriends,
   })
 }
 
 export function useFriendRequests() {
   return useQuery({
-    queryKey: ['friendRequests'],
+    queryKey: queryKeys.friends.requests,
     queryFn: fetchFriendRequests,
   })
 }
 
 export function useSentRequests() {
   return useQuery({
-    queryKey: ['sentRequests'],
+    queryKey: queryKeys.friends.sent,
     queryFn: fetchSentRequests,
   })
 }
 
 export function useUserSearch(query: string) {
   return useQuery({
-    queryKey: ['userSearch', query],
+    queryKey: queryKeys.userSearch(query),
     queryFn: () => searchUsers(query),
     enabled: query.length >= 2,
   })
@@ -45,8 +46,8 @@ export function useSendFriendRequest() {
   return useMutation({
     mutationFn: (userId: string) => sendFriendRequest(userId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sentRequests'] })
-      queryClient.invalidateQueries({ queryKey: ['friends'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.friends.sent })
+      queryClient.invalidateQueries({ queryKey: queryKeys.friends.all })
     },
   })
 }
@@ -57,8 +58,8 @@ export function useAcceptFriendRequest() {
   return useMutation({
     mutationFn: (friendshipId: string) => acceptFriendRequest(friendshipId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['friendRequests'] })
-      queryClient.invalidateQueries({ queryKey: ['friends'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.friends.requests })
+      queryClient.invalidateQueries({ queryKey: queryKeys.friends.all })
     },
   })
 }
@@ -69,7 +70,7 @@ export function useDeclineFriendRequest() {
   return useMutation({
     mutationFn: (friendshipId: string) => declineFriendRequest(friendshipId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['friendRequests'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.friends.requests })
     },
   })
 }
@@ -80,8 +81,8 @@ export function useRemoveFriend() {
   return useMutation({
     mutationFn: (friendshipId: string) => removeFriend(friendshipId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['friends'] })
-      queryClient.invalidateQueries({ queryKey: ['shares'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.friends.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.shares.all })
     },
   })
 }

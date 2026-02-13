@@ -6,6 +6,7 @@ import {
   type FeedbackType,
   type FeedbackListResponse,
 } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 
 interface FeedbackParams {
   limit?: number
@@ -21,7 +22,7 @@ export interface CreateFeedbackData {
 
 export function useFeedbackList(params?: FeedbackParams) {
   return useQuery({
-    queryKey: ['feedback', params],
+    queryKey: queryKeys.feedback(params),
     queryFn: () => fetchFeedback(params),
   })
 }
@@ -33,10 +34,12 @@ export function useSubmitFeedback() {
     mutationFn: (data: CreateFeedbackData) => submitFeedback(data),
     onMutate: async (newFeedback) => {
       // Cancel any outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({ queryKey: ['feedback'] })
+      await queryClient.cancelQueries({ queryKey: queryKeys.feedbackPrefix })
 
       // Snapshot the previous value
-      const previousFeedback = queryClient.getQueryData<FeedbackListResponse>(['feedback'])
+      const previousFeedback = queryClient.getQueryData<FeedbackListResponse>(
+        queryKeys.feedbackPrefix
+      )
 
       // Optimistically update the cache with a temporary feedback item
       if (previousFeedback) {
@@ -50,7 +53,7 @@ export function useSubmitFeedback() {
           created_at: new Date().toISOString(),
         }
 
-        queryClient.setQueryData<FeedbackListResponse>(['feedback'], {
+        queryClient.setQueryData<FeedbackListResponse>(queryKeys.feedbackPrefix, {
           ...previousFeedback,
           feedback: [optimisticFeedback, ...previousFeedback.feedback],
           total: previousFeedback.total + 1,
@@ -63,12 +66,12 @@ export function useSubmitFeedback() {
     onError: (_err, _newFeedback, context) => {
       // Roll back to the previous value on error
       if (context?.previousFeedback) {
-        queryClient.setQueryData(['feedback'], context.previousFeedback)
+        queryClient.setQueryData(queryKeys.feedbackPrefix, context.previousFeedback)
       }
     },
     onSettled: () => {
       // Always refetch after error or success to sync with server
-      queryClient.invalidateQueries({ queryKey: ['feedback'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.feedbackPrefix })
     },
   })
 }

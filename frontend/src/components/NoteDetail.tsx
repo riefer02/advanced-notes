@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import type { Note } from '../lib/api'
 import SuggestedTodos from './SuggestedTodos'
 import { Button } from '@/components/ui/button'
@@ -79,7 +80,9 @@ export default function NoteDetail({ note, onDelete }: NoteDetailProps) {
           </div>
           <div
             className="text-sm text-gray-800"
-            dangerouslySetInnerHTML={{ __html: note.snippet || '' }}
+            dangerouslySetInnerHTML={{
+              __html: DOMPurify.sanitize(note.snippet || '', { ALLOWED_TAGS: ['mark'] }),
+            }}
           />
         </div>
       )}

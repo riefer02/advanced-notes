@@ -2,7 +2,8 @@ import { createRootRouteWithContext, Outlet, useRouterState } from '@tanstack/re
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { QueryClient } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { AppShell } from '../components/layout/AppShell'
+import { AppShell, NAV_ITEMS } from '../components/layout/AppShell'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 
 interface MyRouterContext {
   queryClient: QueryClient
@@ -14,26 +15,21 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 function RootComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const isAppRoute =
-    pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/summaries') ||
-    pathname.startsWith('/notes') ||
-    pathname.startsWith('/settings') ||
-    pathname.startsWith('/todos') ||
-    pathname.startsWith('/meals') ||
-    pathname.startsWith('/vinyl') ||
-    pathname.startsWith('/friends') ||
-    pathname.startsWith('/feedback')
+  const isAppRoute = NAV_ITEMS.some((item) => pathname.startsWith(item.to))
 
   return (
     <>
       {isAppRoute ? (
         <AppShell>
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </AppShell>
       ) : (
         <div className="min-h-screen bg-gray-50">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       )}
 
