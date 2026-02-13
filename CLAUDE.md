@@ -26,9 +26,9 @@ cd backend && uv run python -m pytest -x tests/ # Run tests, stop on first failu
 
 ### Frontend
 ```bash
-cd frontend && npm run dev      # Start Vite dev server
-cd frontend && npm run build    # Production build with type checking
-cd frontend && npm run lint     # ESLint (zero-warning policy)
+cd frontend && pnpm dev         # Start Vite dev server
+cd frontend && pnpm build       # Production build with type checking
+cd frontend && pnpm lint        # ESLint (zero-warning policy)
 ```
 
 ### Database Migrations
@@ -44,7 +44,7 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 - **Frontend**: Vite + React 18 + TypeScript + TanStack Router + TanStack Query + Tailwind CSS v4 + shadcn/ui (New York style)
 - **Auth**: Clerk JWT (all endpoints except `/api/health` require auth)
 - **Database**: SQLite (dev) / PostgreSQL (prod)
-- **Package Management**: `uv` (backend), `pnpm` or `npm` (frontend)
+- **Package Management**: `uv` (backend), `pnpm` (frontend)
 
 ### Key Directories
 - `backend/app/routes.py` - REST API endpoints
@@ -140,7 +140,7 @@ button, card, badge, tabs, input, textarea, dropdown-menu, alert, label, select,
 
 **Adding a new shadcn component:**
 ```bash
-cd frontend && npx shadcn@latest add <component-name>
+cd frontend && pnpm dlx shadcn@latest add <component-name>
 ```
 After install, **add `React.forwardRef`** to any component that Radix uses with `asChild` (e.g. triggers, content wrappers). React 18 requires explicit `forwardRef`; shadcn targets React 19 which auto-forwards refs. Already fixed: Button, DropdownMenuTrigger, DropdownMenuContent. Check new components and apply the same pattern if needed.
 
@@ -195,10 +195,10 @@ cd backend && uv run python -m pytest tests/    # Run all tests
 
 ### Frontend changes:
 ```bash
-cd frontend && npm run lint                     # ESLint (zero-warning policy)
-cd frontend && npm run format:check             # Prettier formatting
-cd frontend && npm run test:run                 # Run Vitest tests
-cd frontend && npm run build                    # TypeScript + production build
+cd frontend && pnpm lint                        # ESLint (zero-warning policy)
+cd frontend && pnpm format:check                # Prettier formatting
+cd frontend && pnpm test:run                    # Run Vitest tests
+cd frontend && pnpm build                       # TypeScript + production build
 ```
 
 ### Full verification (run all):
@@ -207,7 +207,7 @@ cd frontend && npm run build                    # TypeScript + production build
 cd backend && uv run ruff check app/ --fix && uv run python -m pytest tests/
 
 # Frontend
-cd frontend && npm run lint && npm run format:check && npm run test:run && npm run build
+cd frontend && pnpm lint && pnpm format:check && pnpm test:run && pnpm build
 ```
 
 ## Testing
@@ -230,9 +230,9 @@ cd backend && uv run python -m pytest tests/ --cov       # With coverage report
 
 ### Frontend Tests
 ```bash
-cd frontend && npm test              # Run tests in watch mode
-cd frontend && npm run test:run      # Run tests once
-cd frontend && npm run test:coverage # Run with coverage
+cd frontend && pnpm test             # Run tests in watch mode
+cd frontend && pnpm test:run         # Run tests once
+cd frontend && pnpm test:coverage    # Run with coverage
 ```
 
 **Writing Frontend Tests:**
@@ -253,9 +253,9 @@ cd backend && uv run mypy app/               # Type check
 
 ### Frontend
 ```bash
-cd frontend && npm run lint          # ESLint check
-cd frontend && npm run format        # Format with Prettier
-cd frontend && npm run format:check  # Check formatting
+cd frontend && pnpm lint             # ESLint check
+cd frontend && pnpm format           # Format with Prettier
+cd frontend && pnpm format:check     # Check formatting
 ```
 
 ## Code Organization Guide
@@ -286,7 +286,7 @@ cd frontend && npm run format:check  # Check formatting
 
 ### Adding a New Route (Frontend)
 1. Create file in `frontend/src/routes/` (file-based routing)
-2. Run `npm run dev` to regenerate route tree
+2. Run `pnpm dev` to regenerate route tree
 3. Routes are auto-registered by TanStack Router
 
 ## Common Debugging Tips
