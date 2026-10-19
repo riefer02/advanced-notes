@@ -4,8 +4,12 @@ import { act, renderHook } from '@testing-library/react'
 import { useDebouncedValue } from './useDebouncedValue'
 
 describe('useDebouncedValue', () => {
-  beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
 
   it('returns the initial value immediately', () => {
     const { result } = renderHook(() => useDebouncedValue('a', 300))
