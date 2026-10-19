@@ -29,6 +29,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.sql import func
 from sqlalchemy.types import TypeDecorator, UserDefinedType
 
+from .config import Config
+
 Base = declarative_base()
 
 _engine: Engine | None = None
@@ -741,14 +743,33 @@ def get_session() -> Generator[Session, None, None]:
 
 
 def create_engine_for_url(database_url: str | None = None) -> Engine:
-    """Build a SQLAlchemy engine for the given URL (or default environment)."""
+    """Build a SQLAlchemy engine for the given URL (or default environment).
+
+    Every engine gets bounded connect/pool timeouts so a stuck database cannot
+    pin request workers, and a recycling window to avoid stale connections.
+    """
     url = _normalize_database_url(database_url or get_database_url())
-    engine = create_engine(
-        url,
-        future=True,
-        echo=False,
-        pool_pre_ping=True,
-    )
+
+    options: dict = {
+        "future": True,
+        "echo": False,
+        "pool_pre_ping": True,
+    }
+
+    if url.startswith("sqlite"):
+        options["connect_args"] = {
+            "timeout": Config.SQLITE_LOCK_TIMEOUT_SECONDS,
+        }
+    else:
+        options.update(
+            connect_args={"connect_timeout": Config.DB_CONNECT_TIMEOUT_SECONDS},
+            pool_size=Config.DB_POOL_SIZE,
+            max_overflow=Config.DB_MAX_OVERFLOW,
+            pool_timeout=Config.DB_POOL_TIMEOUT_SECONDS,
+            pool_recycle=Config.DB_POOL_RECYCLE_SECONDS,
+        )
+
+    engine = create_engine(url, **options)
 
     if engine.dialect.name == "sqlite":
         event.listen(engine, "connect", _set_sqlite_pragmas)

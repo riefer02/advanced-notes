@@ -8,7 +8,7 @@ Model: gpt-4o-mini-transcribe-2025-12-15 (pinned snapshot; newer, higher quality
 import os
 import tempfile
 
-from .services.openai_provider import get_openai_client, transcribe_model
+from .services.openai_provider import get_transcription_client, transcribe_model
 
 
 def transcribe_bytes(audio_bytes: bytes, content_type: str = None):
@@ -36,7 +36,8 @@ def transcribe_bytes(audio_bytes: bytes, content_type: str = None):
     if len(audio_bytes) > 25 * 1024 * 1024:  # 25MB limit
         raise ValueError("Audio file too large (max 25MB)")
 
-    client = get_openai_client()
+    # Transcription uploads can be large; use the longer, still-bounded timeout.
+    client = get_transcription_client()
 
     # Map MIME types to file extensions
     mime_to_ext = {

@@ -22,7 +22,11 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false, // Don't refetch when window regains focus
-      retry: 1, // Retry failed requests once
+      // Don't burn another full timeout on a request that already timed out.
+      retry: (failureCount, error) => {
+        if (error instanceof Error && error.name === 'TimeoutError') return false
+        return failureCount < 1
+      },
     },
   },
 })

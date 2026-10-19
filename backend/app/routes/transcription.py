@@ -6,9 +6,11 @@ from flask import Blueprint, g, jsonify, request
 from ..auth import require_auth
 from ..config import Config
 from ..services import s3_audio
+from ..services.ai_categorizer import CategoryAction, CategorySuggestion
 from ..services.container import get_services
 from ..services.folder_utils import extract_folder_paths
 from ..services.models import NoteMetadata
+from ..services.resilience import require_external, with_fallback
 from ._helpers import (
     _AudioTranscriptionError,
     _cleanup_stale_pending_audio_clips,
@@ -23,6 +25,22 @@ from ._helpers import (
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("transcription", __name__)
+
+
+def _fallback_category() -> CategorySuggestion:
+    """Degraded categorization used when the AI provider is unavailable."""
+    from datetime import UTC, datetime
+
+    stamp = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
+    return CategorySuggestion(
+        action=CategoryAction.CREATE_FOLDER,
+        folder_path="inbox",
+        filename=f"note-{stamp}.md",
+        tags=[],
+        confidence=0.0,
+        reasoning="Categorization unavailable; saved to inbox",
+        todos=[],
+    )
 
 
 @bp.post("/summarize")
@@ -48,7 +66,10 @@ def summarize_notes():
 
         notes_content = [f"Title: {n.title}\nContent: {n.content}" for n in recent_notes]
 
-        summarization_result = svc.summarizer.summarize(notes_content, return_usage=True)
+        summarization_result = require_external(
+            lambda: svc.summarizer.summarize(notes_content, return_usage=True),
+            service="summarizer",
+        )
         digest_result = summarization_result.digest
 
         if summarization_result.usage:
@@ -94,20 +115,27 @@ def transcribe():
         folder_tree = svc.storage.get_folder_tree(user_id)
 
         existing_folders = extract_folder_paths(folder_tree)
-        cat_result = svc.categorizer.categorize(text, existing_folders, return_usage=True)
-        categorization_result = cat_result.suggestion
+        cat_result = with_fallback(
+            lambda: svc.categorizer.categorize(text, existing_folders, return_usage=True),
+            fallback=None,
+            service="categorizer",
+        )
 
-        if cat_result.usage:
-            svc.usage_tracking.record_usage(
-                user_id=user_id,
-                service_type="categorization",
-                model=cat_result.model,
-                prompt_tokens=cat_result.usage.prompt_tokens,
-                completion_tokens=cat_result.usage.completion_tokens,
-                total_tokens=cat_result.usage.total_tokens,
-                endpoint="/api/transcribe",
-            )
-            _maybe_send_cost_alert(svc)
+        if cat_result is None:
+            categorization_result = _fallback_category()
+        else:
+            categorization_result = cat_result.suggestion
+            if cat_result.usage:
+                svc.usage_tracking.record_usage(
+                    user_id=user_id,
+                    service_type="categorization",
+                    model=cat_result.model,
+                    prompt_tokens=cat_result.usage.prompt_tokens,
+                    completion_tokens=cat_result.usage.completion_tokens,
+                    total_tokens=cat_result.usage.total_tokens,
+                    endpoint="/api/transcribe",
+                )
+                _maybe_send_cost_alert(svc)
 
         note_metadata = NoteMetadata(
             title=categorization_result.filename.replace(".md", "").replace("-", " ").title(),
@@ -127,13 +155,18 @@ def transcribe():
             duration_ms=None,
         )
 
-        svc.embeddings.upsert_for_note(
-            storage=svc.storage,
-            user_id=user_id,
-            note_id=note_id,
-            title=note_metadata.title,
-            content=text,
-            tags=note_metadata.tags,
+        # Embeddings are an enhancement: never fail a saved note over them.
+        with_fallback(
+            lambda: svc.embeddings.upsert_for_note(
+                storage=svc.storage,
+                user_id=user_id,
+                note_id=note_id,
+                title=note_metadata.title,
+                content=text,
+                tags=note_metadata.tags,
+            ),
+            fallback=None,
+            service="embeddings",
         )
 
         created_todos = []

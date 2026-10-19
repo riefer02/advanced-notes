@@ -5,6 +5,7 @@ from flask import Blueprint, g, jsonify, request
 from ..auth import require_auth
 from ..services.container import get_services
 from ..services.embeddings import vector_to_json, vector_to_pg_literal
+from ..services.resilience import require_external, with_fallback
 from ._helpers import (
     _AudioTranscriptionError,
     _transcribe_audio_clip,
@@ -52,7 +53,10 @@ def transcribe_meal():
 
     try:
         current_date = date.today().isoformat()
-        extraction_result = svc.meal_extractor.extract(text, current_date)
+        extraction_result = require_external(
+            lambda: svc.meal_extractor.extract(text, current_date),
+            service="meal extraction",
+        )
 
         meal_date = extraction_result.meal_date or current_date
 
@@ -83,8 +87,8 @@ def transcribe_meal():
             food_items=food_items,
         )
 
-        # Generate embedding for meal (best-effort)
-        try:
+        # Generate embedding for meal (best-effort).
+        def _refresh_meal_embedding() -> None:
             content_for_embedding = f"{extraction_result.meal_type.value}: {text}"
             vec = svc.embeddings.embed_query(content_for_embedding)
             content_hash = hashlib.sha256(content_for_embedding.encode()).hexdigest()
@@ -100,8 +104,8 @@ def transcribe_meal():
                 content_hash=content_hash,
                 embedding_value=embedding_value,
             )
-        except Exception as e:
-            print(f"Meal embedding failed for {meal_id}: {e}")
+
+        with_fallback(_refresh_meal_embedding, fallback=None, service="meal embeddings")
 
         saved_meal = svc.storage.get_meal_entry(target_user_id, meal_id)
 

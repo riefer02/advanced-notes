@@ -13,7 +13,7 @@ import math
 
 from openai import OpenAI, OpenAIError
 
-from .openai_provider import embedding_model, get_openai_client
+from .openai_provider import build_openai_client, embedding_model
 
 
 def build_note_embedding_text(title: str, content: str, tags: list[str]) -> str:
@@ -82,7 +82,7 @@ class EmbeddingsService:
             model: Embedding model to use (default: text-embedding-3-small).
             client: Optional pre-configured OpenAI client.
         """
-        self.client = client or (OpenAI(api_key=api_key) if api_key else get_openai_client())
+        self.client = client or build_openai_client(api_key)
         self.model = model or embedding_model()
 
     def embed_text(self, text: str) -> list[float]:

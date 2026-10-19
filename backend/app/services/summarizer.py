@@ -8,7 +8,7 @@ This module provides an abstraction layer for generating digests from multiple n
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
 
-from .openai_provider import chat_model, get_openai_client
+from .openai_provider import build_openai_client, chat_model
 
 
 class DigestResult(BaseModel):
@@ -57,7 +57,7 @@ class AISummarizerService:
             api_key: OpenAI API key. If None, reads from OPENAI_API_KEY env var
             model: Model to use (default: gpt-4o-mini)
         """
-        self.client = client or (OpenAI(api_key=api_key) if api_key else get_openai_client())
+        self.client = client or build_openai_client(api_key)
         self.model = model or chat_model()
         
     def summarize(self, notes_content: list[str], return_usage: bool = False) -> DigestResult | SummarizationResult:
