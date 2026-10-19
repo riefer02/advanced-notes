@@ -37,7 +37,7 @@ Routes do not construct global singletons. Instead, the app initializes a `Servi
 
 - `backend/app/services/container.py`: `Services`, `create_services()`, `get_services()`
 - `backend/app/__init__.py`: attaches `app.extensions["services"] = create_services()`
-- `backend/app/routes.py`: calls `svc = get_services()` per-request
+- `backend/app/routes/`: each blueprint calls `svc = get_services()` per-request
 
 This pattern keeps route code thin and makes route tests able to inject fakes by overriding `app.extensions["services"]`.
 

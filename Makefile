@@ -1,4 +1,4 @@
-.PHONY: help dev backend frontend clean install test-backend test-backend-fast test-frontend-build
+.PHONY: help dev backend frontend clean install lint test-backend test-backend-fast test-frontend test-frontend-build typecheck
 
 help:
 	@echo "Available targets:"
@@ -7,8 +7,11 @@ help:
 	@echo "  make frontend  - Start only the frontend (Vite)"
 	@echo "  make clean     - Remove all generated files and caches"
 	@echo "  make install   - Install all dependencies"
+	@echo "  make lint               - Run backend ruff + frontend eslint"
+	@echo "  make typecheck          - Typecheck frontend (tsc --noEmit)"
 	@echo "  make test-backend       - Run backend pytest suite"
 	@echo "  make test-backend-fast  - Run backend pytest suite (stop on first failure)"
+	@echo "  make test-frontend      - Run frontend vitest suite"
 	@echo "  make test-frontend-build - Run frontend production build"
 
 dev:
@@ -31,6 +34,15 @@ install:
 	@cd frontend && pnpm install
 	@echo "✓ All dependencies installed"
 
+lint:
+	@echo "Linting backend..."
+	@cd backend && uv run ruff check app/
+	@echo "Linting frontend..."
+	@cd frontend && pnpm run lint
+
+typecheck:
+	@cd frontend && pnpm exec tsc --noEmit
+
 test-backend:
 	@echo "Running backend tests..."
 	@cd backend && uv run python -m pytest tests/
@@ -39,6 +51,10 @@ test-backend-fast:
 	@echo "Running backend tests (fast fail)..."
 	@cd backend && uv run python -m pytest -x tests/
 
+test-frontend:
+	@echo "Running frontend tests..."
+	@cd frontend && pnpm run test:run
+
 test-frontend-build:
 	@echo "Running frontend build..."
 	@cd frontend && pnpm run build
@@ -46,6 +62,8 @@ test-frontend-build:
 clean:
 	@echo "Cleaning build artifacts and caches..."
 	@rm -rf backend/.venv backend/__pycache__ backend/**/__pycache__
-	@rm -rf frontend/node_modules frontend/dist frontend/.vite
+	@rm -rf backend/htmlcov backend/.pytest_cache backend/.ruff_cache backend/.coverage
+	@rm -rf frontend/node_modules frontend/dist frontend/.vite frontend/coverage frontend/.ruff_cache
+	@rm -rf .ruff_cache
 	@echo "✓ Cleaned"
 
