@@ -8,9 +8,11 @@ and a transient delivery failure is retried instead of lost.
 
 from __future__ import annotations
 
+import html
 import logging
+import re
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import boto3
 from botocore.config import Config as BotoConfig
@@ -175,6 +177,35 @@ class EmailService:
             body=body,
         )
 
+    def maybe_enqueue_daily_digest(self) -> bool:
+        """In digest mode, send one daily summary of new users (09:00 UTC)."""
+        if Config.NEW_USER_NOTIFICATION_MODE != "digest" or self.storage is None:
+            return False
+
+        now = datetime.now(UTC)
+        if now.hour < 9:
+            return False
+
+        since = (now - timedelta(hours=24)).replace(tzinfo=None)
+        profiles = self.storage.list_user_profiles_since(since)
+        if not profiles:
+            return False
+
+        lines = [f"{len(profiles)} new users in the last 24 hours", ""]
+        for profile in profiles:
+            label = (
+                profile.get("display_name")
+                or profile.get("username")
+                or profile.get("user_id")
+            )
+            lines.append(f"- {label} <{profile.get('email') or 'no email'}>")
+
+        return self._enqueue(
+            dedupe_key=f"digest:new_users:{now.date().isoformat()}",
+            subject=f"[Chisos][Digest] {len(profiles)} new users",
+            body="\n".join(lines),
+        )
+
     # ------------------------------------------------------------------
     # Outbox + delivery
     # ------------------------------------------------------------------
@@ -184,9 +215,9 @@ class EmailService:
             logger.debug("Email not configured, skipping notification")
             return False
 
-        to_address = Config.ADMIN_EMAIL
-        if not to_address:
-            logger.warning("ADMIN_EMAIL is not configured")
+        recipients = Config.admin_emails()
+        if not recipients:
+            logger.warning("No admin recipients are configured")
             return False
 
         if self.storage is None:
@@ -196,7 +227,7 @@ class EmailService:
         try:
             return self.storage.enqueue_email(
                 dedupe_key=dedupe_key,
-                to_address=to_address,
+                to_address=",".join(recipients),
                 subject=self._safe_subject(subject),
                 body=self._with_footer(body),
             )
@@ -236,14 +267,17 @@ class EmailService:
         subject: str,
         body: str,
     ) -> bool:
-        if not to_address:
+        recipients = [
+            address.strip() for address in (to_address or "").split(",") if address.strip()
+        ]
+        if not recipients:
             logger.warning("No recipient address provided for email")
             return False
 
         if not self.is_configured():
             return False
 
-        sender = Config.SES_SENDER_EMAIL or Config.ADMIN_EMAIL
+        sender = Config.SES_SENDER_EMAIL or recipients[0]
 
         try:
             client = boto3.client(
@@ -259,13 +293,19 @@ class EmailService:
             )
             client.send_email(
                 Source=sender,
-                Destination={"ToAddresses": [to_address]},
+                Destination={"ToAddresses": recipients},
                 Message={
                     "Subject": {"Data": subject, "Charset": "UTF-8"},
-                    "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
+                    "Body": {
+                        "Text": {"Data": body, "Charset": "UTF-8"},
+                        "Html": {
+                            "Data": self._render_html(subject, body),
+                            "Charset": "UTF-8",
+                        },
+                    },
                 },
             )
-            logger.info("Email sent to %s: %s", to_address, subject)
+            logger.info("Email sent to %s: %s", ", ".join(recipients), subject)
             return True
 
         except ClientError as e:
@@ -288,6 +328,40 @@ class EmailService:
         """
         cleaned = " ".join(str(subject).replace("\r", " ").replace("\n", " ").split())
         return cleaned[:max_length] or "(no subject)"
+
+    @staticmethod
+    def _render_html(subject: str, body: str) -> str:
+        """Render the plain-text body as a simple, escaped admin email."""
+        blocks: list[str] = []
+        for line in body.splitlines():
+            if not line.strip():
+                blocks.append('<div style="height:8px"></div>')
+                continue
+            if line.strip() == "---":
+                blocks.append(
+                    '<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0">'
+                )
+                continue
+
+            key_value = re.match(r"^([A-Z][A-Za-z ]{1,40}): (.*)$", line)
+            if key_value:
+                key, value = key_value.groups()
+                blocks.append(
+                    f'<p style="margin:4px 0"><strong>{html.escape(key)}:</strong> '
+                    f"{html.escape(value)}</p>"
+                )
+            else:
+                blocks.append(f'<p style="margin:4px 0">{html.escape(line)}</p>')
+
+        return f"""<!doctype html>
+<html>
+  <body style="margin:0;padding:24px;background:#f8fafc;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a">
+    <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px">
+      <h2 style="margin:0 0 16px;font-size:18px">{html.escape(subject)}</h2>
+      {''.join(blocks)}
+    </div>
+  </body>
+</html>"""
 
     @staticmethod
     def _environment() -> str:

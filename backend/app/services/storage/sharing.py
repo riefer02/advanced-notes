@@ -18,6 +18,25 @@ from ..models import UserProfileResponse as UserProfileDTO
 class SharingStorageMixin:
     """User profiles, friendships, and resource sharing operations."""
 
+    def list_user_profiles_since(self, since: datetime) -> list[dict]:
+        """Minimal profile list for the daily new-user digest."""
+        with self._session_scope() as session:
+            rows = (
+                session.query(UserProfileORM)
+                .filter(UserProfileORM.created_at >= since)
+                .order_by(UserProfileORM.created_at)
+                .all()
+            )
+            return [
+                {
+                    "user_id": row.user_id,
+                    "display_name": row.display_name,
+                    "username": row.username,
+                    "email": row.email,
+                }
+                for row in rows
+            ]
+
     # -----------------------------------------------------------------------
     # Profiles
     # -----------------------------------------------------------------------
