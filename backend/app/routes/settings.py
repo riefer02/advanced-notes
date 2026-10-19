@@ -2,7 +2,7 @@ from flask import Blueprint, g, jsonify, request
 
 from ..auth import require_auth
 from ..services.container import get_services
-from ._helpers import api_error
+from ._helpers import api_error_from_exception
 
 bp = Blueprint("settings", __name__)
 
@@ -18,7 +18,7 @@ def get_settings():
         settings = svc.storage.get_user_settings(user_id)
         return jsonify(settings.model_dump())
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.put("/settings")
@@ -37,4 +37,4 @@ def update_settings():
         )
         return jsonify(settings.model_dump())
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)

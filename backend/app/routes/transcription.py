@@ -1,3 +1,4 @@
+import logging
 from uuid import uuid4
 
 from flask import Blueprint, g, jsonify, request
@@ -14,9 +15,12 @@ from ._helpers import (
     _maybe_send_cost_alert,
     _transcribe_audio_clip,
     api_error,
+    api_error_from_exception,
     require_audio_clips,
     require_quota,
 )
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint("transcription", __name__)
 
@@ -65,7 +69,7 @@ def summarize_notes():
         return jsonify({**digest_result.model_dump(), "digest_id": digest_id})
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/transcribe")
@@ -84,7 +88,7 @@ def transcribe():
     except _AudioTranscriptionError as e:
         return api_error(str(e), e.status)
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
     try:
         folder_tree = svc.storage.get_folder_tree(user_id)
@@ -175,7 +179,7 @@ def transcribe():
         )
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 # ============================================================================
@@ -317,8 +321,8 @@ def delete_audio_clip(clip_id: str):
     try:
         s3_audio.delete_object(storage_key=clip.storage_key)
     except Exception as e:
-        warning = f"Failed to delete audio object from storage: {e}"
-        print(warning)
+        logger.warning("Failed to delete audio object %s: %s", clip_id, e)
+        warning = "Failed to delete audio object from storage"
 
     success = svc.storage.delete_audio_clip(user_id, clip_id)
     if not success:

@@ -2,7 +2,7 @@ from flask import Blueprint, g, jsonify, request
 
 from ..auth import require_auth
 from ..services.container import get_services
-from ._helpers import api_error, parse_pagination
+from ._helpers import api_error, api_error_from_exception, parse_pagination
 
 bp = Blueprint("todos", __name__)
 
@@ -36,7 +36,7 @@ def list_todos():
             }
         )
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/todos/<todo_id>")
@@ -52,7 +52,7 @@ def get_todo(todo_id: str):
             return api_error("Todo not found", 404)
         return jsonify(todo.model_dump())
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/todos")
@@ -83,7 +83,7 @@ def create_todo():
 
         return jsonify(todo.model_dump()), 201
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.put("/todos/<todo_id>")
@@ -108,7 +108,7 @@ def update_todo(todo_id: str):
 
         return jsonify(todo.model_dump())
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.delete("/todos/<todo_id>")
@@ -124,7 +124,7 @@ def delete_todo(todo_id: str):
             return api_error("Todo not found", 404)
         return jsonify({"success": True})
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/todos/<todo_id>/accept")
@@ -140,7 +140,7 @@ def accept_todo(todo_id: str):
             return api_error("Todo not found", 404)
         return jsonify(todo.model_dump())
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/todos/<todo_id>/complete")
@@ -156,7 +156,7 @@ def complete_todo(todo_id: str):
             return api_error("Todo not found", 404)
         return jsonify(todo.model_dump())
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/todos/<todo_id>/dismiss")
@@ -172,7 +172,7 @@ def dismiss_todo(todo_id: str):
             return api_error("Todo not found", 404)
         return jsonify({"success": True})
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 # ============================================================================
@@ -191,7 +191,7 @@ def get_note_todos(note_id: str):
         todos = svc.storage.list_todos_for_note(user_id, note_id)
         return jsonify({"todos": [t.model_dump() for t in todos]})
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/notes/<note_id>/todos/accept")
@@ -218,4 +218,4 @@ def accept_note_todos(note_id: str):
         accepted = svc.storage.accept_todos_bulk(user_id, todo_ids)
         return jsonify({"accepted": accepted})
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)

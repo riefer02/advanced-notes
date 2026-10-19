@@ -720,3 +720,18 @@ def test_create_audio_clip_rejects_non_audio_mime(client):  # noqa: ANN001
     assert "audio" in resp.get_json()["error"].lower()
 
 
+
+
+def test_internal_error_does_not_leak_exception_text(client, app, monkeypatch):  # noqa: ANN001
+    """500 responses must not echo exception text (paths, SQL, provider detail)."""
+    secret = "secret-db-path-/var/lib/postgresql/data"
+
+    def boom(**kwargs):  # noqa: ANN003, ARG001
+        raise RuntimeError(secret)
+
+    monkeypatch.setattr(app.extensions["services"].storage, "list_notes", boom)
+
+    resp = client.get("/api/notes", headers={"X-Test-User-Id": "user-a"})
+    assert resp.status_code == 500
+    assert secret not in resp.get_data(as_text=True)
+    assert resp.get_json()["error"] == "Internal server error"

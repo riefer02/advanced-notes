@@ -2,7 +2,7 @@ from flask import Blueprint, g, jsonify, request
 
 from ..auth import require_auth
 from ..services.container import get_services
-from ._helpers import api_error, parse_pagination
+from ._helpers import api_error_from_exception, parse_pagination
 
 bp = Blueprint("usage", __name__)
 
@@ -18,7 +18,7 @@ def get_usage():
         usage = svc.usage_tracking.get_current_usage(user_id)
         return jsonify(usage.model_dump())
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/usage/history")
@@ -48,4 +48,4 @@ def get_usage_history():
             }
         )
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)

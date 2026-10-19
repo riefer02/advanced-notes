@@ -9,6 +9,7 @@ from ._helpers import (
     _AudioTranscriptionError,
     _transcribe_audio_clip,
     api_error,
+    api_error_from_exception,
     parse_pagination,
     require_audio_clips,
     require_quota,
@@ -47,7 +48,7 @@ def transcribe_meal():
     except _AudioTranscriptionError as e:
         return api_error(str(e), e.status)
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
     try:
         current_date = date.today().isoformat()
@@ -121,7 +122,7 @@ def transcribe_meal():
         )
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/meals")
@@ -172,7 +173,7 @@ def list_meals():
         })
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/meals/calendar")
@@ -195,8 +196,8 @@ def get_meals_calendar():
             month_int = int(month)
             if month_int < 1 or month_int > 12:
                 raise ValueError("Month must be 1-12")
-        except ValueError as e:
-            return api_error(str(e), 400)
+        except ValueError:
+            return api_error("Invalid 'year' or 'month'", 400)
 
         if calendar_owner and calendar_owner != user_id:
             if not svc.storage.has_access(user_id, calendar_owner, "meal_calendar"):
@@ -213,7 +214,7 @@ def get_meals_calendar():
         return jsonify({"calendar": serialized, "year": year_int, "month": month_int})
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/meals/<meal_id>")
@@ -245,7 +246,7 @@ def get_meal(meal_id: str):
         return jsonify(meal.model_dump())
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.put("/meals/<meal_id>")
@@ -276,7 +277,7 @@ def update_meal(meal_id: str):
         return jsonify(updated_meal.model_dump() if updated_meal else {})
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.delete("/meals/<meal_id>")
@@ -295,7 +296,7 @@ def delete_meal(meal_id: str):
         return jsonify({"success": True})
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/meals/<meal_id>/items")
@@ -327,7 +328,7 @@ def add_meal_item(meal_id: str):
         return jsonify(item.model_dump()), 201
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.put("/meals/<meal_id>/items/<item_id>")
@@ -353,7 +354,7 @@ def update_meal_item(meal_id: str, item_id: str):
         return jsonify(item.model_dump())
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.delete("/meals/<meal_id>/items/<item_id>")
@@ -372,4 +373,4 @@ def delete_meal_item(meal_id: str, item_id: str):
         return jsonify({"success": True})
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
