@@ -27,18 +27,19 @@ export function useFolderTree() {
   return useQuery({
     queryKey: queryKeys.folders.all,
     queryFn: api.fetchFolders,
-    refetchInterval: 5000, // Auto-refresh every 5 seconds
-    staleTime: 3000, // Consider stale after 3 seconds
+    // Mutations invalidate this key; polling was unnecessary background load.
+    staleTime: 3000,
   })
 }
 
 /**
  * Fetch notes (optionally filtered by folder)
  */
-export function useNotes(folder?: string, limit = 50, offset = 0) {
+export function useNotes(folder?: string, limit = 50, offset = 0, enabled = true) {
   return useQuery({
     queryKey: queryKeys.notes.list(folder, limit, offset),
     queryFn: () => api.fetchNotes(folder, limit, offset),
+    enabled,
     staleTime: 10000, // Consider stale after 10 seconds
   })
 }
@@ -80,11 +81,11 @@ export function useTags() {
 /**
  * Fetch notes filtered by tag
  */
-export function useNotesByTag(tag: string | null, limit = 50) {
+export function useNotesByTag(tag: string | null, limit = 50, enabled = true) {
   return useQuery({
     queryKey: queryKeys.notes.byTag(tag, limit),
     queryFn: () => (tag ? api.fetchNotesByTag(tag, limit) : Promise.resolve([])),
-    enabled: !!tag, // Only fetch if tag is provided
+    enabled: !!tag && enabled,
     staleTime: 10000, // Consider stale after 10 seconds
   })
 }
