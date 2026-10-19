@@ -1,0 +1,54 @@
+{
+	admin off
+	persist_config off
+	auto_https off
+
+	log {
+		format json
+	}
+
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+:{$PORT:3000} {
+	log {
+		format json
+	}
+
+	respond /health 200
+
+	root * dist
+	encode gzip
+
+	# Hashed build output is immutable: a URL's contents never change.
+	@hashed path /assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+
+	# The SPA shell changes on every deploy, so browsers must revalidate it.
+	# Without this, a cached index.html can reference deleted asset hashes.
+	@html path / /index.html
+	header @html Cache-Control "no-cache, no-store, must-revalidate"
+
+	# A missing hashed asset must 404, never fall back to index.html.
+	# Serving HTML as JavaScript/CSS triggers strict MIME-type errors.
+	handle /assets/* {
+		@missing not file {path}
+		respond @missing 404
+		file_server
+	}
+
+	# Everything else is a client-side route. The shell must revalidate too,
+	# including deep links served through the fallback.
+	handle {
+		header Cache-Control "no-cache, no-store, must-revalidate"
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}
