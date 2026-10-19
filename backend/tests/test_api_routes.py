@@ -696,3 +696,27 @@ def test_create_audio_clip_bytes_must_be_integer(client):  # noqa: ANN001
     assert "integer" in resp.get_json()["error"]
 
 
+def test_create_audio_clip_rejects_oversized_declared_bytes(client):  # noqa: ANN001
+    """Presigned uploads bypass MAX_CONTENT_LENGTH, so the declared size is capped."""
+    from app.config import Config
+
+    resp = client.post(
+        "/api/audio-clips",
+        json={"mime_type": "audio/mp4", "bytes": Config.MAX_AUDIO_BYTES + 1},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 413
+    assert "too large" in resp.get_json()["error"].lower()
+
+
+def test_create_audio_clip_rejects_non_audio_mime(client):  # noqa: ANN001
+    """POST /api/audio-clips only accepts audio/* mime types."""
+    resp = client.post(
+        "/api/audio-clips",
+        json={"mime_type": "text/html", "bytes": 1234},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 400
+    assert "audio" in resp.get_json()["error"].lower()
+
+

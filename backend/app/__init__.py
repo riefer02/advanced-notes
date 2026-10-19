@@ -1,7 +1,7 @@
 import os
 from contextlib import suppress
 
-from flask import Flask
+from flask import Flask, jsonify
 from flask_cors import CORS
 
 from .config import Config
@@ -10,6 +10,9 @@ from .services.container import Services, create_services
 
 def create_app(*, services: Services | None = None, testing: bool = False):
     app = Flask(__name__)
+
+    # Global request-body cap. Individual endpoints enforce tighter limits.
+    app.config["MAX_CONTENT_LENGTH"] = Config.MAX_CONTENT_LENGTH
 
     if testing:
         app.config["TESTING"] = True
@@ -63,5 +66,9 @@ def create_app(*, services: Services | None = None, testing: bool = False):
                     timestamp=datetime.now(UTC).isoformat(),
                 )
         return {"error": "Internal server error"}, 500
+
+    @app.errorhandler(413)
+    def handle_413(error):
+        return jsonify({"error": "Request body too large"}), 413
 
     return app

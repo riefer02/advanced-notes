@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 from datetime import datetime
 from uuid import uuid4
 
@@ -330,7 +331,10 @@ class MealStorageMixin:
         """Return meal counts for the given month and for today."""
         from datetime import date as date_type
 
-        today = date_type(year, month, datetime.utcnow().day)
+        # Clamp to the last day of the requested month: the current UTC day can
+        # exceed it (e.g. the 31st while viewing February).
+        today_day = min(datetime.utcnow().day, calendar.monthrange(year, month)[1])
+        today = date_type(year, month, today_day)
         month_start = date_type(year, month, 1)
         if month == 12:
             next_month_start = date_type(year + 1, 1, 1)

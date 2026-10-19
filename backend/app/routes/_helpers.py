@@ -205,14 +205,23 @@ def _transcribe_audio_clip(
     """
     from uuid import uuid4
 
+    # Reject oversized bodies before buffering when the server reports a length.
+    declared_length = request.content_length
+    if declared_length is not None and declared_length > Config.MAX_CONTENT_LENGTH:
+        raise _AudioTranscriptionError("Audio file too large (max 25MB)", 413)
+
     content_type = None
     if "file" in request.files:
         file = request.files["file"]
-        data = file.read()
+        # Bound the read so a lying/absent Content-Length cannot exhaust memory.
+        data = file.read(Config.MAX_AUDIO_BYTES + 1)
         content_type = file.content_type
     else:
         data = request.get_data()
         content_type = request.content_type
+
+    if len(data) > Config.MAX_AUDIO_BYTES:
+        raise _AudioTranscriptionError("Audio file too large (max 25MB)", 413)
 
     if not data:
         raise _AudioTranscriptionError("No audio data provided", 400)

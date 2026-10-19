@@ -331,24 +331,35 @@ class VinylStorageMixin:
 
     def delete_vinyl_record(self, user_id: str, record_id: str) -> bool:
         with self._session_scope() as session:
+            # Verify ownership BEFORE touching child rows. A record shared for
+            # viewing must never be deletable by the viewer, and child deletes
+            # must not run for a record the caller does not own.
+            owned = (
+                session.query(VinylRecordORM.id)
+                .filter(VinylRecordORM.user_id == user_id, VinylRecordORM.id == record_id)
+                .first()
+            )
+            if owned is None:
+                return False
+
             session.query(VinylEmbeddingORM).filter(
                 VinylEmbeddingORM.user_id == user_id,
                 VinylEmbeddingORM.vinyl_record_id == record_id,
             ).delete(synchronize_session=False)
 
             session.query(VinylTrackORM).filter(
+                VinylTrackORM.user_id == user_id,
                 VinylTrackORM.vinyl_record_id == record_id,
             ).delete(synchronize_session=False)
             session.query(VinylImageORM).filter(
+                VinylImageORM.user_id == user_id,
                 VinylImageORM.vinyl_record_id == record_id,
             ).delete(synchronize_session=False)
 
-            result = (
-                session.query(VinylRecordORM)
-                .filter(VinylRecordORM.user_id == user_id, VinylRecordORM.id == record_id)
-                .delete(synchronize_session=False)
-            )
-            return result > 0
+            session.query(VinylRecordORM).filter(
+                VinylRecordORM.user_id == user_id, VinylRecordORM.id == record_id
+            ).delete(synchronize_session=False)
+            return True
 
     def create_vinyl_image_pending(
         self,

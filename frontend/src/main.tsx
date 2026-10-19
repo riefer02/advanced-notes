@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ClerkProvider } from '@clerk/clerk-react'
 import './index.css'
 
+import { AuthTokenBridge } from './components/AuthTokenBridge'
+
 // Import the generated route tree
 import { routeTree } from './routeTree.gen'
 
@@ -49,7 +51,9 @@ if (!rootElement.innerHTML) {
     <React.StrictMode>
       <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
         <QueryClientProvider client={queryClient}>
-          <RouterProvider router={router} />
+          <AuthTokenBridge>
+            <RouterProvider router={router} />
+          </AuthTokenBridge>
         </QueryClientProvider>
       </ClerkProvider>
     </React.StrictMode>

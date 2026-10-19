@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { type FeedbackType } from '../lib/api'
 import { useSubmitFeedback } from '../hooks/useFeedback'
 import { Button } from '@/components/ui/button'
@@ -17,23 +17,11 @@ function FeedbackPage() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [rating, setRating] = useState<number | null>(null)
-  const [showSuccess, setShowSuccess] = useState(false)
 
   const submitMutation = useSubmitFeedback()
 
-  // Handle optimistic success - show success immediately when mutation starts
-  useEffect(() => {
-    if (submitMutation.isPending) {
-      setShowSuccess(true)
-    }
-  }, [submitMutation.isPending])
-
-  // Handle error - roll back to form if mutation fails
-  useEffect(() => {
-    if (submitMutation.isError) {
-      setShowSuccess(false)
-    }
-  }, [submitMutation.isError])
+  // Only show the success screen once the request has actually succeeded.
+  const showSuccess = submitMutation.isSuccess
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,26 +29,20 @@ function FeedbackPage() {
       return
     }
 
-    // Store form values before clearing (for potential rollback)
-    const feedbackData = {
+    // Keep the form values until success so a failed submit loses nothing.
+    submitMutation.mutate({
       feedback_type: feedbackType,
       title: title.trim(),
       description: description.trim() || undefined,
       rating: rating ?? undefined,
-    }
+    })
+  }
 
-    // Clear form immediately (optimistic)
+  const handleNewFeedback = () => {
     setTitle('')
     setDescription('')
     setRating(null)
     setFeedbackType('general')
-
-    // Submit the mutation
-    submitMutation.mutate(feedbackData)
-  }
-
-  const handleNewFeedback = () => {
-    setShowSuccess(false)
     submitMutation.reset()
   }
 

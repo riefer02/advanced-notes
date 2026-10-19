@@ -3,6 +3,7 @@ from uuid import uuid4
 from flask import Blueprint, g, jsonify, request
 
 from ..auth import require_auth
+from ..config import Config
 from ..services import s3_audio
 from ..services.container import get_services
 from ..services.folder_utils import extract_folder_paths
@@ -193,9 +194,11 @@ def create_audio_clip_upload():
 
     _cleanup_stale_pending_audio_clips(user_id, svc)
 
-    mime_type = (data.get("mime_type") or "").strip()
+    mime_type = (data.get("mime_type") or "").strip().lower()
     if not mime_type:
         return api_error("Body field 'mime_type' is required")
+    if not mime_type.startswith("audio/"):
+        return api_error("Body field 'mime_type' must be an audio type")
 
     try:
         bytes_value = int(data.get("bytes") or 0)
@@ -203,6 +206,9 @@ def create_audio_clip_upload():
         return api_error("Body field 'bytes' must be an integer")
     if bytes_value <= 0:
         return api_error("Body field 'bytes' must be > 0")
+    # Presigned PUTs bypass Flask's MAX_CONTENT_LENGTH, so cap them here.
+    if bytes_value > Config.MAX_AUDIO_BYTES:
+        return api_error("Audio file too large (max 25MB)", 413)
 
     note_id = data.get("note_id")
     duration_ms = data.get("duration_ms")

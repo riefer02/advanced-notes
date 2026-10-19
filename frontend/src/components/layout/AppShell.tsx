@@ -1,9 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useRouterState } from '@tanstack/react-router'
-import { useAuth } from '@clerk/clerk-react'
 
 import { CommandPalette } from '../CommandPalette'
-import { setAuthTokenGetter } from '../../lib/api'
 import { useFriendRequests } from '../../hooks/useFriends'
 import { useReceivedShares } from '../../hooks/useSharing'
 
@@ -29,15 +27,9 @@ export function useAppShell() {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { getToken } = useAuth()
   const pathname = useRouterState({
     select: (s) => s.location.pathname,
   })
-
-  // Ensure API layer can fetch auth tokens regardless of current route.
-  useEffect(() => {
-    setAuthTokenGetter(getToken)
-  }, [getToken])
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)

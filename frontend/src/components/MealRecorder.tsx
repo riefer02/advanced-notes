@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranscribeMeal } from '../hooks/useMeals'
+import { useAudioRecorder } from '../hooks/useAudioRecorder'
 import type { MealTranscriptionResponse, MealType } from '../lib/api'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
@@ -24,15 +25,18 @@ interface MealRecorderProps {
 }
 
 export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecorderProps) {
-  const [isRecording, setIsRecording] = useState(false)
-  const [recordingTime, setRecordingTime] = useState(0)
   const [lastResult, setLastResult] = useState<MealTranscriptionResponse | null>(null)
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
-  const timerRef = useRef<number | null>(null)
-
   const transcribeMutation = useTranscribeMeal(calendarOwner)
+
+  const {
+    isRecording,
+    recordingTime,
+    error: recorderError,
+    startRecording,
+    stopRecording,
+    clearError,
+  } = useAudioRecorder((audioBlob) => transcribeMutation.mutate(audioBlob))
 
   useEffect(() => {
     if (transcribeMutation.isSuccess && transcribeMutation.data) {
@@ -42,113 +46,6 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
       }
     }
   }, [transcribeMutation.isSuccess, transcribeMutation.data, onMealCreated])
-
-  const transcribeAudio = async (audioBlob: Blob) => {
-    transcribeMutation.mutate(audioBlob)
-  }
-
-  const getSupportedMimeType = (): string => {
-    const mimeTypes = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/mp4',
-      'audio/mpeg',
-      'audio/ogg;codecs=opus',
-      'audio/wav',
-    ]
-
-    for (const mimeType of mimeTypes) {
-      if (MediaRecorder.isTypeSupported(mimeType)) {
-        return mimeType
-      }
-    }
-
-    return 'audio/webm'
-  }
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      })
-
-      const mimeType = getSupportedMimeType()
-      const options: MediaRecorderOptions = mimeType ? { mimeType } : {}
-      const mediaRecorder = new MediaRecorder(stream, options)
-
-      mediaRecorderRef.current = mediaRecorder
-      chunksRef.current = []
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data)
-        }
-      }
-
-      mediaRecorder.onstop = () => {
-        const finalMimeType = mediaRecorder.mimeType || mimeType || 'audio/webm'
-        const audioBlob = new Blob(chunksRef.current, { type: finalMimeType })
-
-        if (audioBlob.size === 0) {
-          alert('Recording failed: No audio data captured. Please try again.')
-          stream.getTracks().forEach((track) => track.stop())
-          return
-        }
-
-        if (audioBlob.size < 1000) {
-          alert('Recording too short. Please record for at least 1 second.')
-          stream.getTracks().forEach((track) => track.stop())
-          return
-        }
-
-        transcribeAudio(audioBlob)
-        stream.getTracks().forEach((track) => track.stop())
-      }
-
-      mediaRecorder.start(1000)
-      setIsRecording(true)
-      setRecordingTime(0)
-
-      timerRef.current = window.setInterval(() => {
-        setRecordingTime((prev) => prev + 1)
-      }, 1000)
-    } catch (error: unknown) {
-      console.error('Recording error:', error)
-      let errorMessage = 'Failed to start recording'
-      const errorObject = error instanceof Error ? error : null
-      const errorName = errorObject?.name
-
-      if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
-        errorMessage =
-          'Microphone permission denied. Please allow microphone access in your browser settings.'
-      } else if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
-        errorMessage = 'No microphone found. Please connect a microphone and try again.'
-      } else if (errorName === 'NotReadableError' || errorName === 'TrackStartError') {
-        errorMessage = 'Microphone is already in use by another application.'
-      } else if (errorName === 'NotSupportedError') {
-        errorMessage =
-          'Audio recording is not supported on this browser. Try using a different browser.'
-      }
-
-      transcribeMutation.reset()
-      alert(errorMessage)
-    }
-  }
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop()
-      setIsRecording(false)
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-        timerRef.current = null
-      }
-    }
-  }
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -216,6 +113,21 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
           </Button>
         )}
       </div>
+
+      {/* Recorder Error */}
+      {recorderError && (
+        <Alert variant="destructive">
+          <AlertTitle>Recording Error</AlertTitle>
+          <AlertDescription>
+            <div className="flex items-center justify-between gap-3">
+              <span>{recorderError}</span>
+              <button type="button" onClick={clearError} className="text-sm underline">
+                Dismiss
+              </button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Processing State */}
       {transcribeMutation.isPending && (

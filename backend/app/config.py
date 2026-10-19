@@ -48,6 +48,13 @@ class ContentConfig:
 class Config:
     """Application configuration"""
 
+    # Request body limits (bytes). Global cap applies to every request; the
+    # per-endpoint caps below are enforced by routes before/while reading.
+    MAX_CONTENT_LENGTH: int = int(os.getenv("MAX_CONTENT_LENGTH", str(26 * 1024 * 1024)))
+    MAX_AUDIO_BYTES: int = 25 * 1024 * 1024  # OpenAI transcription limit
+    MAX_IMAGE_BYTES: int = 6 * 1024 * 1024  # per vinyl image
+    MAX_AVATAR_BYTES: int = 1 * 1024 * 1024  # per avatar image
+
     # Flask settings
     FLASK_ENV: str = os.getenv("FLASK_ENV", "development")
     DEBUG: bool = FLASK_ENV == "development"

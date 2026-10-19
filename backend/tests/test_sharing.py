@@ -732,6 +732,73 @@ class TestPermissionEdgeCases:
         )
         assert resp.status_code == 200
 
+    def test_edit_share_saves_meal_to_owner_calendar(self, client, app, monkeypatch):
+        """A meal added to a shared calendar is stored under the calendar owner."""
+        from dataclasses import replace
+        from datetime import date as _date
+
+        import app.routes.meals as meals_module
+        from app.services.meal_extractor import (
+            ExtractedFoodItem,
+            MealExtractionResult,
+            MealType,
+        )
+
+        client.get("/api/profile", headers=auth(ALICE))
+        client.get("/api/profile", headers=auth(BOB))
+        resp = client.post("/api/friends/request", headers=auth(ALICE), json={"user_id": BOB})
+        fid = resp.get_json()["id"]
+        client.post(f"/api/friends/{fid}/accept", headers=auth(BOB))
+
+        resp = client.post("/api/shares", headers=auth(ALICE), json={
+            "shared_with_id": BOB,
+            "resource_type": "meal_calendar",
+            "permission": "edit",
+        })
+        sid = resp.get_json()["id"]
+        client.post(f"/api/shares/{sid}/accept", headers=auth(BOB))
+
+        class _Extractor:
+            def extract(self, text, current_date=None):  # noqa: ANN001
+                return MealExtractionResult(
+                    meal_type=MealType.LUNCH,
+                    food_items=[ExtractedFoodItem(name="toast", confidence=0.9)],
+                    confidence=0.9,
+                    reasoning="test",
+                )
+
+        app.extensions["services"] = replace(
+            app.extensions["services"], meal_extractor=_Extractor()
+        )
+        monkeypatch.setattr(
+            meals_module,
+            "_transcribe_audio_clip",
+            lambda *args, **kwargs: (
+                "I had toast",
+                {"duration": 1.0, "model": "test"},
+                "clip-1",
+                "key-1",
+            ),
+        )
+
+        resp = client.post(
+            f"/api/meals/transcribe?calendar_owner={ALICE}",
+            headers=auth(BOB),
+            data=b"fake-audio",
+            content_type="audio/webm",
+        )
+        assert resp.status_code == 200, resp.get_json()
+        assert resp.get_json()["meal"]["user_id"] == ALICE
+
+        # The meal is visible in the owner's calendar.
+        today = _date.today().isoformat()
+        resp = client.get(
+            f"/api/meals?start_date={today}&end_date={today}&calendar_owner={ALICE}",
+            headers=auth(ALICE),
+        )
+        assert resp.status_code == 200
+        assert len(resp.get_json()["meals"]) == 1
+
 
 # ============================================================================
 # TEST PROFILE ENHANCEMENTS (usernames, avatars, display name derivation)
@@ -852,7 +919,7 @@ class TestProfileEnhancements:
         assert "avatars/" in uploaded["key"]
 
     def test_avatar_upload_too_large(self, app, client, monkeypatch):
-        """1MB+ avatar returns 400."""
+        """1MB+ avatar returns 413."""
         from app.config import Config
         monkeypatch.setattr(Config, "S3_BUCKET", "test-bucket")
 
@@ -869,7 +936,7 @@ class TestProfileEnhancements:
             data={"file": (big_data, "big.jpg", "image/jpeg")},
             content_type="multipart/form-data",
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 413
         assert "too large" in resp.get_json()["error"].lower()
 
     def test_avatar_upload_wrong_mime(self, app, client, monkeypatch):

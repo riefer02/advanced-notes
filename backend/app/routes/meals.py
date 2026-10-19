@@ -37,6 +37,9 @@ def transcribe_meal():
     ):
         return api_error("Not authorized to add meals to this calendar", 403)
 
+    # Meals added to a shared calendar belong to that calendar's owner.
+    target_user_id = calendar_owner or user_id
+
     try:
         text, meta, audio_clip_id, audio_storage_key = _transcribe_audio_clip(
             user_id, svc, "/api/meals/transcribe"
@@ -73,7 +76,7 @@ def transcribe_meal():
         ]
 
         meal_id = svc.storage.save_meal_entry(
-            user_id=user_id,
+            user_id=target_user_id,
             transcription=text,
             metadata=meal_metadata,
             food_items=food_items,
@@ -90,7 +93,7 @@ def transcribe_meal():
                 else vector_to_json(vec)
             )
             svc.storage.upsert_meal_embedding(
-                user_id=user_id,
+                user_id=target_user_id,
                 meal_entry_id=meal_id,
                 embedding_model=svc.embeddings.model,
                 content_hash=content_hash,
@@ -99,7 +102,7 @@ def transcribe_meal():
         except Exception as e:
             print(f"Meal embedding failed for {meal_id}: {e}")
 
-        saved_meal = svc.storage.get_meal_entry(user_id, meal_id)
+        saved_meal = svc.storage.get_meal_entry(target_user_id, meal_id)
 
         return jsonify(
             {
