@@ -48,6 +48,7 @@ def create_services(*, database_url: str | None = None) -> Services:
     storage = NoteStorage(database_url=database_url) if database_url else NoteStorage()
     return Services(
         storage=storage,
+        # EmailService writes notifications to the same durable outbox.
         embeddings=EmbeddingsService(),
         planner=QueryPlanner(),
         asker=AskService(),
@@ -56,7 +57,7 @@ def create_services(*, database_url: str | None = None) -> Services:
         meal_extractor=MealExtractorService(),
         vinyl_extractor=VinylExtractorService(),
         usage_tracking=UsageTrackingService(),
-        email=EmailService(),
+        email=EmailService(storage=storage),
     )
 
 

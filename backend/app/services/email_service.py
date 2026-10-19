@@ -1,14 +1,16 @@
 """
-Email notification service for the application.
+Admin email notifications.
 
-Sends email notifications via AWS SES with best-effort delivery.
-Email failures do not block the main application flow.
+Notifications are written to a durable outbox in the request path and
+delivered by a background worker, so SES latency never blocks a user request
+and a transient delivery failure is retried instead of lost.
 """
 
 from __future__ import annotations
 
 import logging
 import time
+from datetime import UTC, datetime
 
 import boto3
 from botocore.config import Config as BotoConfig
@@ -18,21 +20,26 @@ from ..config import Config
 
 logger = logging.getLogger(__name__)
 
-_last_error_email_at: float = 0.0
-_ERROR_EMAIL_COOLDOWN_SECONDS: float = 600.0  # 10 minutes
+# Errors are deduped into 10-minute buckets, shared across workers through the
+# outbox's unique dedupe key rather than per-process memory.
+_ERROR_BUCKET_SECONDS = 600
 
 
 class EmailService:
-    """
-    Email service for sending notifications.
+    """Enqueue admin notifications and deliver them via AWS SES."""
 
-    Follows the same service pattern as other services in the container.
-    Uses best-effort delivery - failures are logged but don't raise exceptions.
-    """
+    def __init__(self, storage=None):
+        # NoteStorage provides the outbox; optional so the service can be
+        # constructed in isolation for tests.
+        self.storage = storage
 
     def is_configured(self) -> bool:
         """Check if SES is properly configured."""
         return Config.email_enabled()
+
+    # ------------------------------------------------------------------
+    # Public notification helpers (enqueue only)
+    # ------------------------------------------------------------------
 
     def send_feedback_notification(
         self,
@@ -42,54 +49,186 @@ class EmailService:
         title: str,
         description: str | None = None,
         rating: int | None = None,
+        display_name: str | None = None,
+        username: str | None = None,
+        user_email: str | None = None,
     ) -> bool:
-        """
-        Send email notification for new feedback submission.
+        """Queue an admin notification for a new feedback submission."""
+        subject = f"[Chisos][Feedback] {feedback_type.upper()}: {title}"
 
-        Args:
-            feedback_id: The feedback record ID.
-            user_id: The user who submitted feedback.
-            feedback_type: Type of feedback (bug, feature, general).
-            title: Feedback title.
-            description: Optional feedback description.
-            rating: Optional rating (1-5).
-
-        Returns:
-            True if email was sent successfully, False otherwise.
-        """
-        if not self.is_configured():
-            logger.debug("Email not configured, skipping feedback notification")
-            return False
-
-        subject = f"[Chisos Feedback] {feedback_type.upper()}: {title}"
-
-        body_lines = [
+        lines = [
             "New feedback submitted",
             "",
             f"Type: {feedback_type}",
             f"Title: {title}",
+            "",
+            "Submitted by:",
+            f"  Name: {display_name or '(unknown)'}",
+            f"  Username: @{username}" if username else "  Username: (none)",
+            f"  Email: {user_email or '(none)'}",
+            f"  User ID: {user_id}",
         ]
 
         if description:
-            body_lines.extend(["", "Description:", description])
-
+            lines.extend(["", "Description:", description])
         if rating is not None:
-            body_lines.extend(["", f"Rating: {rating}/5"])
+            lines.extend(["", f"Rating: {rating}/5"])
 
-        body_lines.extend([
-            "",
-            "---",
-            f"Feedback ID: {feedback_id}",
-            f"User ID: {user_id}",
-        ])
+        lines.extend(["", f"Feedback ID: {feedback_id}"])
 
-        body = "\n".join(body_lines)
-
-        return self._send_email(
-            to_address=Config.ADMIN_EMAIL,
+        return self._enqueue(
+            dedupe_key=f"feedback:{feedback_id}",
             subject=subject,
+            body="\n".join(lines),
+        )
+
+    def send_new_user_notification(
+        self,
+        user_id: str,
+        display_name: str | None = None,
+        email: str | None = None,
+        username: str | None = None,
+    ) -> bool:
+        """Queue an admin notification for a new user profile."""
+        body = "\n".join(
+            [
+                "New user profile created",
+                "",
+                f"User ID: {user_id}",
+                f"Display Name: {display_name or '(none)'}",
+                f"Email: {email or '(none)'}",
+                f"Username: @{username}" if username else "Username: (none)",
+            ]
+        )
+        return self._enqueue(
+            dedupe_key=f"new_user:{user_id}",
+            subject=f"[Chisos][New User] {display_name or username or user_id}",
             body=body,
         )
+
+    def send_cost_threshold_alert(
+        self,
+        current_cost: float,
+        threshold: float,
+        period: str,
+    ) -> bool:
+        """Queue a monthly API cost alert."""
+        body = "\n".join(
+            [
+                f"Monthly API cost has reached ${current_cost:.2f}",
+                "",
+                f"Threshold: ${threshold:.2f}",
+                f"Billing period: {period}",
+            ]
+        )
+        return self._enqueue(
+            dedupe_key=f"cost:{period}",
+            subject=f"[Chisos][Cost Alert] ${current_cost:.2f} for {period}",
+            body=body,
+        )
+
+    def send_error_notification(
+        self,
+        *,
+        error_type: str,
+        error_message: str,
+        traceback_text: str | None = None,
+        method: str | None = None,
+        path: str | None = None,
+        endpoint: str | None = None,
+        status: int = 500,
+        user_id: str | None = None,
+        request_id: str | None = None,
+        timestamp: str | None = None,
+    ) -> bool:
+        """Queue a structured server-error alert.
+
+        Deduped per endpoint + exception type in 10-minute buckets, so four
+        Gunicorn workers cannot send four copies of the same incident.
+        """
+        resolved_path = path or endpoint or "(unknown)"
+        bucket = int(time.time() // _ERROR_BUCKET_SECONDS)
+        dedupe_key = f"error:{method or '?'}:{resolved_path}:{error_type}:{bucket}"
+
+        body = "\n".join(
+            [
+                "A server error occurred",
+                "",
+                f"Status: {status}",
+                f"Method: {method or '(unknown)'}",
+                f"Path: {resolved_path}",
+                f"Error type: {error_type}",
+                f"Request ID: {request_id or '(none)'}",
+                f"User ID: {user_id or '(anonymous)'}",
+                f"Timestamp: {timestamp or datetime.now(UTC).isoformat()}",
+                "",
+                "Message:",
+                (error_message or "(none)")[:2000],
+                "",
+                "Traceback:",
+                (traceback_text or "(not captured)")[-4000:],
+            ]
+        )
+        return self._enqueue(
+            dedupe_key=dedupe_key,
+            subject=f"[Chisos][Server Error] {error_type} on {resolved_path}",
+            body=body,
+        )
+
+    # ------------------------------------------------------------------
+    # Outbox + delivery
+    # ------------------------------------------------------------------
+
+    def _enqueue(self, *, dedupe_key: str, subject: str, body: str) -> bool:
+        if not self.is_configured():
+            logger.debug("Email not configured, skipping notification")
+            return False
+
+        to_address = Config.ADMIN_EMAIL
+        if not to_address:
+            logger.warning("ADMIN_EMAIL is not configured")
+            return False
+
+        if self.storage is None:
+            logger.warning("Email outbox storage is not configured")
+            return False
+
+        try:
+            return self.storage.enqueue_email(
+                dedupe_key=dedupe_key,
+                to_address=to_address,
+                subject=self._safe_subject(subject),
+                body=self._with_footer(body),
+            )
+        except Exception:  # noqa: BLE001 - notifications must not break requests
+            logger.exception("Failed to enqueue admin email")
+            return False
+
+    def flush(self, limit: int = 10) -> int:
+        """Deliver due outbox rows. Safe to run in every worker; rows are claimed."""
+        if self.storage is None or not self.is_configured():
+            return 0
+
+        sent = 0
+        for item in self.storage.claim_due_emails(limit):
+            try:
+                self._deliver(
+                    to_address=item["to_address"],
+                    subject=item["subject"],
+                    body=item["body"],
+                )
+                self.storage.mark_email_sent(item["id"])
+                sent += 1
+            except Exception as exc:  # noqa: BLE001 - recorded on the row
+                logger.warning("Email delivery failed for %s: %s", item["id"], exc)
+                self.storage.mark_email_failed(item["id"], str(exc))
+
+        return sent
+
+    def _deliver(self, *, to_address: str, subject: str, body: str) -> None:
+        """Send one email synchronously; raises so the outbox can retry."""
+        if not self._send_email(to_address=to_address, subject=subject, body=body):
+            raise RuntimeError("SES delivery failed")
 
     def _send_email(
         self,
@@ -97,17 +236,6 @@ class EmailService:
         subject: str,
         body: str,
     ) -> bool:
-        """
-        Send an email via AWS SES.
-
-        Args:
-            to_address: Recipient email address.
-            subject: Email subject line.
-            body: Plain text email body.
-
-        Returns:
-            True if sent successfully, False otherwise.
-        """
         if not to_address:
             logger.warning("No recipient address provided for email")
             return False
@@ -137,94 +265,41 @@ class EmailService:
                     "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
                 },
             )
-            logger.info(f"Email sent successfully to {to_address}: {subject}")
+            logger.info("Email sent to %s: %s", to_address, subject)
             return True
 
         except ClientError as e:
-            logger.error(f"SES error sending email: {e}")
+            logger.error("SES error sending email: %s", e)
             return False
-        except Exception as e:
-            logger.error(f"Unexpected error sending email: {e}")
+        except Exception as e:  # noqa: BLE001 - caller records the failure
+            logger.error("Unexpected error sending email: %s", e)
             return False
 
     # ------------------------------------------------------------------
-    # Admin notification helpers
+    # Formatting
     # ------------------------------------------------------------------
 
-    def send_new_user_notification(
-        self,
-        user_id: str,
-        display_name: str | None = None,
-        email: str | None = None,
-        username: str | None = None,
-    ) -> bool:
-        """Send admin notification for a new user signup."""
-        body = "\n".join([
-            "New user signed up",
-            "",
-            f"User ID: {user_id}",
-            f"Display Name: {display_name or '(none)'}",
-            f"Email: {email or '(none)'}",
-            f"Username: {username or '(none)'}",
-        ])
-        return self._send_email(
-            to_address=Config.ADMIN_EMAIL,
-            subject="[Chisos] New User Signup",
-            body=body,
-        )
+    @staticmethod
+    def _safe_subject(subject: str, max_length: int = 150) -> str:
+        """Strip control characters and bound the length.
 
-    def send_cost_threshold_alert(
-        self,
-        current_cost: float,
-        threshold: float,
-        period: str,
-    ) -> bool:
-        """Send admin alert when monthly API cost exceeds threshold."""
-        body = "\n".join([
-            f"Monthly API cost has reached ${current_cost:.2f}",
-            "",
-            f"Threshold: ${threshold:.2f}",
-            f"Billing period: {period}",
-        ])
-        return self._send_email(
-            to_address=Config.ADMIN_EMAIL,
-            subject=f"[Chisos] Monthly cost alert: ${current_cost:.2f}",
-            body=body,
-        )
-
-    def send_error_notification(
-        self,
-        error_message: str,
-        endpoint: str,
-        timestamp: str,
-    ) -> bool:
+        User-provided feedback titles are interpolated into subjects; CR/LF
+        must never reach a header.
         """
-        Send admin notification for a 500 server error.
+        cleaned = " ".join(str(subject).replace("\r", " ").replace("\n", " ").split())
+        return cleaned[:max_length] or "(no subject)"
 
-        Rate-limited to one email per 10 minutes.
-        """
-        global _last_error_email_at  # noqa: PLW0603
+    @staticmethod
+    def _environment() -> str:
+        return Config.APP_ENV or Config.FLASK_ENV or "unknown"
 
-        now = time.monotonic()
-        if now - _last_error_email_at < _ERROR_EMAIL_COOLDOWN_SECONDS:
-            logger.debug("Error email rate-limited, skipping")
-            return False
-
-        truncated = error_message[:2000]
-        body = "\n".join([
-            "A 500 error occurred",
-            "",
-            f"Endpoint: {endpoint}",
-            f"Timestamp: {timestamp}",
-            "",
-            "Error:",
-            truncated,
-        ])
-        sent = self._send_email(
-            to_address=Config.ADMIN_EMAIL,
-            subject="[Chisos] Server Error (500)",
-            body=body,
+    def _with_footer(self, body: str) -> str:
+        return "\n".join(
+            [
+                body,
+                "",
+                "---",
+                f"Environment: {self._environment()}",
+                f"Queued: {datetime.now(UTC).isoformat(timespec='seconds')}",
+            ]
         )
-        if sent:
-            _last_error_email_at = now
-        return sent
