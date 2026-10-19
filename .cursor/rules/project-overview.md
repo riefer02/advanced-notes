@@ -86,12 +86,14 @@ advanced-notes/
 ├── backend/                    # Flask backend
 │   ├── app/
 │   │   ├── __init__.py         # Flask app factory
-│   │   ├── routes.py           # 11 REST endpoints
+│   │   ├── routes/             # REST blueprints (one module per feature)
 │   │   ├── asr.py              # OpenAI transcription client
+│   │   ├── auth.py             # Clerk JWT verification
 │   │   ├── config.py           # Configuration
+│   │   ├── database.py         # SQLAlchemy models
 │   │   └── services/
 │   │       ├── ai_categorizer.py  # OpenAI integration
-│   │       ├── storage.py         # SQLite storage
+│   │       ├── storage/           # Storage facade + feature mixins
 │   │       └── models.py          # Pydantic models
 │   ├── tests/                  # Unit tests
 │   │   └── services/

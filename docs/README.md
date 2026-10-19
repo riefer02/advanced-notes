@@ -19,6 +19,7 @@ Complete documentation for the Chisos advanced notes project.
 - **[REST API Reference](./api-reference.md)** - Complete API endpoint documentation
 
 ### Development Guides
+- **[Contributing Guide](./contributing.md)** - Conventions, commands, code organization, debugging, and CI details
 - **Cursor Rules** (`.cursor/rules/`)
   - [Project Overview](../.cursor/rules/project-overview.md)
   - [Coding Standards](../.cursor/rules/coding-standards.md)

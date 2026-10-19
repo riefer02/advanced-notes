@@ -80,6 +80,10 @@ When you’ve made changes, confirm the app still builds and behaves as expected
    - **Route test seam**: when `app.config["TESTING"] == True`, you can authenticate requests by sending `X-Test-User-Id: <user_id>` instead of a Clerk JWT.
    - **Route dependency injection**: routes fetch dependencies from `app.extensions["services"]` via `get_services()`. Tests can override that container to inject fakes.
 
+## Documentation
+- `docs/contributing.md` - Deeper conventions, commands, code organization, debugging, and CI notes
+- `docs/` - Deployment, S3, authentication, and feature documentation
+
 ## Key Files
 - `backend/app/database.py` - SQLAlchemy models (source of truth)
 - `backend/app/services/storage/` - Database adapter layer (facade + per-feature mixins)

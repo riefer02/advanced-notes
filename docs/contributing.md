@@ -1,6 +1,6 @@
-# CLAUDE.md
+# Contributing Guide
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Detailed conventions, commands, and workflow notes for working in this repository. `AGENTS.md` is the concise entry point; this document goes deeper.
 
 ## Project Overview
 
