@@ -6,9 +6,11 @@ lifecycle used across route modules.
 """
 
 import logging
+import traceback
 from contextlib import suppress
 from datetime import UTC, datetime
 from functools import wraps
+from uuid import uuid4
 
 from flask import g, jsonify, request
 
@@ -82,13 +84,42 @@ def api_error_from_exception(
         )
         return api_error(exc.message, 503)
 
-    logger.exception(
-        "Unhandled error on %s %s: %s",
+    report_server_error(exc, status=status)
+    return api_error(message, status)
+
+
+def report_server_error(exc: Exception, *, status: int = 500) -> None:
+    """Log a server error and queue a structured admin alert.
+
+    Called both from caught route errors and the Flask 500 handler, so the
+    errors we actually handle are not invisible to the admin.
+    """
+    request_id = request.headers.get("X-Request-ID") or str(uuid4())
+    traceback_text = "".join(
+        traceback.format_exception(type(exc), exc, exc.__traceback__)
+    )
+
+    logger.error(
+        "Server error on %s %s [request_id=%s]",
         request.method,
         request.path,
-        exc,
+        request_id,
+        exc_info=(type(exc), exc, exc.__traceback__),
     )
-    return api_error(message, status)
+
+    try:
+        get_services().email.send_error_notification(
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+            traceback_text=traceback_text,
+            method=request.method,
+            path=request.path,
+            status=status,
+            user_id=getattr(g, "user_id", None),
+            request_id=request_id,
+        )
+    except Exception:  # noqa: BLE001 - reporting must never mask the original error
+        logger.exception("Failed to queue server error notification")
 
 
 def parse_pagination(default_limit: int = 50, max_limit: int = 100) -> tuple[int, int]:

@@ -418,6 +418,37 @@ class UsageQuota(Base):
     __table_args__ = (Index("idx_usage_quotas_user_id", "user_id"),)
 
 
+class EmailOutbox(Base):
+    """Durable queue of admin notification emails.
+
+    Rows are written in the request path (cheap) and delivered by a
+    background worker with retries, so SES latency never blocks a user
+    request and a transient failure is not lost.
+    """
+
+    __tablename__ = "email_outbox"
+
+    id = Column(String(36), primary_key=True)
+    # Unique per logical event; makes enqueue idempotent across workers and
+    # restarts (feedback id, user id, billing period, error fingerprint).
+    dedupe_key = Column(String(255), nullable=False, unique=True)
+    to_address = Column(String(320), nullable=False)
+    subject = Column(String(255), nullable=False)
+    body = Column(Text, nullable=False)
+
+    status = Column(String(20), nullable=False, server_default="pending")  # pending/sending/sent/failed
+    attempts = Column(Integer, nullable=False, server_default="0")
+    last_error = Column(Text, nullable=True)
+    next_attempt_at = Column(TIMESTAMP, nullable=True)
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    sent_at = Column(TIMESTAMP, nullable=True)
+
+    __table_args__ = (
+        Index("idx_email_outbox_status_next", "status", "next_attempt_at"),
+    )
+
+
 class Feedback(Base):
     """
     User feedback submissions (bug reports, feature requests, general feedback).

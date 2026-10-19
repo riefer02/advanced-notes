@@ -790,3 +790,58 @@ def test_transcribe_returns_503_when_asr_provider_fails(client, monkeypatch):  #
     assert resp.status_code == 503
     body = resp.get_data(as_text=True)
     assert "secret upstream detail" not in body
+
+
+def test_feedback_is_rate_limited_per_user(client):  # noqa: ANN001
+    """One user cannot flood the admin inbox; other users are unaffected."""
+    headers = {"X-Test-User-Id": "feedback-user"}
+    first = client.post(
+        "/api/feedback",
+        json={"feedback_type": "general", "title": "First"},
+        headers=headers,
+    )
+    second = client.post(
+        "/api/feedback",
+        json={"feedback_type": "general", "title": "Second"},
+        headers=headers,
+    )
+    other = client.post(
+        "/api/feedback",
+        json={"feedback_type": "general", "title": "Other user"},
+        headers={"X-Test-User-Id": "other-feedback-user"},
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 429
+    assert other.status_code == 201
+
+
+def test_caught_500_queues_a_structured_admin_alert(client, app, monkeypatch):  # noqa: ANN001
+    """Caught route errors must reach the admin, not just the log."""
+    from dataclasses import replace
+
+    recorded: dict = {}
+
+    class _Recorder:
+        def send_error_notification(self, **kwargs):  # noqa: ANN003
+            recorded.update(kwargs)
+            return True
+
+    monkeypatch.setattr(
+        app.extensions["services"].storage,
+        "list_notes",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("secret detail")),
+    )
+    app.extensions["services"] = replace(
+        app.extensions["services"], email=_Recorder()
+    )
+
+    resp = client.get("/api/notes", headers={"X-Test-User-Id": "user-a"})
+
+    assert resp.status_code == 500
+    assert recorded["error_type"] == "RuntimeError"
+    assert recorded["method"] == "GET"
+    assert recorded["path"] == "/api/notes"
+    assert recorded["user_id"] == "user-a"
+    assert "secret detail" in recorded["error_message"]
+    assert "traceback_text" in recorded

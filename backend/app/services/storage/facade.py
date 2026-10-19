@@ -7,6 +7,7 @@ from .embeddings import EmbeddingStorageMixin
 from .engine import StorageEngine
 from .meals import MealStorageMixin
 from .notes import NoteStorageMixin
+from .notifications import NotificationStorageMixin
 from .settings import SettingsStorageMixin
 from .sharing import SharingStorageMixin
 from .todos import TodoStorageMixin
@@ -22,6 +23,7 @@ class NoteStorage(
     VinylStorageMixin,
     SharingStorageMixin,
     SettingsStorageMixin,
+    NotificationStorageMixin,
     StorageEngine,
 ):
     """
@@ -39,6 +41,7 @@ class NoteStorage(
     - VinylStorageMixin: Vinyl collection, images, tracks
     - SharingStorageMixin: Profiles, friendships, resource shares
     - SettingsStorageMixin: User settings, digests, ask history, feedback
+    - NotificationStorageMixin: Admin email outbox
     - StorageEngine: Connection management, session scoping
     """
 

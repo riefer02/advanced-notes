@@ -47,24 +47,23 @@ def create_app(*, services: Services | None = None, testing: bool = False):
     elif not app.config.get("TESTING"):
         app.extensions["services"] = create_services()
 
+    # Deliver queued admin notifications off the request path. Only the real
+    # container gets a worker; tests pass custom services and must not spawn it.
+    if not app.config.get("TESTING") and services is None:
+        from .services.email_worker import start_email_worker
+
+        start_email_worker(app)
+
     from .routes import api as api_bp
 
     app.register_blueprint(api_bp, url_prefix="/api")
 
     @app.errorhandler(500)
     def handle_500(error):
-        from datetime import UTC, datetime
+        from .routes._helpers import report_server_error
 
-        from flask import request as _req
-
-        svc_container = app.extensions.get("services")
-        if svc_container:
-            with suppress(Exception):
-                svc_container.email.send_error_notification(
-                    error_message=str(error),
-                    endpoint=_req.path,
-                    timestamp=datetime.now(UTC).isoformat(),
-                )
+        with suppress(Exception):
+            report_server_error(getattr(error, "original_exception", None) or error)
         return {"error": "Internal server error"}, 500
 
     @app.errorhandler(413)

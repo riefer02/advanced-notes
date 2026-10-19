@@ -300,6 +300,18 @@ class SettingsStorageMixin:
                 for f in rows
             ]
 
+    def count_feedback_since(self, user_id: str, since: datetime) -> int:
+        """Count a user's feedback rows created at or after ``since``."""
+        with self._session_scope() as session:
+            return (
+                session.query(FeedbackORM)
+                .filter(
+                    FeedbackORM.user_id == user_id,
+                    FeedbackORM.created_at >= since,
+                )
+                .count()
+            )
+
     def mark_feedback_email_sent(self, feedback_id: str) -> bool:
         with self._session_scope() as session:
             feedback = (
