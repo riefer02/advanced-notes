@@ -67,6 +67,11 @@ class Config:
     JWKS_TIMEOUT_SECONDS: float = float(os.getenv("JWKS_TIMEOUT_SECONDS", "5"))
     JWKS_ATTEMPTS: int = int(os.getenv("JWKS_ATTEMPTS", "2"))
 
+    # Public "report a problem" endpoint: per-IP and per-user limits.
+    REPORT_RATE_LIMIT_PER_IP: int = int(os.getenv("REPORT_RATE_LIMIT_PER_IP", "3"))
+    REPORT_RATE_LIMIT_PER_USER: int = int(os.getenv("REPORT_RATE_LIMIT_PER_USER", "2"))
+    REPORT_RATE_WINDOW_SECONDS: int = int(os.getenv("REPORT_RATE_WINDOW_SECONDS", "600"))
+
     # Database pool / connect bounds.
     DB_CONNECT_TIMEOUT_SECONDS: int = int(os.getenv("DB_CONNECT_TIMEOUT_SECONDS", "5"))
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "5"))
