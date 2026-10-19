@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useAuth } from '@clerk/clerk-react'
 import { useState, useRef } from 'react'
 import AudioUploader from '../components/AudioUploader'
 import NotesPanel from '../components/NotesPanel'
@@ -10,22 +9,8 @@ export const Route = createFileRoute('/notes')({
 })
 
 function NotesPage() {
-  const { isLoaded, isSignedIn } = useAuth()
   const recordButtonRef = useRef<HTMLButtonElement>(null)
   const [activeTab, setActiveTab] = useState<'transcribe' | 'notes'>('transcribe')
-
-  if (!isLoaded) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!isSignedIn) {
-    window.location.href = '/sign-in'
-    return null
-  }
 
   return (
     <div className="h-full flex flex-col overflow-hidden">

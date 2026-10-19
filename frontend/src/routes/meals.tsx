@@ -26,7 +26,7 @@ const MOBILE_TABS = [
 ] as const
 
 function MealsPage() {
-  const { isLoaded, isSignedIn, userId } = useAuth()
+  const { userId } = useAuth()
   const { calendar_owner: calendarOwner } = Route.useSearch()
   const isSharedView = !!calendarOwner
   const { data: sharesData } = useShares()
@@ -108,19 +108,6 @@ function MealsPage() {
   }, [])
 
   // Show loading state while Clerk is loading
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    )
-  }
-
-  // Redirect to sign-in if not authenticated
-  if (!isSignedIn) {
-    window.location.href = '/sign-in'
-    return null
-  }
 
   return (
     <div className="h-full flex flex-col overflow-hidden">

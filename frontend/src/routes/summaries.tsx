@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useAuth } from '@clerk/clerk-react'
 import { useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
@@ -25,7 +24,6 @@ export const Route = createFileRoute('/summaries')({
 type TabKey = 'digests' | 'ask'
 
 function SummariesPage() {
-  const { isLoaded, isSignedIn } = useAuth()
   const [tab, setTab] = useState<TabKey>('digests')
 
   const digestsQuery = useDigests(50, 0)
@@ -116,19 +114,6 @@ function SummariesPage() {
         setSummaryError(error instanceof Error ? error.message : 'Failed to generate summary')
       },
     })
-  }
-
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!isSignedIn) {
-    window.location.href = '/sign-in'
-    return null
   }
 
   return (
