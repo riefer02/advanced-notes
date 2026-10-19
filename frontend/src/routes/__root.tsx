@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { AppShell, NAV_ITEMS } from '../components/layout/AppShell'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { RequireAuth } from '../components/RequireAuth'
+import { OutageBanner } from '../components/OutageBanner'
 
 interface MyRouterContext {
   queryClient: QueryClient
@@ -36,6 +37,8 @@ function RootComponent() {
           </ErrorBoundary>
         </div>
       )}
+
+      <OutageBanner />
 
       {/* Development tools are excluded from production bundles. */}
       {import.meta.env.DEV && (

@@ -66,6 +66,14 @@ def create_app(*, services: Services | None = None, testing: bool = False):
             report_server_error(getattr(error, "original_exception", None) or error)
         return {"error": "Internal server error"}, 500
 
+    @app.errorhandler(404)
+    def handle_404(error):
+        return jsonify({"error": "Not found"}), 404
+
+    @app.errorhandler(405)
+    def handle_405(error):
+        return jsonify({"error": "Method not allowed"}), 405
+
     @app.errorhandler(413)
     def handle_413(error):
         return jsonify({"error": "Request body too large"}), 413

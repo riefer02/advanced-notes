@@ -42,6 +42,9 @@ async function fetchWithTimeout(
     if (isTimeout(error)) {
       throw new RequestTimeoutError()
     }
+    if (error instanceof TypeError) {
+      throw new Error('Cannot reach the server. Check your connection and try again.')
+    }
     throw error
   }
 }
@@ -76,6 +79,9 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 interface ApiRequestOptions {
   params?: Record<string, string | number | boolean | undefined>
   body?: unknown
+  timeoutMs?: number
+  /** Skip the Clerk token header (public endpoints such as health). */
+  skipAuth?: boolean
 }
 
 export async function apiRequest<T>(
@@ -83,7 +89,7 @@ export async function apiRequest<T>(
   endpoint: string,
   options?: ApiRequestOptions
 ): Promise<T> {
-  const headers = new Headers(await getAuthHeaders())
+  const headers = new Headers(options?.skipAuth ? undefined : await getAuthHeaders())
 
   let url = `${API_BASE_URL}${endpoint}`
 
@@ -110,7 +116,11 @@ export async function apiRequest<T>(
     fetchOptions.body = JSON.stringify(options.body)
   }
 
-  const response = await fetchWithTimeout(url, fetchOptions, DEFAULT_REQUEST_TIMEOUT_MS)
+  const response = await fetchWithTimeout(
+    url,
+    fetchOptions,
+    options?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
+  )
 
   if (!response.ok) {
     const errorText = await response.text()

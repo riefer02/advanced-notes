@@ -12,6 +12,7 @@ from . import (
     health,
     meals,
     notes,
+    reports,
     settings,
     sharing,
     todos,
@@ -37,6 +38,7 @@ for _module in [
     usage,
     feedback,
     dashboard,
+    reports,
     webhooks,
 ]:
     api.register_blueprint(_module.bp)

@@ -13,6 +13,7 @@ import logging
 import re
 import time
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import boto3
 from botocore.config import Config as BotoConfig
@@ -174,6 +175,35 @@ class EmailService:
         return self._enqueue(
             dedupe_key=dedupe_key,
             subject=f"[Chisos][Server Error] {error_type} on {resolved_path}",
+            body=body,
+        )
+
+    def send_problem_report_notification(
+        self,
+        *,
+        message: str | None,
+        page: str | None,
+        ip: str | None,
+        user_id: str | None,
+        user_agent: str | None,
+        contact_email: str | None = None,
+    ) -> bool:
+        """Queue an admin alert when a user reports the app is broken."""
+        body = "\n".join(
+            [
+                "A user reported a problem",
+                "",
+                f"Message: {message or '(none provided)'}",
+                f"Page: {page or '(unknown)'}",
+                f"Contact: {contact_email or '(none)'}",
+                f"User ID: {user_id or '(anonymous)'}",
+                f"IP: {ip or '(unknown)'}",
+                f"User agent: {user_agent or '(unknown)'}",
+            ]
+        )
+        return self._enqueue(
+            dedupe_key=f"problem:{uuid4()}",
+            subject="[Chisos][Report] User-reported problem",
             body=body,
         )
 

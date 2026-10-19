@@ -57,9 +57,16 @@ def _maybe_send_cost_alert(svc) -> None:  # noqa: ANN001
 # ============================================================================
 
 
-def api_error(message: str, status: int = 400) -> tuple[dict, int]:
+def api_error(
+    message: str,
+    status: int = 400,
+    headers: dict | None = None,
+):
     """Return a standardized JSON error response."""
-    return jsonify({"error": message}), status
+    response = jsonify({"error": message})
+    if headers:
+        return response, status, headers
+    return response, status
 
 
 def api_error_from_exception(
