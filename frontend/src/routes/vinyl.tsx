@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useAuth } from '@clerk/clerk-react'
 import { useState, useCallback } from 'react'
 import VinylLibrary from '../components/VinylLibrary'
 import VinylRecordDetail from '../components/VinylRecordDetail'
@@ -18,7 +17,6 @@ export const Route = createFileRoute('/vinyl')({
 })
 
 function VinylPage() {
-  const { isLoaded, isSignedIn } = useAuth()
   const { owner } = Route.useSearch()
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -40,19 +38,6 @@ function VinylPage() {
   const handleRecordCreated = useCallback((recordId: string) => {
     setSelectedRecordId(recordId)
   }, [])
-
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!isSignedIn) {
-    window.location.href = '/sign-in'
-    return null
-  }
 
   return (
     <div className="h-full flex flex-col overflow-hidden">

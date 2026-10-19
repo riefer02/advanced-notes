@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useAuth, useUser } from '@clerk/clerk-react'
+import { useUser } from '@clerk/clerk-react'
 import { useState } from 'react'
 import FriendsList from '../components/FriendsList'
 import FriendSearch from '../components/FriendSearch'
@@ -25,23 +25,9 @@ const TABS = [
 ]
 
 function FriendsPage() {
-  const { isLoaded, isSignedIn } = useAuth()
   const { user } = useUser()
   const { tab } = Route.useSearch()
   const [activeTab, setActiveTab] = useState<Tab>(tab === 'shares' ? 'shares' : 'friends')
-
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!isSignedIn) {
-    window.location.href = '/sign-in'
-    return null
-  }
 
   const currentUserId = user?.id ?? ''
 

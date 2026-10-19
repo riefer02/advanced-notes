@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useAuth } from '@clerk/clerk-react'
 import { useUserSettings, useUpdateUserSettings } from '../hooks/useSettings'
 import { useMyProfile, useUpdateProfile } from '../hooks/useProfile'
 import AvatarUploader from '../components/AvatarUploader'
@@ -16,7 +15,6 @@ export const Route = createFileRoute('/settings')({
 })
 
 function SettingsPage() {
-  const { isLoaded, isSignedIn } = useAuth()
   const { data: settings, isLoading: settingsLoading } = useUserSettings()
   const updateSettings = useUpdateUserSettings()
   const { data: profile, isLoading: profileLoading } = useMyProfile()
@@ -54,19 +52,6 @@ function SettingsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayName, username, bio, discoverable, profile])
-
-  if (!isLoaded) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!isSignedIn) {
-    window.location.href = '/sign-in'
-    return null
-  }
 
   const handleAutoAcceptToggle = () => {
     if (settings) {

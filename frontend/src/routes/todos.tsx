@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useAuth } from '@clerk/clerk-react'
 import { useTodos, useCreateTodo } from '../hooks/useTodos'
 import TodoList from '../components/TodoList'
 import type { Todo } from '../lib/api'
@@ -17,7 +16,6 @@ export const Route = createFileRoute('/todos')({
 type TabType = 'all' | 'accepted' | 'completed'
 
 function TodosPage() {
-  const { isLoaded, isSignedIn } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>('all')
   const [isCreating, setIsCreating] = useState(false)
   const [newTodoTitle, setNewTodoTitle] = useState('')
@@ -26,19 +24,6 @@ function TodosPage() {
   // Fetch todos based on active tab
   const statusFilter = activeTab === 'all' ? undefined : activeTab
   const { data, isLoading, error } = useTodos({ status: statusFilter })
-
-  if (!isLoaded) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!isSignedIn) {
-    window.location.href = '/sign-in'
-    return null
-  }
 
   const handleCreateTodo = async () => {
     const title = newTodoTitle.trim()

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useAuth, useUser } from '@clerk/clerk-react'
+import { useUser } from '@clerk/clerk-react'
 import {
   FileText,
   CheckCircle2,
@@ -31,24 +31,10 @@ function getGreeting() {
 }
 
 function DashboardPage() {
-  const { isLoaded, isSignedIn } = useAuth()
   const { user } = useUser()
   const statsQuery = useDashboardStats()
   const todosQuery = useTodos({ status: 'accepted', limit: 5 })
   const { openAsk } = useAppShell()
-
-  if (!isLoaded) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!isSignedIn) {
-    window.location.href = '/sign-in'
-    return null
-  }
 
   const firstName = user?.firstName || 'there'
   const today = new Date().toLocaleDateString('en-US', {
