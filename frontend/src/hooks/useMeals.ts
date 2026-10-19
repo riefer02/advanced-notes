@@ -9,8 +9,6 @@ import {
   updateMealItem,
   deleteMealItem,
   transcribeMeal,
-  type MealEntry,
-  type MealItem,
   type MealType,
 } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
@@ -21,11 +19,13 @@ import { queryKeys } from '../lib/queryKeys'
 
 function invalidateMealQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.meals.all })
+  queryClient.invalidateQueries({ queryKey: queryKeys.meals.detailPrefix })
   queryClient.invalidateQueries({ queryKey: queryKeys.meals.calendarPrefix })
 }
 
-function invalidateDeletedMealQueries(queryClient: QueryClient, mealId: string) {
-  queryClient.removeQueries({ queryKey: queryKeys.meals.detail(mealId) })
+function invalidateDeletedMealQueries(queryClient: QueryClient) {
+  // Detail keys include calendarOwner, so remove the whole prefix.
+  queryClient.removeQueries({ queryKey: queryKeys.meals.detailPrefix })
   invalidateMealQueries(queryClient)
 }
 
@@ -95,8 +95,9 @@ export function useUpdateMeal() {
         transcription?: string
       }
     }) => updateMeal(mealId, data),
-    onSuccess: (updatedMeal: MealEntry) => {
-      queryClient.setQueryData(queryKeys.meals.detail(updatedMeal.id), updatedMeal)
+    onSuccess: () => {
+      // Do not setQueryData here: the detail key includes calendarOwner, so
+      // writing an owner-less key would leave the visible entry stale.
       invalidateMealQueries(queryClient)
     },
   })
@@ -107,7 +108,7 @@ export function useDeleteMeal() {
 
   return useMutation({
     mutationFn: (mealId: string) => deleteMeal(mealId),
-    onSuccess: (_data, mealId) => invalidateDeletedMealQueries(queryClient, mealId),
+    onSuccess: () => invalidateDeletedMealQueries(queryClient),
   })
 }
 
@@ -117,8 +118,8 @@ export function useAddMealItem() {
   return useMutation({
     mutationFn: ({ mealId, data }: { mealId: string; data: { name: string; portion?: string } }) =>
       addMealItem(mealId, data),
-    onSuccess: (newItem: MealItem) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.meals.detail(newItem.meal_entry_id) })
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.meals.detailPrefix })
       queryClient.invalidateQueries({ queryKey: queryKeys.meals.calendarPrefix })
     },
   })
@@ -137,10 +138,8 @@ export function useUpdateMealItem() {
       itemId: string
       data: { name?: string; portion?: string }
     }) => updateMealItem(mealId, itemId, data),
-    onSuccess: (updatedItem: MealItem) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.meals.detail(updatedItem.meal_entry_id),
-      })
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.meals.detailPrefix })
     },
   })
 }
@@ -151,8 +150,8 @@ export function useDeleteMealItem() {
   return useMutation({
     mutationFn: ({ mealId, itemId }: { mealId: string; itemId: string }) =>
       deleteMealItem(mealId, itemId),
-    onSuccess: (_data, { mealId }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.meals.detail(mealId) })
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.meals.detailPrefix })
       queryClient.invalidateQueries({ queryKey: queryKeys.meals.calendarPrefix })
     },
   })

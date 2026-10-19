@@ -21,6 +21,9 @@ export const queryKeys = {
     list: (params: object) => ['meals', params] as const,
     detail: (mealId: string | null, calendarOwner?: string) =>
       ['meal', mealId, calendarOwner] as const,
+    // Detail keys include calendarOwner, so invalidation must target the
+    // prefix rather than a single owner-less key.
+    detailPrefix: ['meal'] as const,
     calendar: (year: number, month: number, calendarOwner?: string) =>
       ['mealsCalendar', year, month, calendarOwner] as const,
     calendarPrefix: ['mealsCalendar'] as const,
