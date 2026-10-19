@@ -11,6 +11,7 @@ from ..config import Config
 from ..services import s3_vinyl
 from ..services.container import get_services
 from ..services.embeddings import vector_to_json, vector_to_pg_literal
+from ..services.file_validation import image_matches_declared_type, normalize_mime
 from ._helpers import (
     _maybe_send_cost_alert,
     api_error,
@@ -198,12 +199,14 @@ def extract_vinyl_from_photos():
     allowed_mimes = {"image/jpeg", "image/png", "image/webp", "image/heic"}
     image_urls: list[str] = []
     for f in files:
-        mime = (f.content_type or "image/jpeg").split(";")[0].strip().lower()
+        mime = normalize_mime(f.content_type) or "image/jpeg"
         if mime not in allowed_mimes:
             return api_error(f"Unsupported image type: {mime}", 400)
         raw = f.read(Config.MAX_IMAGE_BYTES + 1)
         if len(raw) > Config.MAX_IMAGE_BYTES:
             return api_error("Image too large (max 6MB per image)", 413)
+        if not image_matches_declared_type(raw, mime):
+            return api_error("File content does not match its declared image type", 400)
         data = base64.b64encode(raw).decode("utf-8")
         image_urls.append(f"data:{mime};base64,{data}")
 
@@ -369,7 +372,7 @@ def create_vinyl_image(record_id: str):
         if image_type not in valid_types:
             return api_error(f"'image_type' must be one of: {', '.join(sorted(valid_types))}", 400)
 
-        mime_type = (f.content_type or "image/jpeg").split(";")[0].strip().lower()
+        mime_type = normalize_mime(f.content_type) or "image/jpeg"
         allowed_mimes = {"image/jpeg", "image/png", "image/webp", "image/heic"}
         if mime_type not in allowed_mimes:
             return api_error(f"Unsupported image type: {mime_type}", 400)
@@ -381,6 +384,8 @@ def create_vinyl_image(record_id: str):
             return api_error("Image too large (max 6MB)", 413)
         if bytes_value == 0:
             return api_error("Empty file", 400)
+        if not image_matches_declared_type(file_data, mime_type):
+            return api_error("File content does not match its declared image type", 400)
 
         image_id = str(uuid4())
         storage_key = s3_vinyl.object_key_for_image(
