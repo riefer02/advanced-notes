@@ -316,6 +316,11 @@ class EmailService:
                     retries={"max_attempts": 1},
                 ),
             )
+            send_kwargs = {}
+            if Config.SES_CONFIGURATION_SET:
+                # Required for SES to emit bounce/complaint events to SNS.
+                send_kwargs["ConfigurationSetName"] = Config.SES_CONFIGURATION_SET
+
             client.send_email(
                 Source=sender,
                 Destination={"ToAddresses": recipients},
@@ -329,6 +334,7 @@ class EmailService:
                         },
                     },
                 },
+                **send_kwargs,
             )
             logger.info("Email sent to %s: %s", ", ".join(recipients), subject)
             return True
