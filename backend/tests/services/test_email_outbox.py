@@ -125,3 +125,28 @@ def test_notifications_are_skipped_when_email_is_unconfigured(email, monkeypatch
 
     assert email.send_new_user_notification("user-4") is False
     assert email.storage.claim_due_emails() == []
+
+
+def test_multiple_admin_recipients_are_stored(email, monkeypatch):
+    monkeypatch.setenv("ADMIN_EMAILS", "one@example.com, two@example.com")
+    email.send_new_user_notification("user-5", display_name="Dan")
+
+    row = _row(email.storage, "new_user:user-5")
+    assert row.to_address == "one@example.com,two@example.com"
+
+
+def test_html_body_is_escaped():
+    from app.services.email_service import EmailService
+
+    rendered = EmailService._render_html(
+        "Subject <script>",
+        "Name: <script>alert(1)</script>\nplain & text",
+    )
+
+    assert "<script>alert(1)</script>" not in rendered
+    assert "&lt;script&gt;" in rendered
+    assert "plain &amp; text" in rendered
+
+
+def test_digest_only_enqueues_in_digest_mode(email):
+    assert email.maybe_enqueue_daily_digest() is False

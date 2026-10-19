@@ -125,6 +125,9 @@ class Config:
     SES_REGION: str | None = os.getenv("SES_REGION", "us-east-2")
     SES_SENDER_EMAIL: str | None = os.getenv("SES_SENDER_EMAIL")
     ADMIN_EMAIL: str | None = os.getenv("ADMIN_EMAIL")
+    # instant | digest | off — controls per-signup notifications. Digest
+    # sends one daily summary instead of one email per new user.
+    NEW_USER_NOTIFICATION_MODE: str = os.getenv("NEW_USER_NOTIFICATION_MODE", "instant")
     # SES credentials — fall back to existing AWS creds (shared with S3)
     SES_ACCESS_KEY_ID: str | None = os.getenv("SES_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID")
     SES_SECRET_ACCESS_KEY: str | None = os.getenv("SES_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -135,14 +138,21 @@ class Config:
     )
 
     @classmethod
+    def admin_emails(cls) -> list[str]:
+        """Admin recipients: ADMIN_EMAILS (comma-separated) or ADMIN_EMAIL."""
+        raw = os.getenv("ADMIN_EMAILS") or cls.ADMIN_EMAIL or ""
+        return [address.strip() for address in raw.split(",") if address.strip()]
+
+    @classmethod
     def email_enabled(cls) -> bool:
         """
         Check if email notifications are properly configured.
 
-        Returns True when SES credentials and an admin email are set.
+        Returns True when SES credentials and at least one admin recipient
+        are set.
         """
         return bool(
-            cls.ADMIN_EMAIL
+            cls.admin_emails()
             and cls.SES_ACCESS_KEY_ID
             and cls.SES_SECRET_ACCESS_KEY
         )

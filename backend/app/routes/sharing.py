@@ -7,6 +7,7 @@ from flask import Blueprint, g, jsonify, request
 from sqlalchemy.exc import IntegrityError
 
 from ..auth import require_auth
+from ..config import Config
 from ..services import s3_avatar
 from ..services.container import get_services
 from ..services.file_validation import image_matches_declared_type, normalize_mime
@@ -86,12 +87,13 @@ def get_my_profile():
                 email=email,
                 username=username,
             )
-            svc.email.send_new_user_notification(
-                user_id=user_id,
-                display_name=display_name,
-                email=email,
-                username=username,
-            )
+            if Config.NEW_USER_NOTIFICATION_MODE == "instant":
+                svc.email.send_new_user_notification(
+                    user_id=user_id,
+                    display_name=display_name,
+                    email=email,
+                    username=username,
+                )
         return jsonify(_enrich_profile(profile.model_dump()))
     except Exception as e:
         return api_error_from_exception(e)

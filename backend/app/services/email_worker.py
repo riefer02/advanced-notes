@@ -20,7 +20,9 @@ def start_email_worker(app, interval: float = _FLUSH_INTERVAL_SECONDS) -> thread
         while True:
             try:
                 with app.app_context():
-                    app.extensions["services"].email.flush()
+                    email = app.extensions["services"].email
+                    email.maybe_enqueue_daily_digest()
+                    email.flush()
             except Exception:  # noqa: BLE001 - the loop must survive
                 logger.exception("Email outbox flush failed")
             time.sleep(interval)
