@@ -49,3 +49,7 @@ jobs:
       - name: Run Alembic migrations on Postgres
         working-directory: backend
         run: uv run alembic upgrade head
+
+      - name: Check for schema drift
+        working-directory: backend
+        run: uv run alembic check
