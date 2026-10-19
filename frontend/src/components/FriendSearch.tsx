@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useUserSearch, useSendFriendRequest } from '../hooks/useFriends'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import type { UserProfile } from '../lib/api'
 import UserAvatar from './UserAvatar'
 import { Button } from '@/components/ui/button'
@@ -9,7 +10,8 @@ import { Card } from '@/components/ui/card'
 export default function FriendSearch() {
   const [query, setQuery] = useState('')
   const [sentIds, setSentIds] = useState<Set<string>>(new Set())
-  const { data, isLoading } = useUserSearch(query)
+  const debouncedQuery = useDebouncedValue(query, 300)
+  const { data, isLoading } = useUserSearch(debouncedQuery)
   const sendRequest = useSendFriendRequest()
 
   const users = data?.users ?? []
@@ -35,15 +37,15 @@ export default function FriendSearch() {
         />
       </div>
 
-      {isLoading && query.length >= 2 && (
+      {isLoading && debouncedQuery.length >= 2 && (
         <div className="text-sm text-gray-500 py-2">Searching...</div>
       )}
 
-      {!isLoading && query.length >= 2 && users.length === 0 && (
+      {!isLoading && debouncedQuery.length >= 2 && users.length === 0 && (
         <div className="text-sm text-gray-500 py-2">No users found</div>
       )}
 
-      {users.length > 0 && (
+      {users.length > 0 && debouncedQuery.length >= 2 && (
         <div className="space-y-2">
           {users.map((user) => (
             <UserSearchResult

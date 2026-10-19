@@ -24,13 +24,13 @@ export default function NotesList({
   onNoteSelect,
   selectedNoteId,
 }: NotesListProps) {
-  // Use either notes query, search query, or tag query
-  const notesQuery = useNotes(folder)
-  const searchQueryHook = useSearchNotes(searchQuery || '')
-  const tagQueryHook = useNotesByTag(tag || null)
+  // Use exactly one source: search, tag, or the folder/browse list.
+  const isSearchMode = !!searchQuery?.trim()
+  const isTagMode = !!tag && !isSearchMode
 
-  const isSearchMode = !!searchQuery
-  const isTagMode = !!tag && !searchQuery
+  const notesQuery = useNotes(folder, 50, 0, !isSearchMode && !isTagMode)
+  const searchQueryHook = useSearchNotes(searchQuery || '')
+  const tagQueryHook = useNotesByTag(tag || null, 50, isTagMode)
   const { data: notesData, isLoading: notesLoading, error: notesError } = notesQuery
   const { data: searchResults, isLoading: searchLoading, error: searchError } = searchQueryHook
   const { data: tagResults, isLoading: tagLoading, error: tagError } = tagQueryHook

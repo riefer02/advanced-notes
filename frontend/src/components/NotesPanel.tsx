@@ -7,6 +7,7 @@ import SlideOver from './ui/SlideOver'
 import NoteDetail from './NoteDetail'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useNotes, useSearchNotes, useNotesByTag, useDeleteNote } from '../hooks/useNotes'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 
 export default function NotesPanel() {
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null)
@@ -14,18 +15,21 @@ export default function NotesPanel() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showFolders, setShowFolders] = useState(false)
 
+  // Debounce so typing does not fire a request per keystroke.
+  const debouncedSearch = useDebouncedValue(searchQuery, 300)
+
   // Selection State
   const [selectedNote, setSelectedNote] = useState<NoteItemData | null>(null)
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const deleteNoteMutation = useDeleteNote()
 
-  // Get counts for different views
-  const { data: allNotes } = useNotes()
-  const { data: searchResults } = useSearchNotes(searchQuery)
+  // Get counts for different views. Only one source is active at a time.
+  const { data: allNotes } = useNotes(undefined, 50, 0, !debouncedSearch && !selectedTag)
+  const { data: searchResults } = useSearchNotes(debouncedSearch)
   const { data: tagNotes } = useNotesByTag(selectedTag)
 
-  const noteCount = searchQuery
+  const noteCount = debouncedSearch
     ? searchResults?.length || 0
     : selectedTag
       ? tagNotes?.length || 0
@@ -72,7 +76,7 @@ export default function NotesPanel() {
         <div className="border-b pb-4">
           <div className="flex items-baseline justify-between">
             <h2 className="text-2xl font-bold text-gray-900">Your Notes</h2>
-            {!searchQuery && !selectedTag && !selectedFolder && (
+            {!debouncedSearch && !selectedTag && !selectedFolder && (
               <span className="text-sm font-medium text-gray-500">
                 {noteCount} {noteCount === 1 ? 'note' : 'notes'}
               </span>
@@ -106,10 +110,10 @@ export default function NotesPanel() {
         />
 
         {/* Active Filter Context */}
-        {(searchQuery || selectedTag || selectedFolder) && (
+        {(debouncedSearch || selectedTag || selectedFolder) && (
           <Alert variant="info" className="flex items-center justify-between">
             <AlertDescription className="flex items-center gap-2 text-sm">
-              {searchQuery ? (
+              {debouncedSearch ? (
                 <>
                   <svg className="h-4 w-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                     <path
@@ -119,7 +123,7 @@ export default function NotesPanel() {
                     />
                   </svg>
                   <span className="font-medium text-blue-900">
-                    Found {noteCount} result{noteCount !== 1 ? 's' : ''} for "{searchQuery}"
+                    Found {noteCount} result{noteCount !== 1 ? 's' : ''} for "{debouncedSearch}"
                   </span>
                 </>
               ) : selectedTag ? (
@@ -185,10 +189,10 @@ export default function NotesPanel() {
 
         {/* Content Area */}
         <div className="space-y-4">
-          {searchQuery ? (
+          {debouncedSearch ? (
             /* Show search results when searching */
             <NotesList
-              searchQuery={searchQuery}
+              searchQuery={debouncedSearch}
               onTagClick={(tag) => {
                 setSelectedTag(tag)
                 setSearchQuery('')
