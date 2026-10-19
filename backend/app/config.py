@@ -124,6 +124,8 @@ class Config:
     # Email notifications via AWS SES
     SES_REGION: str | None = os.getenv("SES_REGION", "us-east-2")
     SES_SENDER_EMAIL: str | None = os.getenv("SES_SENDER_EMAIL")
+    # Sending must use a configuration set for SES to publish events to SNS.
+    SES_CONFIGURATION_SET: str | None = os.getenv("SES_CONFIGURATION_SET")
     # SNS topic that receives SES bounce/complaint notifications. Required
     # before the webhook will accept anything.
     SES_SNS_TOPIC_ARN: str | None = os.getenv("SES_SNS_TOPIC_ARN")

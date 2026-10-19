@@ -150,3 +150,22 @@ def test_html_body_is_escaped():
 
 def test_digest_only_enqueues_in_digest_mode(email):
     assert email.maybe_enqueue_daily_digest() is False
+
+
+def test_send_email_uses_configured_configuration_set(email, monkeypatch):
+    from app.config import Config
+
+    monkeypatch.setattr(Config, "SES_CONFIGURATION_SET", "my-first-configuration-set")
+    captured: dict = {}
+
+    class _Client:
+        def send_email(self, **kwargs):  # noqa: ANN003
+            captured.update(kwargs)
+
+    monkeypatch.setattr(
+        "app.services.email_service.boto3.client",
+        lambda *args, **kwargs: _Client(),
+    )
+
+    assert email._send_email("admin@example.com", "subject", "body") is True
+    assert captured["ConfigurationSetName"] == "my-first-configuration-set"
