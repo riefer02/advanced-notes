@@ -76,29 +76,31 @@ chisos/
 │
 ├─ backend/               # Flask + OpenAI API
 │  ├─ pyproject.toml      # uv project definition
-│  ├─ uv.lock             # Dependency lock file (auto-generated)
+│  ├─ uv.lock             # Dependency lock file (committed)
 │  ├─ run.sh              # Dev server launcher
 │  ├─ wsgi.py             # WSGI entry point
 │  └─ app/
-│     ├─ __init__.py      # Flask app factory with CORS
+│     ├─ __init__.py      # Flask app factory, CORS, error handlers
 │     ├─ asr.py           # OpenAI transcription API client
-│     ├─ routes.py        # REST API endpoints (11 total)
-│     └─ services/        # AI categorization + storage
+│     ├─ auth.py          # Clerk JWT verification
+│     ├─ config.py        # Environment-backed configuration
+│     ├─ database.py      # SQLAlchemy models (schema source of truth)
+│     ├─ routes/          # REST API blueprints, one module per feature
+│     └─ services/        # AI services + storage/ package (per-feature mixins)
 │
 └─ frontend/              # Vite + React + TS + Tailwind
    ├─ package.json
+   ├─ pnpm-lock.yaml      # pnpm is the only supported package manager
    ├─ vite.config.ts
-   ├─ tailwind.config.ts
-   ├─ postcss.config.js
    ├─ tsconfig.json
    ├─ index.html
-   ├─ .env.local          # API URL: VITE_API_URL=http://localhost:5001
+   ├─ .env.example        # Copy to .env.local
    └─ src/
-      ├─ main.tsx
-      ├─ App.tsx
-      ├─ index.css        # Tailwind directives
-      └─ components/
-         └─ AudioUploader.tsx  # Upload UI + transcription display
+      ├─ main.tsx         # Providers, router, auth token bridge
+      ├─ routes/          # TanStack Router file-based routes
+      ├─ components/      # UI components (+ ui/ primitives)
+      ├─ hooks/           # TanStack Query hooks
+      └─ lib/api/         # Typed API client (core.ts + feature modules)
 ```
 
 ---
@@ -118,12 +120,13 @@ chisos/
    - Generates folder paths, filenames, tags automatically
    - Structured JSON outputs for reliability
 
-3. **Storage** (`app/services/storage.py`):
+3. **Storage** (`app/services/storage/`):
    - **SQLite** database with FTS5 full-text search
    - Database-only storage (no file system)
    - CRUD operations, folder hierarchy, tag management
+   - Split into per-feature mixins (`notes.py`, `todos.py`, `meals.py`, `vinyl.py`, `sharing.py`, …)
 
-4. **REST API** (`app/routes.py`):
+4. **REST API** (`app/routes/`):
    - Endpoints for transcription, notes, folders, tags, search, and **Ask Notes**
    - Returns JSON responses with comprehensive metadata
 
@@ -297,7 +300,7 @@ Check API usage via the `meta.model` field in responses.
 ### Backend
 
 - **CORS**: Restrict origins in production (edit `app/__init__.py`)
-- **File size limits**: Add max file size checks in `routes.py`
+- **File size limits**: Use the caps in `app/config.py` (`MAX_AUDIO_BYTES`, `MAX_IMAGE_BYTES`, `MAX_AVATAR_BYTES`) and read with a bounded `file.read(limit + 1)`
 - **Rate limiting**: Use `flask-limiter`
 - **Authentication**: Add API keys or OAuth
 - **Streaming**: Implement chunked upload + streaming ASR (if NeMo supports)

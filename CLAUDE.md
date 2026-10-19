@@ -47,8 +47,9 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 - **Package Management**: `uv` (backend), `pnpm` (frontend)
 
 ### Key Directories
-- `backend/app/routes.py` - REST API endpoints
+- `backend/app/routes/` - REST API blueprints (one module per feature)
 - `backend/app/services/` - Business logic (storage, AI categorization, embeddings, S3, usage tracking, extractors)
+- `backend/app/services/storage/` - Storage facade + per-feature mixins
 - `backend/app/services/usage_tracking.py` - Rate limiting and API usage tracking
 - `backend/app/services/s3_audio.py` - Core S3 operations (shared by all S3 features)
 - `backend/app/services/s3_vinyl.py` - Vinyl image S3 helpers (delegates to s3_audio)
@@ -56,7 +57,7 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 - `backend/app/database.py` - SQLAlchemy models (source of truth for schema)
 - `frontend/src/routes/` - TanStack Router file-based routes
 - `frontend/src/components/` - React components
-- `frontend/src/lib/api.ts` - Type-safe API client with auth headers
+- `frontend/src/lib/api/` - Type-safe API client (`core.ts` auth/request helpers + feature modules)
 
 ### Patterns
 
@@ -74,7 +75,7 @@ cd backend && uv run alembic revision --autogenerate -m "message"  # Create migr
 
 **External Service Timeouts (CRITICAL)**: Every boto3/HTTP client MUST have explicit timeouts. With 4 sync gunicorn workers, a single hung external call (SES, S3, etc.) without a timeout can deadlock the entire app. Best-effort services (email, analytics): `connect_timeout=5, read_timeout=5, retries=1`. Core services (S3): `connect_timeout=10, read_timeout=30, retries=2`. See `docs/deployment-lessons.md` §5 for the full incident writeup.
 
-**Backend Error Responses**: Always use the `api_error(message, status_code)` helper in `routes.py` for error responses. Never use raw `jsonify({"error": ...}), status` — the helper ensures consistent JSON error format across all endpoints.
+**Backend Error Responses**: Always use the `api_error(message, status_code)` helper in `routes/_helpers.py` for error responses. Never use raw `jsonify({"error": ...}), status` — the helper ensures consistent JSON error format across all endpoints.
 ```python
 # Good
 return api_error("Not found", 404)
@@ -112,16 +113,16 @@ function invalidateXQueries(queryClient: QueryClient) {
 }
 ```
 
-**Shared Audio Transcription**: The `_transcribe_audio_clip(user_id, svc, endpoint)` helper in `routes.py` handles the full audio lifecycle (request parsing → pending clip → S3 upload → transcription → error cleanup → usage recording → mark ready). Both `transcribe()` and `transcribe_meal()` use it. Any future transcription endpoint should use this helper and only add post-transcription logic (e.g. categorization, extraction). Raises `_AudioTranscriptionError` for validation failures.
+**Shared Audio Transcription**: The `_transcribe_audio_clip(user_id, svc, endpoint)` helper in `routes/_helpers.py` handles the full audio lifecycle (request parsing → pending clip → S3 upload → transcription → error cleanup → usage recording → mark ready). Both `transcribe()` and `transcribe_meal()` use it. Any future transcription endpoint should use this helper and only add post-transcription logic (e.g. categorization, extraction). Raises `_AudioTranscriptionError` for validation failures.
 
 **Feature Modules**: Each major feature has its own set of files following the same pattern:
 - ORM models in `database.py`
 - Pydantic DTOs in `services/models.py`
-- Storage methods in `services/storage.py`
+- Storage methods in the matching `services/storage/<feature>.py` mixin
 - Service class in `services/` (e.g. `meal_extractor.py`, `vinyl_extractor.py`)
 - Registered in `services/container.py`
-- API endpoints in `routes.py`
-- Frontend types + API functions in `lib/api.ts`
+- API endpoints in `routes/<feature>.py`
+- Frontend types + API functions in `lib/api/<feature>.ts`
 - TanStack Query hooks in `hooks/`
 - Components in `components/`
 - File-based route in `routes/`
@@ -261,14 +262,14 @@ cd frontend && pnpm format:check     # Check formatting
 ## Code Organization Guide
 
 ### Adding a New API Endpoint
-1. Add route in `backend/app/routes.py` with `@bp.get/post/put/delete` and `@require_auth`
+1. Add route in the matching `backend/app/routes/<feature>.py` blueprint with `@bp.get/post/put/delete` and `@require_auth`
 2. If endpoint calls OpenAI, add `@require_quota("transcription")` or `@require_quota("ai_calls")` decorator
 3. Use `api_error(message, status)` for ALL error responses — never raw `jsonify({"error": ...})`
 4. If the endpoint involves audio transcription, use `_transcribe_audio_clip()` helper
-5. Add storage method in `backend/app/services/storage.py` (follow user_id pattern)
+5. Add storage method in the matching `backend/app/services/storage/<feature>.py` mixin (follow user_id pattern)
 6. Add Pydantic models in `backend/app/services/models.py` if needed
 7. If tracking usage, call `svc.usage_tracking.record_usage(...)` after successful API call
-8. Add API function in `frontend/src/lib/api.ts` using `apiRequest<T>()` or `apiUpload<T>()` — never raw `fetch()`
+8. Add API function in `frontend/src/lib/api/<feature>.ts` using `apiRequest<T>()` or `apiUpload<T>()` — never raw `fetch()`
 9. Add TanStack Query hook in `frontend/src/hooks/` with invalidation helpers at the top of the file
 
 ### Adding a New Service

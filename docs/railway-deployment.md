@@ -42,13 +42,13 @@
 
 - **Root Directory:** `/backend`
 - **Start Command:** `python migrate.py && gunicorn -w 4 -b 0.0.0.0:$PORT wsgi:app` (via `Procfile`)
-- **Build:** Nixpacks auto-detects Python + `requirements.txt`
-- **Language:** Python 3.13+
+- **Build:** Nixpacks auto-detects Python + `requirements.txt` (generated from `uv.lock`)
+- **Language:** Python 3.11+ (CI targets 3.11)
 
 ### 2. Frontend Service
 
 - **Root Directory:** `/frontend`
-- **Build:** `npm run build` (outputs to `dist/`)
+- **Build:** `pnpm run build` (outputs to `dist/`)
 - **Serve:** Caddy static server (Railway default)
 - **Language:** TypeScript + React
 
@@ -178,8 +178,8 @@ uv run gunicorn -w 4 -b 0.0.0.0:5001 wsgi:app
 
 ```bash
 cd frontend
-npm run build
-npm run preview
+pnpm run build
+pnpm run preview
 ```
 
 ---
@@ -208,11 +208,12 @@ git push
 ```bash
 cd frontend
 
+# pnpm is the only supported package manager.
 # Add new package
-npm install package-name
+pnpm add package-name
 
-# Commit and push (package.json and package-lock.json)
-git add package.json package-lock.json
+# Commit and push (package.json and pnpm-lock.yaml)
+git add package.json pnpm-lock.yaml
 git commit -m "deps: add package-name"
 git push
 ```

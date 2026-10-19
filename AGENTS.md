@@ -22,7 +22,7 @@
 - Production: Automatic via `Procfile` release command on Railway deploy
 
 ### Storage Layer Pattern
-All methods in `backend/app/services/storage.py` require `user_id` as first parameter:
+All methods in `backend/app/services/storage/` (per-feature mixins under a `NoteStorage` facade) require `user_id` as first parameter:
 ```python
 def method_name(self, user_id: str, other_params) -> ReturnType:
     # All SQL queries include WHERE user_id = ? (SQLite) or %s (PostgreSQL)
@@ -36,7 +36,7 @@ def method_name(self, user_id: str, other_params) -> ReturnType:
 - Pass `user_id` to all storage methods
 
 ### Frontend
-- JWT token auto-added via `getAuthHeaders()` in `lib/api.ts`
+- JWT token auto-added via `getAuthHeaders()` in `frontend/src/lib/api/core.ts`
 - Token from `useAuth().getToken()` (Clerk)
 - Sent as `Authorization: Bearer <token>` header
 
@@ -61,7 +61,7 @@ Frontend:
 5. Commit migration file
 
 ### New API Endpoint
-1. Add route in `backend/app/routes.py` with `@require_auth`
+1. Add route in the matching `backend/app/routes/<feature>.py` blueprint with `@require_auth`
 2. Extract `user_id = g.user_id`
 3. Pass to storage method
 4. All queries automatically user-scoped
@@ -82,8 +82,8 @@ When you’ve made changes, confirm the app still builds and behaves as expected
 
 ## Key Files
 - `backend/app/database.py` - SQLAlchemy models (source of truth)
-- `backend/app/services/storage.py` - Database adapter layer
-- `backend/app/routes.py` - API endpoints with auth
+- `backend/app/services/storage/` - Database adapter layer (facade + per-feature mixins)
+- `backend/app/routes/` - API blueprints with auth (one module per feature)
 - `backend/app/auth.py` - JWT verification
 - `backend/migrate.py` - Migration runner for Railway
 - `backend/Procfile` - Railway deployment config

@@ -7,7 +7,6 @@ backend/*.pyc
 backend/**/*.pyc
 backend/*.nemo
 backend/.uv/
-backend/uv.lock
 
 # NeMo/HuggingFace cache (optional - comment out to share cache)
 # backend/.cache/
@@ -56,10 +55,14 @@ test_notes.db*
 # OS
 Thumbs.db
 
-# Testing
+# Testing / tool caches
 coverage/
+htmlcov/
 .pytest_cache/
+.ruff_cache/
+.tanstack/
 .coverage
+.coverage.*
 
 # Temp
 tmp/
