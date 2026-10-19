@@ -363,7 +363,9 @@ class TokenUsage(Base):
     __tablename__ = "token_usage"
 
     id = Column(String(36), primary_key=True)
-    user_id = Column(String(255), nullable=False, index=True)
+    # Indexed by the explicitly named indexes in __table_args__; no index=True
+    # here, which would create a second, redundantly named index.
+    user_id = Column(String(255), nullable=False)
 
     # Service type: transcription, categorization, embedding, chat, summarization
     service_type = Column(String(50), nullable=False)
@@ -400,7 +402,7 @@ class UsageQuota(Base):
     __tablename__ = "usage_quotas"
 
     id = Column(String(36), primary_key=True)
-    user_id = Column(String(255), nullable=False, unique=True, index=True)
+    user_id = Column(String(255), nullable=False, unique=True)
 
     # User tier (free, pro, etc.)
     tier = Column(String(50), nullable=False, server_default="free")
@@ -575,10 +577,10 @@ class UserProfile(Base):
     __tablename__ = "user_profiles"
 
     id = Column(String(36), primary_key=True)
-    user_id = Column(String(255), nullable=False, unique=True, index=True)
+    user_id = Column(String(255), nullable=False, unique=True)
     display_name = Column(String(255), nullable=False)
     username = Column(String(30), nullable=True)
-    email = Column(String(255), nullable=True, index=True)
+    email = Column(String(255), nullable=True)
     avatar_url = Column(Text, nullable=True)
     avatar_storage_key = Column(String(512), nullable=True)
     bio = Column(Text, nullable=True)
@@ -603,8 +605,8 @@ class Friendship(Base):
     __tablename__ = "friendships"
 
     id = Column(String(36), primary_key=True)
-    requester_id = Column(String(255), nullable=False, index=True)
-    addressee_id = Column(String(255), nullable=False, index=True)
+    requester_id = Column(String(255), nullable=False)
+    addressee_id = Column(String(255), nullable=False)
     status = Column(String(20), nullable=False, server_default="pending")
 
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
@@ -631,8 +633,8 @@ class ResourceShare(Base):
     __tablename__ = "resource_shares"
 
     id = Column(String(36), primary_key=True)
-    owner_id = Column(String(255), nullable=False, index=True)
-    shared_with_id = Column(String(255), nullable=False, index=True)
+    owner_id = Column(String(255), nullable=False)
+    shared_with_id = Column(String(255), nullable=False)
     resource_type = Column(String(50), nullable=False)
     permission = Column(String(20), nullable=False, server_default="view")
     status = Column(String(20), nullable=False, server_default="pending")
