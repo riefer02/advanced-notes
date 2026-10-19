@@ -55,6 +55,26 @@ class Config:
     MAX_IMAGE_BYTES: int = 6 * 1024 * 1024  # per vinyl image
     MAX_AVATAR_BYTES: int = 1 * 1024 * 1024  # per avatar image
 
+    # External call timeouts / retries. Every client must be bounded so a
+    # hung provider cannot pin sync gunicorn workers indefinitely.
+    OPENAI_TIMEOUT_SECONDS: float = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "45"))
+    OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS: float = float(
+        os.getenv("OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS", "120")
+    )
+    OPENAI_MAX_RETRIES: int = int(os.getenv("OPENAI_MAX_RETRIES", "2"))
+    # Must match the pgvector column width used by the embedding tables.
+    EMBEDDING_DIMENSIONS: int = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
+    JWKS_TIMEOUT_SECONDS: float = float(os.getenv("JWKS_TIMEOUT_SECONDS", "5"))
+    JWKS_ATTEMPTS: int = int(os.getenv("JWKS_ATTEMPTS", "2"))
+
+    # Database pool / connect bounds.
+    DB_CONNECT_TIMEOUT_SECONDS: int = int(os.getenv("DB_CONNECT_TIMEOUT_SECONDS", "5"))
+    DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "5"))
+    DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "10"))
+    DB_POOL_TIMEOUT_SECONDS: int = int(os.getenv("DB_POOL_TIMEOUT_SECONDS", "10"))
+    DB_POOL_RECYCLE_SECONDS: int = int(os.getenv("DB_POOL_RECYCLE_SECONDS", "1800"))
+    SQLITE_LOCK_TIMEOUT_SECONDS: int = int(os.getenv("SQLITE_LOCK_TIMEOUT_SECONDS", "15"))
+
     # Flask settings
     FLASK_ENV: str = os.getenv("FLASK_ENV", "development")
     DEBUG: bool = FLASK_ENV == "development"

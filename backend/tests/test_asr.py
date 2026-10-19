@@ -61,7 +61,7 @@ def test_transcribe_bytes_rejects_exactly_too_large():
 # ============================================================================
 
 
-@patch("app.asr.get_openai_client")
+@patch("app.asr.get_transcription_client")
 def test_transcribe_bytes_uses_webm_extension(mock_client):
     """Uses .webm extension for audio/webm MIME type."""
     mock_response = MagicMock()
@@ -81,7 +81,7 @@ def test_transcribe_bytes_uses_webm_extension(mock_client):
     mock_openai.audio.transcriptions.create.assert_called_once()
 
 
-@patch("app.asr.get_openai_client")
+@patch("app.asr.get_transcription_client")
 def test_transcribe_bytes_uses_mp3_extension(mock_client):
     """Uses .mp3 extension for audio/mpeg MIME type."""
     mock_response = MagicMock()
@@ -98,7 +98,7 @@ def test_transcribe_bytes_uses_mp3_extension(mock_client):
     assert text == "mp3 transcription"
 
 
-@patch("app.asr.get_openai_client")
+@patch("app.asr.get_transcription_client")
 def test_transcribe_bytes_handles_codec_suffix(mock_client):
     """Handles MIME types with codec suffixes."""
     mock_response = MagicMock()
@@ -115,7 +115,7 @@ def test_transcribe_bytes_handles_codec_suffix(mock_client):
     assert text == "opus transcription"
 
 
-@patch("app.asr.get_openai_client")
+@patch("app.asr.get_transcription_client")
 def test_transcribe_bytes_defaults_to_webm(mock_client):
     """Defaults to .webm extension for unknown MIME types."""
     mock_response = MagicMock()
@@ -132,7 +132,7 @@ def test_transcribe_bytes_defaults_to_webm(mock_client):
     assert text == "default transcription"
 
 
-@patch("app.asr.get_openai_client")
+@patch("app.asr.get_transcription_client")
 def test_transcribe_bytes_handles_none_content_type(mock_client):
     """Handles None content type gracefully."""
     mock_response = MagicMock()
@@ -154,7 +154,7 @@ def test_transcribe_bytes_handles_none_content_type(mock_client):
 # ============================================================================
 
 
-@patch("app.asr.get_openai_client")
+@patch("app.asr.get_transcription_client")
 def test_transcribe_bytes_returns_metadata(mock_client):
     """Returns metadata dict with model and device info."""
     mock_response = MagicMock()
@@ -177,7 +177,7 @@ def test_transcribe_bytes_returns_metadata(mock_client):
     assert meta["duration_sec"] == 5.5
 
 
-@patch("app.asr.get_openai_client")
+@patch("app.asr.get_transcription_client")
 def test_transcribe_bytes_handles_missing_metadata_attrs(mock_client):
     """Handles response without language/duration attributes."""
     mock_response = MagicMock(spec=["text"])  # Only has 'text' attribute
@@ -201,7 +201,7 @@ def test_transcribe_bytes_handles_missing_metadata_attrs(mock_client):
 # ============================================================================
 
 
-@patch("app.asr.get_openai_client")
+@patch("app.asr.get_transcription_client")
 def test_transcribe_bytes_accepts_minimum_size(mock_client):
     """Accepts audio data at exactly 1000 bytes."""
     mock_response = MagicMock()
@@ -219,7 +219,7 @@ def test_transcribe_bytes_accepts_minimum_size(mock_client):
     assert text == "minimum size"
 
 
-@patch("app.asr.get_openai_client")
+@patch("app.asr.get_transcription_client")
 def test_transcribe_bytes_accepts_maximum_size(mock_client):
     """Accepts audio data at exactly 25MB."""
     mock_response = MagicMock()

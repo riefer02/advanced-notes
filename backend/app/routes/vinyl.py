@@ -12,6 +12,7 @@ from ..services import s3_vinyl
 from ..services.container import get_services
 from ..services.embeddings import vector_to_json, vector_to_pg_literal
 from ..services.file_validation import image_matches_declared_type, normalize_mime
+from ..services.resilience import require_external, with_fallback
 from ._helpers import (
     _maybe_send_cost_alert,
     api_error,
@@ -211,7 +212,10 @@ def extract_vinyl_from_photos():
         image_urls.append(f"data:{mime};base64,{data}")
 
     try:
-        result = svc.vinyl_extractor.extract(image_urls)
+        result = require_external(
+            lambda: svc.vinyl_extractor.extract(image_urls),
+            service="vinyl extraction",
+        )
 
         svc.usage_tracking.record_usage(
             user_id=user_id,
@@ -281,10 +285,11 @@ def update_vinyl_record(record_id: str):
         if not success:
             return api_error("Vinyl record not found", 404)
 
-        # Best-effort embedding refresh
+        # Best-effort embedding refresh.
         updated = svc.storage.get_vinyl_record(user_id, record_id)
         if updated:
-            try:
+
+            def _refresh_vinyl_embedding() -> None:
                 content = f"{updated.artist} - {updated.album_title}"
                 if updated.genre:
                     content += f" [{', '.join(updated.genre)}]"
@@ -308,8 +313,8 @@ def update_vinyl_record(record_id: str):
                     content_hash=content_hash,
                     embedding_value=embedding_value,
                 )
-            except Exception as e:
-                print(f"Vinyl embedding failed for {record_id}: {e}")
+
+            with_fallback(_refresh_vinyl_embedding, fallback=None, service="vinyl embeddings")
 
         return jsonify(updated.model_dump() if updated else {})
 
@@ -499,7 +504,10 @@ def extract_vinyl_metadata(record_id: str):
             dl = s3_vinyl.presign_get_object(storage_key=img.storage_key)
             image_urls.append(dl.url)
 
-        result = svc.vinyl_extractor.extract(image_urls)
+        result = require_external(
+            lambda: svc.vinyl_extractor.extract(image_urls),
+            service="vinyl extraction",
+        )
 
         svc.usage_tracking.record_usage(
             user_id=user_id,

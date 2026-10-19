@@ -735,3 +735,58 @@ def test_internal_error_does_not_leak_exception_text(client, app, monkeypatch): 
     assert resp.status_code == 500
     assert secret not in resp.get_data(as_text=True)
     assert resp.get_json()["error"] == "Internal server error"
+
+
+def test_transcribe_falls_back_to_inbox_when_categorizer_fails(client, app, monkeypatch):  # noqa: ANN001
+    """A categorization outage must not lose the transcript."""
+    from app.routes import _helpers as _route_helpers
+    from app.services import s3_audio as _s3_audio
+
+    monkeypatch.setattr(
+        _route_helpers,
+        "transcribe_bytes",
+        lambda *a, **k: ("hello", {"duration": 1.0, "model": "test"}),
+    )
+
+    def _categorizer_down(*args, **kwargs):  # noqa: ANN002, ANN003, ARG001
+        raise RuntimeError("openai is down")
+
+    monkeypatch.setattr(
+        app.extensions["services"].categorizer, "categorize", _categorizer_down
+    )
+    monkeypatch.setattr(_s3_audio, "put_object_bytes", lambda **kwargs: None)
+
+    resp = client.post(
+        "/api/transcribe",
+        data=b"x" * 2000,
+        headers={"X-Test-User-Id": "user-a", "Content-Type": "audio/m4a"},
+    )
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["text"] == "hello"
+    assert payload["categorization"]["folder_path"] == "inbox"
+    assert payload["categorization"]["confidence"] == 0.0
+
+
+def test_transcribe_returns_503_when_asr_provider_fails(client, monkeypatch):  # noqa: ANN001
+    """An upstream transcription outage is 503, not a leaked 500."""
+    from app.routes import _helpers as _route_helpers
+    from app.services import s3_audio as _s3_audio
+
+    def _asr_down(*args, **kwargs):  # noqa: ANN002, ANN003, ARG001
+        raise RuntimeError("secret upstream detail")
+
+    monkeypatch.setattr(_route_helpers, "transcribe_bytes", _asr_down)
+    monkeypatch.setattr(_s3_audio, "put_object_bytes", lambda **kwargs: None)
+    monkeypatch.setattr(_s3_audio, "delete_object", lambda **kwargs: None)
+
+    resp = client.post(
+        "/api/transcribe",
+        data=b"x" * 2000,
+        headers={"X-Test-User-Id": "user-a", "Content-Type": "audio/m4a"},
+    )
+
+    assert resp.status_code == 503
+    body = resp.get_data(as_text=True)
+    assert "secret upstream detail" not in body

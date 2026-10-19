@@ -9,7 +9,7 @@ from __future__ import annotations
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
 
-from .openai_provider import chat_model, get_openai_client
+from .openai_provider import build_openai_client, chat_model
 from .query_planner import QueryPlan
 
 
@@ -58,7 +58,7 @@ class AskService:
         model: str | None = None,
         client: OpenAI | None = None,
     ):
-        self.client = client or (OpenAI(api_key=api_key) if api_key else get_openai_client())
+        self.client = client or build_openai_client(api_key)
         self.model = model or chat_model()
 
     def answer(

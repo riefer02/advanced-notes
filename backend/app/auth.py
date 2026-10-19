@@ -15,6 +15,9 @@ from flask import current_app, jsonify, request
 from jose import jwt
 from jose.exceptions import JWTError
 
+from .config import Config
+from .services.resilience import retry_with_backoff
+
 logger = logging.getLogger(__name__)
 
 # Clerk configuration from environment
@@ -54,10 +57,18 @@ def get_jwks(*, force_refresh: bool = False) -> dict[str, Any]:
         return _jwks_cache
 
     jwks_url = f'https://{CLERK_DOMAIN}/.well-known/jwks.json'
-    try:
-        response = requests.get(jwks_url, timeout=10)
+
+    def _fetch_jwks():
+        response = requests.get(jwks_url, timeout=Config.JWKS_TIMEOUT_SECONDS)
         response.raise_for_status()
-        jwks = response.json()
+        return response.json()
+
+    try:
+        jwks = retry_with_backoff(
+            _fetch_jwks,
+            service="Clerk JWKS",
+            attempts=Config.JWKS_ATTEMPTS,
+        )
     except Exception as e:
         # Prefer a stale key set over logging everyone out during an outage:
         # previously valid signing keys remain valid until Clerk revokes them.

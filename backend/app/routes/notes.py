@@ -7,6 +7,7 @@ from ..config import Config
 from ..services import s3_audio
 from ..services.container import get_services
 from ..services.models import NoteMetadata
+from ..services.resilience import with_fallback
 from ._helpers import api_error, api_error_from_exception, parse_pagination
 
 logger = logging.getLogger(__name__)
@@ -94,15 +95,19 @@ def update_note(note_id: str):
 
         updated_note = svc.storage.get_note(user_id, note_id)
 
-        # Best-effort embedding refresh
+        # Best-effort embedding refresh: never fail a saved update over it.
         if updated_note:
-            svc.embeddings.upsert_for_note(
-                storage=svc.storage,
-                user_id=user_id,
-                note_id=updated_note.id,
-                title=updated_note.title,
-                content=updated_note.content,
-                tags=updated_note.tags,
+            with_fallback(
+                lambda: svc.embeddings.upsert_for_note(
+                    storage=svc.storage,
+                    user_id=user_id,
+                    note_id=updated_note.id,
+                    title=updated_note.title,
+                    content=updated_note.content,
+                    tags=updated_note.tags,
+                ),
+                fallback=None,
+                service="embeddings",
             )
 
         return jsonify(updated_note.model_dump())

@@ -4,6 +4,48 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
+// Never let a request hang forever: a stuck fetch keeps the UI in a
+// loading state and holds a connection open.
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
+const UPLOAD_REQUEST_TIMEOUT_MS = 120_000
+
+export class RequestTimeoutError extends Error {
+  constructor() {
+    super('Request timed out. Please try again.')
+    this.name = 'TimeoutError'
+  }
+}
+
+function timeoutSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms)
+  }
+  const controller = new AbortController()
+  window.setTimeout(() => controller.abort(), ms)
+  return controller.signal
+}
+
+function isTimeout(error: unknown): boolean {
+  return (
+    error instanceof DOMException && (error.name === 'AbortError' || error.name === 'TimeoutError')
+  )
+}
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  try {
+    return await fetch(input, { ...init, signal: timeoutSignal(timeoutMs) })
+  } catch (error) {
+    if (isTimeout(error)) {
+      throw new RequestTimeoutError()
+    }
+    throw error
+  }
+}
+
 // ============================================================================
 // Auth Helper
 // ============================================================================
@@ -68,7 +110,7 @@ export async function apiRequest<T>(
     fetchOptions.body = JSON.stringify(options.body)
   }
 
-  const response = await fetch(url, fetchOptions)
+  const response = await fetchWithTimeout(url, fetchOptions, DEFAULT_REQUEST_TIMEOUT_MS)
 
   if (!response.ok) {
     const errorText = await response.text()
@@ -96,11 +138,15 @@ export async function apiUpload<T>(
 ): Promise<T> {
   const headers = new Headers(await getAuthHeaders())
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    method,
-    headers,
-    body: formData,
-  })
+  const response = await fetchWithTimeout(
+    `${API_BASE_URL}${endpoint}`,
+    {
+      method,
+      headers,
+      body: formData,
+    },
+    UPLOAD_REQUEST_TIMEOUT_MS
+  )
 
   if (!response.ok) {
     const errorText = await response.text()

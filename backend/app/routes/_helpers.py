@@ -16,6 +16,7 @@ from ..asr import transcribe_bytes
 from ..config import Config
 from ..services import s3_audio
 from ..services.container import get_services
+from ..services.resilience import ExternalServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,17 @@ def api_error_from_exception(
     Exception text must never reach the client: it leaks SQL, filesystem
     paths, and upstream provider details.
     """
+    if isinstance(exc, ExternalServiceError):
+        # A provider outage is not our bug: report it as unavailable, with a
+        # safe message that does not include the upstream error.
+        logger.warning(
+            "External service unavailable on %s %s: %s",
+            request.method,
+            request.path,
+            exc.service,
+        )
+        return api_error(exc.message, 503)
+
     logger.exception(
         "Unhandled error on %s %s: %s",
         request.method,
@@ -297,7 +309,8 @@ def _transcribe_audio_clip(
         with suppress(Exception):
             s3_audio.delete_object(storage_key=audio_storage_key)
         svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
-        raise
+        # Provider/network failure, not a client error: map to 503 upstream.
+        raise ExternalServiceError("Transcription service") from e
 
     audio_duration = meta.get("duration")
     if audio_duration is not None:

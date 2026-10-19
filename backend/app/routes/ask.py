@@ -3,10 +3,13 @@ import json as _json
 from flask import Blueprint, g, jsonify, request
 
 from ..auth import require_auth
+from ..config import Config
 from ..services.ask_service import RetrievedNote
 from ..services.container import get_services
 from ..services.embeddings import vector_to_json, vector_to_pg_literal
 from ..services.folder_utils import extract_folder_paths
+from ..services.query_planner import AskIntent, QueryPlan
+from ..services.resilience import require_external, with_fallback
 from ._helpers import (
     _maybe_send_cost_alert,
     api_error,
@@ -41,14 +44,28 @@ def ask_notes():
 
         known_folders = extract_folder_paths(folder_tree)
 
-        plan = svc.planner.plan(
-            question=query,
-            known_tags=known_tags,
-            known_folders=known_folders,
-            result_limit=max_results,
+        plan = with_fallback(
+            lambda: svc.planner.plan(
+                question=query,
+                known_tags=known_tags,
+                known_folders=known_folders,
+                result_limit=max_results,
+            ),
+            fallback=lambda: QueryPlan(
+                intent=AskIntent.fact_lookup,
+                semantic_query=query,
+                result_limit=max_results,
+            ),
+            service="query planner",
         )
 
-        q_vec = svc.embeddings.embed_query(plan.semantic_query)
+        # If embeddings are down, fall back to a zero vector: FTS still works
+        # and the request degrades to keyword search instead of failing.
+        q_vec = with_fallback(
+            lambda: svc.embeddings.embed_query(plan.semantic_query),
+            fallback=lambda: [0.0] * Config.EMBEDDING_DIMENSIONS,
+            service="embeddings",
+        )
         q_literal = (
             vector_to_pg_literal(q_vec)
             if svc.storage.dialect == "postgresql"
@@ -92,7 +109,10 @@ def ask_notes():
                 )
             )
 
-        ask_result = svc.asker.answer(query, plan, retrieved_notes, return_usage=True)
+        ask_result = require_external(
+            lambda: svc.asker.answer(query, plan, retrieved_notes, return_usage=True),
+            service="ask service",
+        )
         answer = ask_result.answer
 
         if ask_result.usage:
