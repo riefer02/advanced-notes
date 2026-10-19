@@ -124,6 +124,15 @@ class Config:
     # Email notifications via AWS SES
     SES_REGION: str | None = os.getenv("SES_REGION", "us-east-2")
     SES_SENDER_EMAIL: str | None = os.getenv("SES_SENDER_EMAIL")
+    # SNS topic that receives SES bounce/complaint notifications. Required
+    # before the webhook will accept anything.
+    SES_SNS_TOPIC_ARN: str | None = os.getenv("SES_SNS_TOPIC_ARN")
+    SES_SNS_AUTO_CONFIRM: bool = (
+        os.getenv("SES_SNS_AUTO_CONFIRM", "false").lower() in {"1", "true", "yes", "on"}
+    )
+    SES_SNS_MAX_MESSAGE_AGE_SECONDS: int = int(
+        os.getenv("SES_SNS_MAX_MESSAGE_AGE_SECONDS", "3600")
+    )
     ADMIN_EMAIL: str | None = os.getenv("ADMIN_EMAIL")
     # instant | digest | off — controls per-signup notifications. Digest
     # sends one daily summary instead of one email per new user.

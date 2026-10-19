@@ -177,6 +177,31 @@ class EmailService:
             body=body,
         )
 
+    def send_delivery_problem_notification(
+        self,
+        *,
+        event_type: str,
+        subtype: str | None,
+        recipients: list[str],
+        sns_message_id: str,
+    ) -> bool:
+        """Queue an alert for a permanent bounce or a complaint."""
+        body = "\n".join(
+            [
+                f"SES reported a {event_type.lower()}",
+                "",
+                f"Type: {event_type}",
+                f"Subtype: {subtype or '(unknown)'}",
+                f"Recipients: {', '.join(recipients) or '(unknown)'}",
+                f"SNS message ID: {sns_message_id}",
+            ]
+        )
+        return self._enqueue(
+            dedupe_key=f"email_event:{sns_message_id}",
+            subject=f"[Chisos][Email Problem] {event_type}: {subtype or 'unknown'}",
+            body=body,
+        )
+
     def maybe_enqueue_daily_digest(self) -> bool:
         """In digest mode, send one daily summary of new users (09:00 UTC)."""
         if Config.NEW_USER_NOTIFICATION_MODE != "digest" or self.storage is None:

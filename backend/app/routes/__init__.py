@@ -18,6 +18,7 @@ from . import (
     transcription,
     usage,
     vinyl,
+    webhooks,
 )
 
 api = Blueprint("api", __name__)
@@ -36,5 +37,6 @@ for _module in [
     usage,
     feedback,
     dashboard,
+    webhooks,
 ]:
     api.register_blueprint(_module.bp)

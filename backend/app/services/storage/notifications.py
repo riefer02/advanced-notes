@@ -9,6 +9,7 @@ from uuid import uuid4
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
+from ...database import EmailEvent as EmailEventORM
 from ...database import EmailOutbox as EmailOutboxORM
 
 
@@ -84,6 +85,32 @@ class NotificationStorageMixin:
                     )
 
         return claimed
+
+    def record_email_event(
+        self,
+        *,
+        sns_message_id: str,
+        event_type: str,
+        subtype: str | None,
+        recipients: list[str],
+        detail: str | None = None,
+    ) -> bool:
+        """Persist a bounce/complaint; returns False for a duplicate SNS message."""
+        row = EmailEventORM(
+            id=str(uuid4()),
+            sns_message_id=sns_message_id,
+            event_type=event_type,
+            subtype=subtype,
+            recipients=",".join(recipients),
+            detail=detail,
+            created_at=datetime.utcnow(),
+        )
+        try:
+            with self._session_scope() as session:
+                session.add(row)
+            return True
+        except IntegrityError:
+            return False
 
     def mark_email_sent(self, email_id: str) -> bool:
         with self._session_scope() as session:

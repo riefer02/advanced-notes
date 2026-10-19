@@ -128,6 +128,8 @@ class _FakeEmailService:
 
     def send_error_notification(self, **kwargs):
         return False
+    def send_delivery_problem_notification(self, **kwargs):
+        return False
 
 
 def test_transcribe_uploads_audio_to_s3_and_links_clip(client, app, monkeypatch):  # noqa: ANN001
