@@ -449,6 +449,25 @@ class EmailOutbox(Base):
     )
 
 
+class EmailEvent(Base):
+    """Delivery events reported by SES through SNS (bounce/complaint)."""
+
+    __tablename__ = "email_events"
+
+    id = Column(String(36), primary_key=True)
+    sns_message_id = Column(String(255), nullable=False, unique=True)
+    event_type = Column(String(50), nullable=False)  # Bounce / Complaint / Delivery
+    subtype = Column(String(50), nullable=True)  # Permanent / Transient / feedback type
+    recipients = Column(Text, nullable=False)  # comma-separated addresses
+    detail = Column(Text, nullable=True)  # raw SNS message JSON
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_email_events_type_created", "event_type", "created_at"),
+    )
+
+
 class Feedback(Base):
     """
     User feedback submissions (bug reports, feature requests, general feedback).
