@@ -6,6 +6,7 @@ from uuid import uuid4
 from flask import Blueprint, g, jsonify, request
 
 from ..auth import require_auth
+from ..config import Config
 from ..services import s3_vinyl
 from ..services.container import get_services
 from ..services.embeddings import vector_to_json, vector_to_pg_literal
@@ -193,10 +194,13 @@ def extract_vinyl_from_photos():
     allowed_mimes = {"image/jpeg", "image/png", "image/webp", "image/heic"}
     image_urls: list[str] = []
     for f in files:
-        mime = f.content_type or "image/jpeg"
+        mime = (f.content_type or "image/jpeg").split(";")[0].strip().lower()
         if mime not in allowed_mimes:
             return api_error(f"Unsupported image type: {mime}", 400)
-        data = base64.b64encode(f.read()).decode("utf-8")
+        raw = f.read(Config.MAX_IMAGE_BYTES + 1)
+        if len(raw) > Config.MAX_IMAGE_BYTES:
+            return api_error("Image too large (max 6MB per image)", 413)
+        data = base64.b64encode(raw).decode("utf-8")
         image_urls.append(f"data:{mime};base64,{data}")
 
     try:
@@ -360,10 +364,16 @@ def create_vinyl_image(record_id: str):
         if image_type not in valid_types:
             return api_error(f"'image_type' must be one of: {', '.join(sorted(valid_types))}", 400)
 
-        mime_type = f.content_type or "image/jpeg"
-        file_data = f.read()
+        mime_type = (f.content_type or "image/jpeg").split(";")[0].strip().lower()
+        allowed_mimes = {"image/jpeg", "image/png", "image/webp", "image/heic"}
+        if mime_type not in allowed_mimes:
+            return api_error(f"Unsupported image type: {mime_type}", 400)
+
+        file_data = f.read(Config.MAX_IMAGE_BYTES + 1)
         bytes_value = len(file_data)
 
+        if bytes_value > Config.MAX_IMAGE_BYTES:
+            return api_error("Image too large (max 6MB)", 413)
         if bytes_value == 0:
             return api_error("Empty file", 400)
 

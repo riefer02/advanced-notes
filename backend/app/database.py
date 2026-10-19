@@ -656,6 +656,19 @@ class ResourceShare(Base):
     )
 
 
+def _normalize_database_url(url: str) -> str:
+    """Pin Postgres URLs to the psycopg2 driver.
+
+    SQLAlchemy 2.1 defaults ``postgresql://`` to psycopg (v3), which this
+    project does not install. Making the driver explicit keeps dev, CI, and
+    production on the same DBAPI regardless of the SQLAlchemy version.
+    """
+    for prefix in ("postgresql://", "postgres://"):
+        if url.startswith(prefix):
+            return f"postgresql+psycopg2://{url[len(prefix):]}"
+    return url
+
+
 def get_database_url() -> str:
     """
     Get database URL from environment, defaulting to SQLite.
@@ -667,7 +680,7 @@ def get_database_url() -> str:
     
     if database_url:
         # PostgreSQL
-        return database_url
+        return _normalize_database_url(database_url)
     
     # Debug/Safety check
     flask_env = os.getenv("FLASK_ENV", "development")
@@ -727,7 +740,7 @@ def get_session() -> Generator[Session, None, None]:
 
 def create_engine_for_url(database_url: str | None = None) -> Engine:
     """Build a SQLAlchemy engine for the given URL (or default environment)."""
-    url = database_url or get_database_url()
+    url = _normalize_database_url(database_url or get_database_url())
     engine = create_engine(
         url,
         future=True,

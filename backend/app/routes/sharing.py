@@ -155,9 +155,10 @@ def upload_avatar():
         if "file" not in request.files:
             return api_error("No file provided")
         file = request.files["file"]
-        data = file.read()
+        # Bound the read so a lying/absent Content-Length cannot exhaust memory.
+        data = file.read(_AVATAR_MAX_BYTES + 1)
         if len(data) > _AVATAR_MAX_BYTES:
-            return api_error("File too large (max 1MB)")
+            return api_error("File too large (max 1MB)", 413)
         if not data:
             return api_error("Empty file")
 

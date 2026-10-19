@@ -68,7 +68,9 @@ function TodosPage() {
   const todos = data?.todos || []
   const suggestedTodos = todos.filter((t: Todo) => t.status === 'suggested')
   const activeTodos =
-    activeTab === 'all' ? todos.filter((t: Todo) => t.status !== 'suggested') : todos
+    activeTab === 'all'
+      ? todos.filter((t: Todo) => t.status === 'accepted')
+      : todos.filter((t: Todo) => t.status === 'completed')
 
   const tabs: { key: TabType; label: string; count?: number }[] = [
     {

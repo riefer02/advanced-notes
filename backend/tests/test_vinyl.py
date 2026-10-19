@@ -563,3 +563,20 @@ class TestVinylUserIsolation:
         assert response.status_code == 200
         data = response.get_json()
         assert data["total"] == 0
+
+    def test_failed_delete_does_not_remove_owner_tracks(
+        self, client, sample_record, auth_headers
+    ):
+        """A non-owner delete must not cascade-delete the owner's child rows.
+
+        Regression: the storage layer used to delete tracks/images by
+        record_id before verifying that the caller owned the record, letting a
+        viewer of a shared library wipe the owner's data.
+        """
+        other_headers = {"X-Test-User-Id": "other-user-456"}
+        response = client.delete(f"/api/vinyl/{sample_record}", headers=other_headers)
+        assert response.status_code == 404
+
+        response = client.get(f"/api/vinyl/{sample_record}", headers=auth_headers)
+        assert response.status_code == 200
+        assert len(response.get_json()["tracks"]) == 3

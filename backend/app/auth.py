@@ -4,7 +4,9 @@ Clerk Authentication Middleware for Flask
 This module provides JWT verification for Clerk authentication tokens.
 """
 
+import logging
 import os
+import time
 from functools import wraps
 from typing import Any
 
@@ -13,36 +15,68 @@ from flask import current_app, jsonify, request
 from jose import jwt
 from jose.exceptions import JWTError
 
+logger = logging.getLogger(__name__)
+
 # Clerk configuration from environment
 CLERK_DOMAIN = os.getenv('CLERK_DOMAIN', 'clerk.your-domain.com')
 CLERK_SECRET_KEY = os.getenv('CLERK_SECRET_KEY')
 
-# Cache for JWKS
+# Cache for JWKS. Signing keys rotate, so entries expire; an unknown `kid`
+# forces an immediate refresh (see verify_clerk_token).
+_JWKS_TTL_SECONDS = 3600
 _jwks_cache: dict[str, Any] | None = None
+_jwks_cache_expires_at: float = 0.0
 
 
-def get_jwks() -> dict[str, Any]:
+class JWKSUnavailableError(Exception):
+    """Raised when Clerk's JWKS cannot be fetched and no cached copy exists."""
+
+
+def get_jwks(*, force_refresh: bool = False) -> dict[str, Any]:
     """
     Fetch Clerk's JSON Web Key Set (JWKS) for JWT verification.
-    
+
+    Args:
+        force_refresh: bypass the cache (used when a token references an
+            unknown key ID, which usually means the keys rotated).
+
     Returns:
         JWKS dictionary
+
+    Raises:
+        JWKSUnavailableError: the IdP could not be reached and no cached copy
+            is available.
     """
-    global _jwks_cache
-    
-    if _jwks_cache is not None:
+    global _jwks_cache, _jwks_cache_expires_at
+
+    now = time.monotonic()
+    if not force_refresh and _jwks_cache is not None and now < _jwks_cache_expires_at:
         return _jwks_cache
-    
-    # Fetch JWKS from Clerk
+
     jwks_url = f'https://{CLERK_DOMAIN}/.well-known/jwks.json'
     try:
         response = requests.get(jwks_url, timeout=10)
         response.raise_for_status()
-        _jwks_cache = response.json()
-        return _jwks_cache
+        jwks = response.json()
     except Exception as e:
-        print(f"Error fetching JWKS: {e}")
-        raise
+        # Prefer a stale key set over logging everyone out during an outage:
+        # previously valid signing keys remain valid until Clerk revokes them.
+        if _jwks_cache is not None:
+            logger.warning("JWKS refresh failed, using cached keys: %s", e)
+            return _jwks_cache
+        logger.error("Error fetching JWKS: %s", e)
+        raise JWKSUnavailableError(str(e)) from e
+
+    _jwks_cache = jwks
+    _jwks_cache_expires_at = time.monotonic() + _JWKS_TTL_SECONDS
+    return _jwks_cache
+
+
+def _find_key(jwks: dict[str, Any], kid: str) -> dict[str, Any] | None:
+    for jwk_key in jwks.get('keys', []):
+        if jwk_key.get('kid') == kid:
+            return jwk_key
+    return None
 
 
 def verify_clerk_token(token: str) -> dict[str, Any] | None:
@@ -58,25 +92,26 @@ def verify_clerk_token(token: str) -> dict[str, Any] | None:
     try:
         # Get the JWKS
         jwks = get_jwks()
-        
+
         # Decode the token header to get the key ID
         unverified_header = jwt.get_unverified_header(token)
         kid = unverified_header.get('kid')
-        
+
         if not kid:
             return None
-        
+
         # Find the matching key in JWKS
-        key = None
-        for jwk_key in jwks.get('keys', []):
-            if jwk_key.get('kid') == kid:
-                key = jwk_key
-                break
-        
+        key = _find_key(jwks, kid)
+
+        # An unknown kid usually means Clerk rotated its signing keys. Refresh
+        # once before rejecting the token.
         if not key:
-            print(f"Key {kid} not found in JWKS")
-            return None
-        
+            logger.info("Key %s not in cached JWKS; refreshing", kid)
+            key = _find_key(get_jwks(force_refresh=True), kid)
+            if not key:
+                logger.warning("Key %s not found in refreshed JWKS", kid)
+                return None
+
         # Verify and decode the token
         payload = jwt.decode(
             token,
@@ -88,14 +123,16 @@ def verify_clerk_token(token: str) -> dict[str, Any] | None:
             },
             issuer=f'https://{CLERK_DOMAIN}'
         )
-        
+
         return payload
-        
+
     except JWTError as e:
-        print(f"JWT verification failed: {e}")
+        logger.info("JWT verification failed: %s", e)
         return None
+    except JWKSUnavailableError:
+        raise
     except Exception as e:
-        print(f"Unexpected error verifying token: {e}")
+        logger.exception("Unexpected error verifying token: %s", e)
         return None
 
 
@@ -145,16 +182,19 @@ def require_auth(f):
             return jsonify({'error': 'Missing authentication token'}), 401
         
         # Verify token
-        payload = verify_clerk_token(token)
-        
-        if not payload:
+        try:
+            payload = verify_clerk_token(token)
+        except JWKSUnavailableError:
+            return jsonify({'error': 'Authentication temporarily unavailable'}), 503
+
+        if not payload or not payload.get('sub'):
             return jsonify({'error': 'Invalid authentication token'}), 401
-        
+
         # Store user info in Flask's g object
         from flask import g
         g.user = payload
-        g.user_id = payload.get('sub')  # Clerk uses 'sub' for user ID
-        
+        g.user_id = payload['sub']  # Clerk uses 'sub' for user ID
+
         return f(*args, **kwargs)
     
     return decorated_function
@@ -186,8 +226,11 @@ def optional_auth(f):
         
         if token:
             # Verify token
-            payload = verify_clerk_token(token)
-            
+            try:
+                payload = verify_clerk_token(token)
+            except JWKSUnavailableError:
+                payload = None
+
             if payload:
                 # Store user info in Flask's g object
                 from flask import g

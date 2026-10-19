@@ -585,3 +585,23 @@ class TestMealUserIsolation:
         assert response.status_code == 200
         data = response.get_json()
         assert len(data["meals"]) == 0
+
+
+class TestMealCounts:
+    """Regression tests for month-boundary handling in meal counts."""
+
+    def test_get_meal_counts_clamps_today_to_month_length(self, storage, monkeypatch):
+        """Viewing February on the 31st must not raise ValueError."""
+        from datetime import datetime as real_datetime
+
+        import app.services.storage.meals as meals_module
+
+        class _FrozenDatetime(real_datetime):
+            @classmethod
+            def utcnow(cls):
+                return cls(2026, 3, 31, 12, 0, 0)
+
+        monkeypatch.setattr(meals_module, "datetime", _FrozenDatetime)
+
+        counts = storage.get_meal_counts("meal-counts-user", 2026, 2)
+        assert counts is not None
