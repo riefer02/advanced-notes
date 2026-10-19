@@ -13,9 +13,12 @@ def test_client_uses_configured_timeout_and_retries():
         client.close()
 
 
-def test_transcription_client_uses_longer_timeout():
-    client = get_transcription_client()
+def test_transcription_client_uses_longer_timeout(monkeypatch):
+    monkeypatch.setattr(Config, "OPENAI_API_KEY", "sk-test")
+    get_transcription_client.cache_clear()
     try:
+        client = get_transcription_client()
         assert float(client.timeout) == Config.OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS
     finally:
         client.close()
+        get_transcription_client.cache_clear()

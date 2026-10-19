@@ -27,8 +27,7 @@ function timeoutSignal(ms: number): AbortSignal {
 
 function isTimeout(error: unknown): boolean {
   return (
-    error instanceof DOMException &&
-    (error.name === 'AbortError' || error.name === 'TimeoutError')
+    error instanceof DOMException && (error.name === 'AbortError' || error.name === 'TimeoutError')
   )
 }
 
