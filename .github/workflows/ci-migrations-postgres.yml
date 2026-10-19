@@ -2,7 +2,6 @@ name: CI - Postgres migrations
 
 on:
   pull_request:
-    branches: [main]
 
 jobs:
   alembic-postgres:

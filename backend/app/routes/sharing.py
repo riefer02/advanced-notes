@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from ..auth import require_auth
 from ..services import s3_avatar
 from ..services.container import get_services
-from ._helpers import api_error
+from ._helpers import api_error, api_error_from_exception
 
 bp = Blueprint("sharing", __name__)
 
@@ -93,7 +93,7 @@ def get_my_profile():
             )
         return jsonify(_enrich_profile(profile.model_dump()))
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.put("/profile")
@@ -138,7 +138,7 @@ def update_my_profile():
             return api_error("Profile not found", 404)
         return jsonify(_enrich_profile(profile.model_dump()))
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.put("/profile/avatar")
@@ -174,7 +174,7 @@ def upload_avatar():
             return api_error("Profile not found", 404)
         return jsonify(_enrich_profile(profile.model_dump()))
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.delete("/profile/avatar")
@@ -196,7 +196,7 @@ def delete_avatar():
         profile = svc.storage.update_user_profile_avatar(user_id, None)
         return jsonify(_enrich_profile(profile.model_dump()))
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/profile/username-available")
@@ -240,7 +240,7 @@ def get_user_profile(target_user_id):
             return api_error("Profile not found", 404)
         return jsonify(_enrich_profile(profile.model_dump()))
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 # ============================================================================
@@ -273,7 +273,7 @@ def list_friends():
 
         return jsonify({"friends": result})
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/friends/requests")
@@ -296,7 +296,7 @@ def list_friend_requests():
 
         return jsonify({"requests": result})
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/friends/sent")
@@ -319,7 +319,7 @@ def list_sent_requests():
 
         return jsonify({"sent": result})
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/friends/request")
@@ -351,7 +351,7 @@ def send_friend_request():
         friendship = svc.storage.create_friendship(user_id, target_id)
         return jsonify(friendship.model_dump()), 201
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/friends/<friendship_id>/accept")
@@ -373,7 +373,7 @@ def accept_friend_request(friendship_id):
         updated = svc.storage.update_friendship_status(friendship_id, "accepted")
         return jsonify(updated.model_dump())
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/friends/<friendship_id>/decline")
@@ -395,7 +395,7 @@ def decline_friend_request(friendship_id):
         updated = svc.storage.update_friendship_status(friendship_id, "declined")
         return jsonify(updated.model_dump())
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.delete("/friends/<friendship_id>")
@@ -417,7 +417,7 @@ def remove_friend(friendship_id):
         svc.storage.delete_friendship(friendship_id)
         return jsonify({"deleted": True})
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/friends/search")
@@ -435,7 +435,7 @@ def search_friends():
         profiles = svc.storage.search_user_profiles(q, exclude_user_id=user_id, limit=20)
         return jsonify({"users": [_enrich_profile(p.model_dump()) for p in profiles]})
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 # ============================================================================
@@ -477,7 +477,7 @@ def create_share():
         share = svc.storage.create_resource_share(user_id, shared_with_id, resource_type, permission)
         return jsonify(share.model_dump()), 201
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/shares")
@@ -511,7 +511,7 @@ def list_shares():
             "received": [enrich(s, "recipient") for s in received],
         })
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/shares/received")
@@ -534,7 +534,7 @@ def list_received_shares():
 
         return jsonify({"received": result})
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/shares/<share_id>/accept")
@@ -556,7 +556,7 @@ def accept_share(share_id):
         updated = svc.storage.update_share_status(share_id, "accepted")
         return jsonify(updated.model_dump())
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/shares/<share_id>/decline")
@@ -578,7 +578,7 @@ def decline_share(share_id):
         updated = svc.storage.update_share_status(share_id, "declined")
         return jsonify(updated.model_dump())
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.delete("/shares/<share_id>")
@@ -598,4 +598,4 @@ def revoke_share(share_id):
         svc.storage.update_share_status(share_id, "revoked")
         return jsonify({"deleted": True})
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)

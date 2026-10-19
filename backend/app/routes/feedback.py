@@ -2,7 +2,7 @@ from flask import Blueprint, g, jsonify, request
 
 from ..auth import require_auth
 from ..services.container import get_services
-from ._helpers import api_error, parse_pagination
+from ._helpers import api_error, api_error_from_exception, parse_pagination
 
 bp = Blueprint("feedback", __name__)
 
@@ -70,7 +70,7 @@ def create_feedback():
         return jsonify(feedback.model_dump()), 201
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/feedback")
@@ -95,4 +95,4 @@ def list_feedback():
         )
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)

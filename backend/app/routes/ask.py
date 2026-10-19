@@ -7,7 +7,13 @@ from ..services.ask_service import RetrievedNote
 from ..services.container import get_services
 from ..services.embeddings import vector_to_json, vector_to_pg_literal
 from ..services.folder_utils import extract_folder_paths
-from ._helpers import _maybe_send_cost_alert, api_error, parse_pagination, require_quota
+from ._helpers import (
+    _maybe_send_cost_alert,
+    api_error,
+    api_error_from_exception,
+    parse_pagination,
+    require_quota,
+)
 
 bp = Blueprint("ask", __name__)
 
@@ -142,7 +148,7 @@ def ask_notes():
             }
         return jsonify(response)
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 # ============================================================================
@@ -167,7 +173,7 @@ def list_digests():
             }
         )
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/digests/<digest_id>")
@@ -181,7 +187,7 @@ def get_digest(digest_id: str):
             return api_error("Digest not found", 404)
         return jsonify(digest.model_dump())
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.delete("/digests/<digest_id>")
@@ -195,7 +201,7 @@ def delete_digest(digest_id: str):
             return api_error("Digest not found", 404)
         return jsonify({"success": True})
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 # ============================================================================
@@ -220,7 +226,7 @@ def list_ask_history():
             }
         )
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/ask-history/<ask_id>")
@@ -234,7 +240,7 @@ def get_ask_history(ask_id: str):
             return api_error("Ask history item not found", 404)
         return jsonify(item.model_dump())
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.delete("/ask-history/<ask_id>")
@@ -248,4 +254,4 @@ def delete_ask_history(ask_id: str):
             return api_error("Ask history item not found", 404)
         return jsonify({"success": True})
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)

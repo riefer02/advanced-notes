@@ -1,3 +1,5 @@
+import logging
+
 from flask import Blueprint, g, jsonify, request
 
 from ..auth import require_auth
@@ -5,7 +7,9 @@ from ..config import Config
 from ..services import s3_audio
 from ..services.container import get_services
 from ..services.models import NoteMetadata
-from ._helpers import api_error, parse_pagination
+from ._helpers import api_error, api_error_from_exception, parse_pagination
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint("notes", __name__)
 
@@ -33,7 +37,7 @@ def list_notes():
         )
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/notes/<note_id>")
@@ -52,7 +56,7 @@ def get_note(note_id: str):
         return jsonify(note.model_dump())
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.put("/notes/<note_id>")
@@ -104,7 +108,7 @@ def update_note(note_id: str):
         return jsonify(updated_note.model_dump())
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.delete("/notes/<note_id>")
@@ -123,14 +127,20 @@ def delete_note(note_id: str):
                     try:
                         s3_audio.delete_object(storage_key=clip.storage_key)
                     except Exception as e:
-                        warning = f"Failed to delete one or more audio objects: {e}"
+                        logger.warning(
+                            "Failed to delete an audio object for note %s: %s", note_id, e
+                        )
+                        warning = "Failed to delete one or more audio objects"
             except Exception as e:
-                warning = f"Failed to list/delete note audio clips: {e}"
+                logger.warning("Failed to list/delete audio clips for note %s: %s", note_id, e)
+                warning = "Failed to list or delete note audio clips"
 
             try:
                 svc.storage.delete_audio_clips_for_note(user_id, note_id)
             except Exception as e:
-                return api_error(f"Failed to delete note audio clips: {e}", 500)
+                return api_error_from_exception(
+                    e, message="Failed to delete note audio clips"
+                )
 
         success = svc.storage.delete_note(user_id, note_id)
 
@@ -143,7 +153,7 @@ def delete_note(note_id: str):
         return jsonify(payload)
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 # ============================================================================
@@ -164,7 +174,7 @@ def get_folders():
         return jsonify({"folders": folder_tree.model_dump()})
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/folders/<path:folder_path>/stats")
@@ -180,7 +190,7 @@ def get_folder_stats(folder_path: str):
         return jsonify(stats.model_dump())
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 # ============================================================================
@@ -201,7 +211,7 @@ def get_tags():
         return jsonify({"tags": tags})
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/tags/<tag>/notes")
@@ -217,7 +227,7 @@ def get_notes_by_tag(tag: str):
         return jsonify({"tag": tag, "notes": [note.model_dump() for note in notes]})
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 # ============================================================================
@@ -243,4 +253,4 @@ def search_notes():
         return jsonify({"query": query, "results": [result.model_dump() for result in results]})
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)

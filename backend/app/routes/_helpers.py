@@ -59,6 +59,26 @@ def api_error(message: str, status: int = 400) -> tuple[dict, int]:
     return jsonify({"error": message}), status
 
 
+def api_error_from_exception(
+    exc: Exception,
+    *,
+    status: int = 500,
+    message: str = "Internal server error",
+) -> tuple[dict, int]:
+    """Log an exception server-side and return a client-safe error response.
+
+    Exception text must never reach the client: it leaks SQL, filesystem
+    paths, and upstream provider details.
+    """
+    logger.exception(
+        "Unhandled error on %s %s: %s",
+        request.method,
+        request.path,
+        exc,
+    )
+    return api_error(message, status)
+
+
 def parse_pagination(default_limit: int = 50, max_limit: int = 100) -> tuple[int, int]:
     """Parse limit and offset from query parameters with bounds checking."""
     try:

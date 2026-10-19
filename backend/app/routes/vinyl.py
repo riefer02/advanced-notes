@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import logging
 from contextlib import suppress
 from uuid import uuid4
 
@@ -13,10 +14,13 @@ from ..services.embeddings import vector_to_json, vector_to_pg_literal
 from ._helpers import (
     _maybe_send_cost_alert,
     api_error,
+    api_error_from_exception,
     parse_pagination,
     require_quota,
     resolve_target_user,
 )
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint("vinyl", __name__)
 
@@ -77,7 +81,7 @@ def create_vinyl_record():
         return jsonify(record.model_dump() if record else {"id": record_id}), 201
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/vinyl")
@@ -124,7 +128,7 @@ def list_vinyl_records():
         })
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 # Static paths MUST come before dynamic <record_id> paths
@@ -141,7 +145,7 @@ def get_vinyl_stats():
         stats = svc.storage.get_vinyl_collection_stats(target_user)
         return jsonify(stats)
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/vinyl/search")
@@ -174,7 +178,7 @@ def search_vinyl():
         })
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/vinyl/extract-photos")
@@ -217,7 +221,7 @@ def extract_vinyl_from_photos():
         return jsonify(result.model_dump())
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 # Dynamic <record_id> paths come AFTER static paths
@@ -236,7 +240,7 @@ def get_vinyl_record(record_id: str):
             return api_error("Vinyl record not found", 404)
         return jsonify(_enrich_vinyl_record(record.model_dump()))
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.put("/vinyl/<record_id>")
@@ -307,7 +311,7 @@ def update_vinyl_record(record_id: str):
         return jsonify(updated.model_dump() if updated else {})
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.delete("/vinyl/<record_id>")
@@ -325,7 +329,8 @@ def delete_vinyl_record(record_id: str):
                 with suppress(Exception):
                     s3_vinyl.delete_object(storage_key=img.storage_key)
         except Exception as e:
-            warning = f"Failed to delete some image objects: {e}"
+            logger.warning("Failed to delete image objects for record %s: %s", record_id, e)
+            warning = "Failed to delete some image objects"
 
         success = svc.storage.delete_vinyl_record(user_id, record_id)
         if not success:
@@ -337,7 +342,7 @@ def delete_vinyl_record(record_id: str):
         return jsonify(payload)
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/vinyl/<record_id>/images")
@@ -403,7 +408,7 @@ def create_vinyl_image(record_id: str):
         return jsonify({"image": (updated or image).model_dump()})
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.get("/vinyl/<record_id>/images/<image_id>/url")
@@ -428,7 +433,7 @@ def get_vinyl_image_url(record_id: str, image_id: str):
         return jsonify({"url": dl.url, "expires_at": dl.expires_at})
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.delete("/vinyl/<record_id>/images/<image_id>")
@@ -449,8 +454,8 @@ def delete_vinyl_image(record_id: str, image_id: str):
         try:
             s3_vinyl.delete_object(storage_key=image.storage_key)
         except Exception as e:
-            warning = f"Failed to delete image from storage: {e}"
-            print(warning)
+            logger.warning("Failed to delete image %s from storage: %s", image_id, e)
+            warning = "Failed to delete image from storage"
 
         success = svc.storage.delete_vinyl_image(user_id, image_id)
         if not success:
@@ -462,7 +467,7 @@ def delete_vinyl_image(record_id: str, image_id: str):
         return jsonify(payload)
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
 
 
 @bp.post("/vinyl/<record_id>/extract")
@@ -502,4 +507,4 @@ def extract_vinyl_metadata(record_id: str):
         return jsonify(result.model_dump())
 
     except Exception as e:
-        return api_error(str(e), 500)
+        return api_error_from_exception(e)
