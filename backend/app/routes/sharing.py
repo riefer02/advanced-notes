@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from ..auth import require_auth
 from ..services import s3_avatar
 from ..services.container import get_services
+from ..services.file_validation import image_matches_declared_type, normalize_mime
 from ._helpers import api_error, api_error_from_exception
 
 bp = Blueprint("sharing", __name__)
@@ -162,9 +163,11 @@ def upload_avatar():
         if not data:
             return api_error("Empty file")
 
-        mime = (file.content_type or "").split(";")[0].strip().lower()
+        mime = normalize_mime(file.content_type)
         if mime not in _AVATAR_ALLOWED_MIMES:
             return api_error("Only JPEG, PNG, and WebP images are allowed")
+        if not image_matches_declared_type(data, mime):
+            return api_error("File content does not match its declared image type")
 
         storage_key = s3_avatar.object_key_for_avatar(user_id=user_id, mime_type=mime)
         s3_avatar.upload_avatar(storage_key=storage_key, content_type=mime, data=data)

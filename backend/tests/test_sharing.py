@@ -959,6 +959,28 @@ class TestProfileEnhancements:
         )
         assert resp.status_code == 400
 
+    def test_avatar_upload_rejects_spoofed_content_type(self, app, client, monkeypatch):
+        """A declared image type that disagrees with the bytes is rejected."""
+        from app.config import Config
+        monkeypatch.setattr(Config, "S3_BUCKET", "test-bucket")
+
+        from app.services import s3_avatar
+        monkeypatch.setattr(s3_avatar, "s3_available", lambda: True)
+        monkeypatch.setattr(s3_avatar, "upload_avatar", lambda **kw: None)
+
+        client.get("/api/profile", headers=auth(ALICE))
+
+        import io
+        data = io.BytesIO(b"<html><script>alert(1)</script></html>")
+        resp = client.put(
+            "/api/profile/avatar",
+            headers=auth(ALICE),
+            data={"file": (data, "avatar.jpg", "image/jpeg")},
+            content_type="multipart/form-data",
+        )
+        assert resp.status_code == 400
+        assert "does not match" in resp.get_json()["error"].lower()
+
     def test_avatar_delete(self, app, client, monkeypatch):
         """DELETE /profile/avatar clears avatar."""
         from app.config import Config
