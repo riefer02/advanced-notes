@@ -6,6 +6,7 @@ Flask API server with OpenAI gpt-transcribe for speech-to-text and advanced note
 
 - **Transcription**: OpenAI gpt-transcribe API
 - **AI Categorization**: GPT-6 Luna with structured outputs
+- **Note Quality**: Generated titles/summaries, editable notes, source-audio playback
 - **Authentication**: Clerk JWT verification with user isolation
 - **Storage**: SQLite (dev) / PostgreSQL (prod) with full-text search
 - **Migrations**: Alembic for database schema management

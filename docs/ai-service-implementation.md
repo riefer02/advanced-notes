@@ -32,6 +32,7 @@ Implement an AI-powered categorization service using OpenAI GPT-6 Luna to automa
 - ✅ Implemented structured outputs with Pydantic models:
   - `CategoryAction` enum (append/create_folder/create_subfolder)
   - `CategorySuggestion` model with full schema
+- ✅ Generates a human-readable title and short summary
 - ✅ Built intelligent prompting system
 - ✅ Added confidence scoring (0.0-1.0)
 - ✅ Implemented error handling

@@ -16,9 +16,14 @@ from openai import OpenAI, OpenAIError
 from .openai_provider import build_openai_client, embedding_model
 
 
-def build_note_embedding_text(title: str, content: str, tags: list[str]) -> str:
+def build_note_embedding_text(
+    title: str, content: str, tags: list[str], summary: str | None = None
+) -> str:
     tags_part = ", ".join(tags or [])
-    return f"Title: {title}\nTags: {tags_part}\n\nContent:\n{content}"
+    summary_part = f"Summary: {summary}\n" if summary else ""
+    return (
+        f"Title: {title}\n{summary_part}Tags: {tags_part}\n\nContent:\n{content}"
+    )
 
 
 def content_hash(text: str) -> str:
@@ -127,6 +132,7 @@ class EmbeddingsService:
         title: str,
         content: str,
         tags: list[str] | None = None,
+        summary: str | None = None,
     ) -> bool:
         """
         Generate and upsert embedding for a note.
@@ -141,6 +147,7 @@ class EmbeddingsService:
             title: Note title.
             content: Note content.
             tags: Optional list of tags.
+            summary: Optional short AI summary.
 
         Returns:
             True if embedding was successfully upserted, False if embedding failed.
@@ -150,6 +157,7 @@ class EmbeddingsService:
                 title=title,
                 content=content,
                 tags=tags or [],
+                summary=summary,
             )
             h = content_hash(embedding_text)
             vec = self.embed_text(embedding_text)

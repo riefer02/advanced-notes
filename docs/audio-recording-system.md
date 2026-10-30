@@ -334,6 +334,20 @@ OpenAI's transcription API accepts:
 
 The billed duration lives in `usage.seconds`; there is no top-level `duration` field. `backend/app/asr.py` maps it into the API response's `meta.duration` for quota tracking and note metadata.
 
+### Transcription Context
+
+`_transcribe_audio_clip` builds context per user:
+
+- `languages` comes from the user's Settings (`transcription_languages`).
+- `keywords` comes from the user's existing tags (up to 40), which helps with project names, acronyms, and product terms.
+- `prompt` is a short tag-based context sentence when tags exist.
+
+These are passed through `extra_body` because the pinned OpenAI SDK predates the fields. Invalid keywords and language codes are filtered in `asr.py`.
+
+### Generated Title and Summary
+
+Categorization returns a human-readable `title` and a 1-2 sentence `summary` in addition to the filename. Both are stored on the note and shown in the note list/detail; the filename remains the export name. Users can edit the title, summary, folder, tags, and content from the note detail panel, and play the source audio to verify the transcript when audio clips are enabled.
+
 ## Mobile-Specific Considerations
 
 ### iOS Safari

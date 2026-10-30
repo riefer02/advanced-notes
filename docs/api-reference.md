@@ -35,6 +35,8 @@ This endpoint requires audio clips to be enabled (`AUDIO_CLIPS_ENABLED=true`) be
   "categorization": {
     "note_id": "uuid",
     "action": "create_subfolder",
+    "title": "React Performance Optimization",
+    "summary": "Notes on improving React performance with useMemo and useCallback.",
     "folder_path": "blog-ideas/react",
     "filename": "optimize-performance-2025-11-08.md",
     "tags": ["react", "performance", "blog"],
@@ -112,6 +114,7 @@ List notes with optional filtering.
     {
       "id": "uuid",
       "title": "React Performance Tips",
+      "summary": "Notes on optimizing React with useMemo and useCallback.",
       "content": "# React Performance Optimization\n...",
       "folder_path": "blog-ideas/react",
       "filename": "optimize-performance-2025-11-08.md",
@@ -139,6 +142,7 @@ Get a specific note by ID.
 {
   "id": "uuid",
   "title": "React Performance Tips",
+  "summary": "Notes on optimizing React with useMemo and useCallback.",
   "content": "# React Performance Optimization\n...",
   "folder_path": "blog-ideas/react",
   "filename": "optimize-performance-2025-11-08.md",
@@ -164,6 +168,7 @@ Update an existing note.
 {
   "content": "Updated content (optional)",
   "title": "New Title (optional)",
+  "summary": "New summary (optional)",
   "folder_path": "new/folder (optional)",
   "tags": ["tag1", "tag2"] (optional)
 }
@@ -309,6 +314,7 @@ Full-text search across all notes (uses SQLite FTS5).
     {
       "id": "uuid",
       "title": "React Performance Tips",
+      "summary": "Notes on optimizing React with useMemo and useCallback.",
       "content": "# React Performance Optimization\n...",
       "folder_path": "blog-ideas/react",
       "snippet": "# <mark>React</mark> Performance <mark>Optimization</mark>\n...",

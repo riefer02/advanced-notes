@@ -25,7 +25,9 @@ function SettingsPage() {
   const [bio, setBio] = useState('')
   const [discoverable, setDiscoverable] = useState(true)
   const [hasChanges, setHasChanges] = useState(false)
+  const [languagesText, setLanguagesText] = useState('')
   const initializedRef = useRef(false)
+  const settingsInitializedRef = useRef(false)
 
   // Sync form state from profile data (only on first load)
   useEffect(() => {
@@ -37,6 +39,13 @@ function SettingsPage() {
       initializedRef.current = true
     }
   }, [profile])
+
+  useEffect(() => {
+    if (settings && !settingsInitializedRef.current) {
+      setLanguagesText((settings.transcription_languages ?? []).join(', '))
+      settingsInitializedRef.current = true
+    }
+  }, [settings])
 
   // Track changes — reset stale success message when user starts editing again
   useEffect(() => {
@@ -57,6 +66,18 @@ function SettingsPage() {
     if (settings) {
       updateSettings.mutate({ auto_accept_todos: !settings.auto_accept_todos })
     }
+  }
+
+  const handleSaveLanguages = () => {
+    const languages = Array.from(
+      new Set(
+        languagesText
+          .split(',')
+          .map((language) => language.trim().toLowerCase())
+          .filter(Boolean)
+      )
+    ).slice(0, 5)
+    updateSettings.mutate({ transcription_languages: languages })
   }
 
   const handleSaveProfile = () => {
@@ -210,6 +231,48 @@ function SettingsPage() {
                 />
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Transcription Settings Section */}
+        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+          <div className="px-4 py-4 border-b border-gray-100">
+            <h3 className="text-base font-medium text-gray-900">Transcription</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Hint at the languages you speak so names and accents transcribe more accurately.
+            </p>
+          </div>
+
+          <div className="px-4 py-4 space-y-3">
+            {settingsLoading ? (
+              <div className="text-sm text-gray-500">Loading settings...</div>
+            ) : settings ? (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="transcription-languages">Preferred languages</Label>
+                  <Input
+                    id="transcription-languages"
+                    value={languagesText}
+                    onChange={(event) => setLanguagesText(event.target.value)}
+                    placeholder="en, es, fr"
+                    maxLength={50}
+                  />
+                  <p className="text-xs text-gray-500">
+                    Comma-separated ISO codes (for example: en, es, fr). Leave empty to auto-detect.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button
+                    size="sm"
+                    onClick={handleSaveLanguages}
+                    loading={updateSettings.isPending}
+                  >
+                    Save languages
+                  </Button>
+                  {updateSettings.isSuccess && <p className="text-sm text-green-600">Saved!</p>}
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       </div>

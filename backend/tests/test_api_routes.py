@@ -36,7 +36,7 @@ class _FakeEmbeddings:
     def embed_text(self, text):
         return [0.0]
 
-    def upsert_for_note(self, storage, user_id, note_id, title, content, tags=None):
+    def upsert_for_note(self, storage, user_id, note_id, title, content, tags=None, summary=None):
         return True
 
 

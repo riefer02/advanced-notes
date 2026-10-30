@@ -92,7 +92,7 @@ class _FakeEmbeddings:
     def embed_query(self, text):
         return [0.0] * 1536
 
-    def upsert_for_note(self, storage, user_id, note_id, title, content, tags=None):
+    def upsert_for_note(self, storage, user_id, note_id, title, content, tags=None, summary=None):
         return True
 
 
@@ -559,6 +559,21 @@ def test_get_settings_default(client):
     data = resp.get_json()
     assert "auto_accept_todos" in data
     assert data["auto_accept_todos"] is False  # Default
+    assert data["transcription_languages"] == []
+
+
+def test_update_settings_transcription_languages(client):
+    """PUT /api/settings - normalize and persist transcription languages."""
+    resp = client.put(
+        "/api/settings",
+        json={"transcription_languages": ["EN", "es", "en", "bad code"]},
+        headers={"X-Test-User-Id": "user-lang"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["transcription_languages"] == ["en", "es"]
+
+    resp = client.get("/api/settings", headers={"X-Test-User-Id": "user-lang"})
+    assert resp.get_json()["transcription_languages"] == ["en", "es"]
 
 
 def test_update_settings(client):
@@ -828,6 +843,36 @@ def test_update_note_tags(client, storage):
     assert "new-tag" in tags
     assert "another-tag" in tags
     assert "old-tag" not in tags
+
+
+def test_update_note_summary(client, storage):
+    """PUT /api/notes/<id> - update and clear the note summary."""
+    note_id = storage.save_note(
+        user_id="user-a",
+        content="Content",
+        metadata=NoteMetadata(
+            title="Test",
+            summary="Old summary",
+            folder_path="x",
+            tags=[],
+        ),
+    )
+
+    resp = client.put(
+        f"/api/notes/{note_id}",
+        json={"summary": "New summary"},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["summary"] == "New summary"
+
+    cleared = client.put(
+        f"/api/notes/{note_id}",
+        json={"summary": ""},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert cleared.status_code == 200
+    assert cleared.get_json()["summary"] == ""
 
 
 def test_update_note_multiple_fields(client, storage):

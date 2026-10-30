@@ -19,6 +19,8 @@ export interface TranscriptionMeta {
 export interface CategoryResult {
   note_id: string
   action: string
+  title?: string
+  summary?: string
   folder_path: string
   filename: string
   tags: string[]
@@ -50,6 +52,7 @@ export interface TranscriptionResponse {
 export interface Note {
   id: string
   title: string
+  summary?: string | null
   content: string
   folder_path: string
   filename: string
@@ -192,6 +195,38 @@ export async function fetchNotes(folder?: string, limit = 50, offset = 0): Promi
 
 export async function fetchNote(noteId: string): Promise<Note> {
   return apiRequest<Note>('GET', `/api/notes/${noteId}`)
+}
+
+export interface NoteAudioResponse {
+  clip: {
+    id: string
+    note_id: string | null
+    mime_type: string
+    bytes: number
+    status: string
+    storage_key: string
+    duration_ms?: number | null
+  }
+  playback: {
+    url: string
+    expires_at: string
+  }
+}
+
+export interface UpdateNoteInput {
+  title?: string
+  summary?: string | null
+  content?: string
+  folder_path?: string
+  tags?: string[]
+}
+
+export async function fetchNoteAudio(noteId: string): Promise<NoteAudioResponse> {
+  return apiRequest<NoteAudioResponse>('GET', `/api/notes/${noteId}/audio`)
+}
+
+export async function updateNote(noteId: string, input: UpdateNoteInput): Promise<Note> {
+  return apiRequest<Note>('PUT', `/api/notes/${noteId}`, { body: input })
 }
 
 export async function deleteNote(noteId: string): Promise<void> {

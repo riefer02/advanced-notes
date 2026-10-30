@@ -56,6 +56,19 @@ export function useNote(noteId: string) {
 }
 
 /**
+ * Fetch the source audio for a note (404/501 when audio clips are disabled).
+ */
+export function useNoteAudio(noteId: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.notes.audio(noteId),
+    queryFn: () => api.fetchNoteAudio(noteId),
+    enabled: !!noteId && enabled,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+/**
  * Search notes
  */
 export function useSearchNotes(query: string) {
@@ -104,6 +117,23 @@ export function useTranscribeAudio() {
   return useMutation({
     mutationFn: (audioBlob: Blob) => api.transcribeAudio(audioBlob),
     onSuccess: () => invalidateNoteQueries(queryClient),
+  })
+}
+
+/**
+ * Update note mutation
+ * Refreshes the list, folders, tags, and the selected note detail.
+ */
+export function useUpdateNote() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ noteId, input }: { noteId: string; input: api.UpdateNoteInput }) =>
+      api.updateNote(noteId, input),
+    onSuccess: (note) => {
+      invalidateNoteQueries(queryClient)
+      queryClient.invalidateQueries({ queryKey: queryKeys.notes.detail(note.id) })
+    },
   })
 }
 

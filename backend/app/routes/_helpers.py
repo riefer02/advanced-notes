@@ -327,8 +327,25 @@ def _transcribe_audio_clip(
         svc.storage.mark_audio_clip_failed(user_id, audio_clip_id)
         raise
 
+    keywords: list[str] = []
+    languages: list[str] = []
+    with suppress(Exception):
+        keywords = list(svc.storage.get_all_tags(user_id))[:40]
+    with suppress(Exception):
+        languages = list(svc.storage.get_user_settings(user_id).transcription_languages)
+
+    prompt = None
+    if keywords:
+        prompt = "Personal notes tagged with: " + ", ".join(keywords[:12]) + "."
+
     try:
-        text, meta = transcribe_bytes(data, content_type)
+        text, meta = transcribe_bytes(
+            data,
+            content_type,
+            prompt=prompt,
+            keywords=keywords,
+            languages=languages,
+        )
     except ValueError as e:
         with suppress(Exception):
             s3_audio.delete_object(storage_key=audio_storage_key)

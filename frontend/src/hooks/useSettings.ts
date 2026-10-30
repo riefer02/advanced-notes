@@ -14,7 +14,8 @@ export function useUpdateUserSettings() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (settings: { auto_accept_todos?: boolean }) => updateUserSettings(settings),
+    mutationFn: (settings: { auto_accept_todos?: boolean; transcription_languages?: string[] }) =>
+      updateUserSettings(settings),
     onSuccess: (data: UserSettings) => {
       queryClient.setQueryData(queryKeys.settings, data)
     },

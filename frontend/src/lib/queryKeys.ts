@@ -4,6 +4,7 @@ export const queryKeys = {
     list: (folder?: string, limit?: number, offset?: number) =>
       ['notes', folder, limit, offset] as const,
     detail: (noteId: string) => ['note', noteId] as const,
+    audio: (noteId: string) => ['noteAudio', noteId] as const,
     search: (query: string) => ['search', query] as const,
     byTag: (tag: string | null, limit?: number) => ['notes', 'tag', tag, limit] as const,
   },

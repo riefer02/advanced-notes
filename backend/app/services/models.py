@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 class NoteMetadata(BaseModel):
     """Metadata for creating/updating a note"""
     title: str = Field(..., min_length=1, max_length=500)
+    summary: str | None = Field(None, max_length=1000, description="Short AI-generated summary")
     folder_path: str = Field(..., description="Folder path (e.g., 'blog-ideas/react')")
     tags: list[str] = Field(default_factory=list, description="List of tags")
     confidence: float | None = Field(None, ge=0.0, le=1.0, description="AI categorization confidence")
@@ -25,6 +26,7 @@ class Note(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     user_id: str = Field(..., description="Clerk user ID")
     title: str
+    summary: str | None = None
     content: str
     folder_path: str
     tags: list[str] = Field(default_factory=list)
@@ -116,10 +118,14 @@ class AudioClip(BaseModel):
 
 
 class UserSettings(BaseModel):
-    """User settings including todo preferences."""
+    """User settings including todo and transcription preferences."""
     id: str = Field(default_factory=lambda: str(uuid4()))
     user_id: str = Field(..., description="Clerk user ID")
     auto_accept_todos: bool = Field(default=False, description="Auto-accept extracted todos")
+    transcription_languages: list[str] = Field(
+        default_factory=list,
+        description="Preferred input languages for transcription (ISO codes)",
+    )
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 

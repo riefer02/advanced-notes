@@ -117,7 +117,7 @@ chisos/
 
 2. **AI Categorization** (`app/services/ai_categorizer.py`):
    - Uses **OpenAI GPT-6 Luna** for semantic analysis
-   - Generates folder paths, filenames, tags automatically
+   - Generates folder paths, human-readable titles, summaries, filenames, and tags automatically
    - Structured JSON outputs for reliability
 
 3. **Storage** (`app/services/storage/`):
@@ -161,6 +161,8 @@ chisos/
   },
   "categorization": {
     "note_id": "abc123",
+    "title": "New Product Feature Idea",
+    "summary": "A short note about a product feature idea.",
     "folder_path": "Ideas/Product",
     "filename": "new_feature_idea.txt",
     "tags": ["product", "feature"],
@@ -357,6 +359,9 @@ Check API usage via the `meta.model` field in responses.
 - ✅ Vite frontend with Tailwind for recording/uploading audio
 - ✅ OpenAI API transcription (gpt-transcribe)
 - ✅ AI-powered categorization (GPT-6 Luna)
+- ✅ Generated note titles and summaries
+- ✅ Editable notes with source-audio playback
+- ✅ Transcription language and keyword hints
 - ✅ SQLite database storage with FTS5 search
 - ✅ 11 REST API endpoints for full CRUD
 - ✅ Split-pane layout with folder navigation
@@ -371,7 +376,6 @@ Check API usage via the `meta.model` field in responses.
 
 - [ ] Realtime transcription with WebSocket (`gpt-live-transcribe`)
 - [ ] Speaker diarization (deferred: no non-deprecated OpenAI model as of Oct 2026)
-- [ ] Note editing UI with inline updates
 - [ ] Bulk operations (move, delete, export)
 - [ ] Export as Markdown/PDF
 - [ ] User authentication & multi-user support

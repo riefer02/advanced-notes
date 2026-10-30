@@ -34,6 +34,8 @@ def _fallback_category() -> CategorySuggestion:
     stamp = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
     return CategorySuggestion(
         action=CategoryAction.CREATE_FOLDER,
+        title="Voice note",
+        summary="Categorization unavailable; saved to inbox.",
         folder_path="inbox",
         filename=f"note-{stamp}.md",
         tags=[],
@@ -137,8 +139,15 @@ def transcribe():
                 )
                 _maybe_send_cost_alert(svc)
 
+        generated_title = (getattr(categorization_result, "title", "") or "").strip()
+        title = generated_title or (
+            categorization_result.filename.replace(".md", "").replace("-", " ").title()
+        )
+        generated_summary = (getattr(categorization_result, "summary", "") or "").strip()
+
         note_metadata = NoteMetadata(
-            title=categorization_result.filename.replace(".md", "").replace("-", " ").title(),
+            title=title[:500],
+            summary=generated_summary[:1000] or None,
             folder_path=categorization_result.folder_path,
             tags=categorization_result.tags,
             confidence=categorization_result.confidence,
@@ -164,6 +173,7 @@ def transcribe():
                 title=note_metadata.title,
                 content=text,
                 tags=note_metadata.tags,
+                summary=note_metadata.summary,
             ),
             fallback=None,
             service="embeddings",
@@ -201,6 +211,8 @@ def transcribe():
                 "categorization": {
                     "note_id": note_id,
                     "action": categorization_result.action,
+                    "title": getattr(categorization_result, "title", ""),
+                    "summary": getattr(categorization_result, "summary", ""),
                     "folder_path": categorization_result.folder_path,
                     "filename": categorization_result.filename,
                     "tags": categorization_result.tags,

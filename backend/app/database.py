@@ -61,6 +61,7 @@ class Note(Base):
     
     # Metadata
     word_count = Column(Integer, default=0)
+    summary = Column(Text, nullable=True)
     confidence = Column(Float, nullable=True)
     transcription_duration = Column(Float, nullable=True)
     model_version = Column(String(50), nullable=True)
@@ -218,6 +219,9 @@ class UserSettings(Base):
 
     # Todo extraction behavior
     auto_accept_todos = Column(Boolean, nullable=False, server_default="0")
+
+    # Preferred transcription languages, stored as a JSON list of ISO codes.
+    transcription_languages = Column(Text, nullable=True)
 
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
     updated_at = Column(

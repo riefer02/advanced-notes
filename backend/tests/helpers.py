@@ -98,7 +98,7 @@ class FakeEmbeddings:
     def embed_query(self, text):
         return [0.0] * 1536
 
-    def upsert_for_note(self, storage, user_id, note_id, title, content, tags=None):
+    def upsert_for_note(self, storage, user_id, note_id, title, content, tags=None, summary=None):
         return True
 
 

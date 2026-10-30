@@ -7,11 +7,44 @@ gpt-4o-*-transcribe family it replaces shuts down on 2027-02-26.
 
 import logging
 import os
+import re
 import tempfile
 
 from .services.openai_provider import get_transcription_client, transcribe_model
 
 logger = logging.getLogger(__name__)
+
+_LANGUAGE_CODE_RE = re.compile(r"^[a-z]{2,3}(?:-[a-z]{2,4})?$")
+_KEYWORD_BAD_CHARS_RE = re.compile(r"[<>\r\n]")
+
+
+def _clean_keywords(keywords: list[str] | None) -> list[str]:
+    """Normalize keyword hints and drop values the API rejects."""
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for keyword in keywords or []:
+        term = str(keyword).strip()
+        if not term or len(term) > 80 or _KEYWORD_BAD_CHARS_RE.search(term):
+            continue
+        key = term.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(term)
+        if len(cleaned) >= 40:
+            break
+    return cleaned
+
+
+def _clean_languages(languages: list[str] | None) -> list[str]:
+    cleaned: list[str] = []
+    for language in languages or []:
+        code = str(language).strip().lower()
+        if _LANGUAGE_CODE_RE.fullmatch(code) and code not in cleaned:
+            cleaned.append(code)
+        if len(cleaned) >= 5:
+            break
+    return cleaned
 
 
 def _duration_seconds(response: object) -> float | None:
@@ -51,7 +84,12 @@ def _detected_language(response: object) -> str | None:
 
 
 def transcribe_bytes(
-    audio_bytes: bytes, content_type: str | None = None
+    audio_bytes: bytes,
+    content_type: str | None = None,
+    *,
+    prompt: str | None = None,
+    keywords: list[str] | None = None,
+    languages: list[str] | None = None,
 ) -> tuple[str, dict[str, str | float | None]]:
     """
     Transcribe audio from raw bytes using OpenAI gpt-transcribe.
@@ -61,6 +99,9 @@ def transcribe_bytes(
     Args:
         audio_bytes: Audio file bytes
         content_type: MIME type of audio (e.g., 'audio/webm', 'audio/mp4')
+        prompt: Optional context about the recording (not instructions)
+        keywords: Optional literal terms likely to appear (names, acronyms)
+        languages: Optional expected input language codes
 
     Returns:
         tuple: (transcribed_text, metadata_dict)
@@ -112,13 +153,27 @@ def transcribe_bytes(
 
     try:
         model = transcribe_model()
+        context: dict[str, object] = {}
+        clean_prompt = (prompt or "").strip()
+        if clean_prompt:
+            context["prompt"] = clean_prompt[:500]
+        clean_keywords = _clean_keywords(keywords)
+        if clean_keywords:
+            context["keywords"] = clean_keywords
+        clean_languages = _clean_languages(languages)
+        if clean_languages:
+            context["languages"] = clean_languages
+
         # gpt-transcribe defaults to json; keep it explicit so we get the
         # structured Transcription object (text + languages + usage).
+        # prompt/keywords/languages are newer than the pinned SDK, so pass
+        # them through extra_body.
         with open(temp_path, "rb") as audio_file:
             response = client.audio.transcriptions.create(
                 model=model,
                 file=audio_file,
                 response_format="json",
+                extra_body=context or None,
             )
 
         # Extract text and metadata

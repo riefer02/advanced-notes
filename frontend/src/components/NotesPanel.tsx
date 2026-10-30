@@ -278,7 +278,13 @@ export default function NotesPanel() {
         title={selectedNote?.title || 'Note Details'}
         width="max-w-xl"
       >
-        {selectedNote && <NoteDetail note={selectedNote} onDelete={handleDeleteNote} />}
+        {selectedNote && (
+          <NoteDetail
+            note={selectedNote}
+            onDelete={handleDeleteNote}
+            onUpdated={(updated) => setSelectedNote(updated)}
+          />
+        )}
       </SlideOver>
     </div>
   )

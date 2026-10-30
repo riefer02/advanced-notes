@@ -148,9 +148,11 @@ interface NoteItemProps {
 
 function NoteItem({ note, isSelected, onClick, onTagClick }: NoteItemProps) {
   const hasSnippet = !!note.snippet
-  const contentPreview = note.content
-    ? note.content.substring(0, 150)
-    : note.snippet?.replace(/<[^>]*>/g, '').substring(0, 150) || ''
+  const contentPreview =
+    note.summary?.trim() ||
+    (note.content
+      ? note.content.substring(0, 150)
+      : note.snippet?.replace(/<[^>]*>/g, '').substring(0, 150) || '')
 
   return (
     <div

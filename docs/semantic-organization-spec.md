@@ -91,6 +91,8 @@ AI Categorizer receives transcript + existing folders
 OpenAI GPT-6 Luna analyzes content
     ↓
 Returns structured output:
+  - title: "React Performance Optimization"
+  - summary: "Notes on improving React performance with useMemo and useCallback."
   - folder_path: "blog-ideas/react"
   - filename: "optimize-performance-2025-11-08.md"
   - tags: ["react", "performance", "blog"]

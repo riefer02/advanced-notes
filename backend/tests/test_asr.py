@@ -308,6 +308,37 @@ def test_transcribe_bytes_parses_real_sdk_transcription_shape(mock_client):
 
 
 @patch("app.asr.get_transcription_client")
+def test_transcribe_bytes_passes_context_hints(mock_client):
+    """prompt/keywords/languages go through extra_body and are sanitized."""
+    response = Transcription.model_validate(
+        {
+            "text": "hello",
+            "languages": [{"code": "en"}],
+            "usage": {"type": "duration", "seconds": 1.0},
+        }
+    )
+
+    mock_openai = MagicMock()
+    mock_openai.audio.transcriptions.create.return_value = response
+    mock_client.return_value = mock_openai
+
+    transcribe_bytes(
+        b"x" * 2000,
+        "audio/wav",
+        prompt="Project Alpha",
+        keywords=["Project Alpha", "bad\nterm", "Project Alpha"],
+        languages=["EN", "es", "bad code"],
+    )
+
+    kwargs = mock_openai.audio.transcriptions.create.call_args.kwargs
+    assert kwargs["extra_body"] == {
+        "prompt": "Project Alpha",
+        "keywords": ["Project Alpha"],
+        "languages": ["en", "es"],
+    }
+
+
+@patch("app.asr.get_transcription_client")
 def test_transcribe_bytes_invalid_duration_usage_returns_none(mock_client):
     """Malformed usage metadata must not fail an otherwise successful call."""
     mock_response = MagicMock()

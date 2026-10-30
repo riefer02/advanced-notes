@@ -41,6 +41,12 @@ class CategorySuggestion(BaseModel):
     action: CategoryAction = Field(
         description="Whether to append to existing folder or create a new one"
     )
+    title: str = Field(
+        description="Short human-readable title (3-10 words, no date, no file extension)"
+    )
+    summary: str = Field(
+        description="1-2 sentence factual summary of the note"
+    )
     folder_path: str = Field(
         description="Simple, flat folder path (1-2 levels max, e.g., 'ideas', 'work/meetings')"
     )
@@ -213,12 +219,14 @@ Tags are the PRIMARY organization method. Folders are just broad, simple contain
 Think: Gmail labels vs folders. Notes can be found through tags, not deep hierarchies.
 
 TASK:
-1. Generate 3-7 RICH, MEANINGFUL TAGS that capture all aspects of the content
-2. Choose a simple, flat folder (1-2 levels max, broad categories)
-3. Create a descriptive filename (lowercase, kebab-case, with date suffix)
-4. Provide confidence score (0.0-1.0)
-5. Brief reasoning
-6. Extract 0-5 TODO items (action items mentioned in the transcription)
+1. Create a concise human-readable TITLE (3-10 words, no date, no file extension)
+2. Write a 1-2 sentence SUMMARY using only facts from the transcription
+3. Generate 3-7 RICH, MEANINGFUL TAGS that capture all aspects of the content
+4. Choose a simple, flat folder (1-2 levels max, broad categories)
+5. Create a descriptive filename (lowercase, kebab-case, with date suffix)
+6. Provide confidence score (0.0-1.0)
+7. Brief reasoning
+8. Extract 0-5 TODO items (action items mentioned in the transcription)
 
 TAG GUIDELINES (MOST IMPORTANT):
 - Extract specific topics, concepts, technologies, people, projects
@@ -227,6 +235,11 @@ TAG GUIDELINES (MOST IMPORTANT):
 - Think: "What would I search for to find this note?"
 - Tags should be: lowercase, kebab-case, specific, searchable
 - Prefer MORE tags over fewer (3-7 tags per note)
+
+TITLE/SUMMARY GUIDELINES:
+- Title: 3-10 words, human-readable, no date suffix, no ".md"
+- Summary: 1-2 sentences, factual, no new information or advice
+- Prefer concrete nouns ("React performance notes") over vague labels ("Misc thoughts")
 
 FOLDER GUIDELINES (KEEP SIMPLE):
 - Use broad, flat categories: "work", "personal", "ideas", "learning", etc.

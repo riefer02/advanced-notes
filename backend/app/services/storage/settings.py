@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from uuid import uuid4
 
@@ -17,11 +18,35 @@ from ..models import FeedbackResponse as FeedbackDTO
 from ..models import UserSettings as UserSettingsDTO
 
 
+def _deserialize_languages(value: str | None) -> list[str]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [str(item).strip().lower() for item in parsed if str(item).strip()]
+
+
+def _serialize_languages(languages: list[str] | None) -> str | None:
+    if not languages:
+        return None
+    cleaned: list[str] = []
+    for language in languages:
+        code = str(language).strip().lower()
+        if code and code not in cleaned:
+            cleaned.append(code)
+    return json.dumps(cleaned) if cleaned else None
+
+
 def _user_settings_to_dto(settings: UserSettingsORM) -> UserSettingsDTO:
     return UserSettingsDTO(
         id=settings.id,
         user_id=settings.user_id,
         auto_accept_todos=settings.auto_accept_todos,
+        transcription_languages=_deserialize_languages(settings.transcription_languages),
         created_at=settings.created_at,
         updated_at=settings.updated_at,
     )
@@ -50,6 +75,7 @@ class SettingsStorageMixin:
                 id=settings_id,
                 user_id=user_id,
                 auto_accept_todos=False,
+                transcription_languages=None,
                 created_at=now,
                 updated_at=now,
             )
@@ -61,6 +87,7 @@ class SettingsStorageMixin:
         user_id: str,
         *,
         auto_accept_todos: bool | None = None,
+        transcription_languages: list[str] | None = None,
     ) -> UserSettingsDTO:
         with self._session_scope() as session:
             settings = (
@@ -75,6 +102,7 @@ class SettingsStorageMixin:
                     id=str(uuid4()),
                     user_id=user_id,
                     auto_accept_todos=auto_accept_todos if auto_accept_todos is not None else False,
+                    transcription_languages=_serialize_languages(transcription_languages),
                     created_at=now,
                     updated_at=now,
                 )
@@ -82,6 +110,10 @@ class SettingsStorageMixin:
             else:
                 if auto_accept_todos is not None:
                     settings.auto_accept_todos = auto_accept_todos
+                if transcription_languages is not None:
+                    settings.transcription_languages = _serialize_languages(
+                        transcription_languages
+                    )
                 settings.updated_at = now
                 session.add(settings)
 

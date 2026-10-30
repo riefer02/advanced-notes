@@ -81,6 +81,7 @@ def update_note(note_id: str):
 
         metadata = NoteMetadata(
             title=data.get("title", note.title),
+            summary=data.get("summary", note.summary),
             folder_path=data.get("folder_path", note.folder_path),
             tags=data.get("tags", note.tags),
             confidence=note.confidence,
@@ -105,6 +106,7 @@ def update_note(note_id: str):
                     title=updated_note.title,
                     content=updated_note.content,
                     tags=updated_note.tags,
+                    summary=updated_note.summary,
                 ),
                 fallback=None,
                 service="embeddings",

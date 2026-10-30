@@ -23,6 +23,7 @@ def _mapping_to_note(row: Mapping[str, Any]) -> NoteDTO:
         id=row["id"],
         user_id=row["user_id"],
         title=row["title"],
+        summary=row.get("summary"),
         content=row["content"],
         folder_path=row["folder_path"],
         tags=_deserialize_tags(row.get("tags")),
@@ -40,6 +41,7 @@ def _note_to_dto(note: NoteORM) -> NoteDTO:
         id=note.id,
         user_id=note.user_id,
         title=note.title,
+        summary=note.summary,
         content=note.content,
         folder_path=note.folder_path,
         tags=_deserialize_tags(note.tags),
@@ -87,6 +89,7 @@ class NoteStorageMixin:
             id=note_id,
             user_id=user_id,
             title=metadata.title,
+            summary=metadata.summary,
             content=content,
             folder_path=metadata.folder_path,
             tags=_serialize_tags(metadata.tags),
@@ -138,6 +141,8 @@ class NoteStorageMixin:
 
             if metadata:
                 note.title = metadata.title or note.title
+                if metadata.summary is not None:
+                    note.summary = metadata.summary
                 note.folder_path = metadata.folder_path or note.folder_path
                 note.tags = _serialize_tags(metadata.tags)
                 note.confidence = metadata.confidence if metadata.confidence is not None else note.confidence
@@ -325,6 +330,7 @@ class NoteStorageMixin:
                 n.id,
                 n.user_id,
                 n.title,
+                n.summary,
                 n.content,
                 n.folder_path,
                 n.tags,
