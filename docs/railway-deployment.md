@@ -67,11 +67,24 @@
 | Variable               | Value                              | Description                               |
 | ---------------------- | ---------------------------------- | ----------------------------------------- |
 | `OPENAI_API_KEY`       | `sk-proj-...`                      | OpenAI API key (required)                 |
-| `OPENAI_MODEL`         | `gpt-4o-mini`                      | Model for categorization                  |
+| `OPENAI_MODEL`         | `gpt-6-luna`                       | Model for categorization                  |
+| `OPENAI_REASONING_EFFORT` | `none`                          | "none" override for Luna/Terra/GPT-6 Sol |
+| `TRANSCRIBE_MODEL`     | `gpt-transcribe`                   | Model for speech-to-text                  |
 | `FLASK_ENV`            | `production`                       | Flask environment                         |
 | `CONFIDENCE_THRESHOLD` | `0.7`                              | AI confidence threshold                   |
 | `FRONTEND_URL`         | `https://your-frontend-domain.com` | For CORS (your custom domain)             |
 | `DATABASE_URL`         | (auto-set)                         | PostgreSQL connection (reference from DB) |
+
+**Model access preflight:** the code defaults change with the deploy. Confirm
+the project can use both models before deploying; if either is missing, set the
+previous value (`OPENAI_MODEL=gpt-4o-mini` or
+`TRANSCRIBE_MODEL=gpt-4o-mini-transcribe-2025-12-15`) until access is granted:
+
+```bash
+curl -s https://api.openai.com/v1/models \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  | jq -r '.data[] | select(.id=="gpt-6-luna" or .id=="gpt-transcribe") | [.id, (.shutdown_date // "none")] | @tsv'
+```
 
 ### Frontend
 
@@ -285,8 +298,8 @@ git push
 
 ### OpenAI API
 
-- Transcription: ~$0.10 per hour of audio
-- Categorization: ~$0.10 per 1M tokens
+- Transcription: ~$0.27 per hour of audio (`gpt-transcribe`, $0.0045/min)
+- Categorization: $0.10 per 1M input tokens / $0.50 per 1M output tokens
 - **Estimated:** $5-10/month moderate use
 
 **Total monthly:** ~$20-30

@@ -14,12 +14,19 @@ from pydantic import BaseModel, Field
 from ..database import TokenUsage, UsageQuota, get_session
 
 # Cost estimates per model (USD)
-# These are approximate and should be updated as pricing changes
+# These are approximate and should be updated as pricing changes.
+# Legacy entries stay so historical usage rows still price correctly.
 MODEL_COSTS = {
     # Chat/completion models (per 1K tokens)
+    "gpt-6-luna": {"prompt": 0.0001, "completion": 0.0005},
+    "gpt-6.1-terra": {"prompt": 0.001, "completion": 0.005},
+    "gpt-6-sol": {"prompt": 0.002, "completion": 0.01},
+    "gpt-6.1-sol": {"prompt": 0.002, "completion": 0.01},
+    "gpt-6-astra": {"prompt": 0.01, "completion": 0.05},
     "gpt-4o-mini": {"prompt": 0.00015, "completion": 0.0006},
     "gpt-4o-mini-2024-07-18": {"prompt": 0.00015, "completion": 0.0006},
     # Transcription models (per minute)
+    "gpt-transcribe": {"per_minute": 0.0045},
     "gpt-4o-mini-transcribe": {"per_minute": 0.003},
     "gpt-4o-mini-transcribe-2025-12-15": {"per_minute": 0.003},
     "whisper-1": {"per_minute": 0.006},
@@ -27,6 +34,23 @@ MODEL_COSTS = {
     "text-embedding-3-small": {"per_1k": 0.00002},
     "text-embedding-ada-002": {"per_1k": 0.0001},
 }
+
+
+def _lookup_model_cost(model: str) -> dict[str, float] | None:
+    """Find pricing, preferring exact IDs and then the longest matching key.
+
+    Exact-first stops `gpt-4o-mini` from swallowing
+    `gpt-4o-mini-transcribe`; longest-first lets dated/fine-tuned IDs inherit
+    their base model's price.
+    """
+    model_key = model.lower()
+    if model_key in MODEL_COSTS:
+        return MODEL_COSTS[model_key]
+    for key in sorted(MODEL_COSTS, key=len, reverse=True):
+        if key in model_key:
+            return MODEL_COSTS[key]
+    return None
+
 
 # Default monthly limits for free tier
 DEFAULT_TRANSCRIPTION_MINUTES = 100
@@ -132,15 +156,8 @@ class UsageTrackingService:
     ) -> float:
         """Estimate the cost of an API call."""
         cost = 0.0
-        model_key = model.lower()
 
-        # Find matching cost config
-        cost_config = None
-        for key, config in MODEL_COSTS.items():
-            if key in model_key or model_key in key:
-                cost_config = config
-                break
-
+        cost_config = _lookup_model_cost(model)
         if not cost_config:
             return 0.0
 

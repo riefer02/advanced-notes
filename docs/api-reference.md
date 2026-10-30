@@ -23,9 +23,9 @@ This endpoint requires audio clips to be enabled (`AUDIO_CLIPS_ENABLED=true`) be
 {
   "text": "Transcribed text content",
   "meta": {
-    "device": "mps",
-    "model": "parakeet-tdt-0.6b-v3",
-    "sample_rate": 48000,
+    "device": "openai-api",
+    "model": "gpt-transcribe",
+    "language": "en",
     "duration": 3.48
   },
   "audio": {
@@ -118,7 +118,7 @@ List notes with optional filtering.
       "tags": ["react", "performance", "optimization"],
       "confidence": 0.92,
       "transcription_duration": 3.48,
-      "model_version": "parakeet-tdt-0.6b-v3",
+      "model_version": "gpt-transcribe",
       "word_count": 125,
       "created_at": "2025-11-08T10:30:00Z",
       "updated_at": "2025-11-08T10:30:00Z"
@@ -145,7 +145,7 @@ Get a specific note by ID.
   "tags": ["react", "performance", "optimization"],
   "confidence": 0.92,
   "transcription_duration": 3.48,
-  "model_version": "parakeet-tdt-0.6b-v3",
+  "model_version": "gpt-transcribe",
   "word_count": 125,
   "created_at": "2025-11-08T10:30:00Z",
   "updated_at": "2025-11-08T10:30:00Z"

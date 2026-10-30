@@ -9,7 +9,7 @@ from __future__ import annotations
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
 
-from .openai_provider import build_openai_client, chat_model
+from .openai_provider import build_openai_client, chat_model, chat_reasoning_extra_body
 from .query_planner import QueryPlan
 
 
@@ -81,6 +81,7 @@ class AskService:
                 ],
                 response_format=AskAnswer,
                 temperature=0.2,
+                extra_body=chat_reasoning_extra_body(self.model),
             )
             result = completion.choices[0].message.parsed
             if not result:

@@ -8,7 +8,7 @@
 
 ## 🎯 Objective
 
-Implement an AI-powered categorization service using OpenAI GPT-4o-mini to automatically organize voice transcriptions into semantic folder hierarchies.
+Implement an AI-powered categorization service using OpenAI GPT-6 Luna to automatically organize voice transcriptions into semantic folder hierarchies.
 
 ---
 
@@ -16,9 +16,9 @@ Implement an AI-powered categorization service using OpenAI GPT-4o-mini to autom
 
 ### 1. Research & Planning
 - ✅ Researched OpenAI's latest API capabilities
-- ✅ Evaluated GPT-4o-mini for cost/performance balance
+- ✅ Selected GPT-6 Luna; 45-run eval passed (100% overall)
 - ✅ Confirmed structured outputs with Pydantic support
-- ✅ Documented pricing: ~$0.15/month for typical usage
+- ✅ Documented estimated pricing: ~$0.05/month for typical usage
 
 ### 2. Package Installation
 - ✅ Installed `openai` (v2.7.1)
@@ -38,8 +38,8 @@ Implement an AI-powered categorization service using OpenAI GPT-4o-mini to autom
 - ✅ Support for batch categorization
 
 **Key Features**:
-- Uses GPT-4o-mini (cost-optimized)
-- Temperature 0.3 for consistent categorization
+- Uses GPT-6 Luna (cost-optimized)
+- Temperature 0.3 for consistent categorization (with `OPENAI_REASONING_EFFORT=none`)
 - Context-aware folder suggestions
 - Comprehensive error handling
 
@@ -53,7 +53,7 @@ Implement an AI-powered categorization service using OpenAI GPT-4o-mini to autom
 **Configuration Options**:
 ```python
 OPENAI_API_KEY: str        # Required
-OPENAI_MODEL: str          # Default: "gpt-4o-mini"
+OPENAI_MODEL: str          # Default: "gpt-6-luna"
 CONFIDENCE_THRESHOLD: float  # Default: 0.7
 NOTES_DIR: Path            # Default: backend/notes/
 DEFAULT_FOLDERS: list      # ["inbox", "archive"]
@@ -130,7 +130,8 @@ chisos/
    ```bash
    cd backend
    echo "OPENAI_API_KEY=sk-proj-your-key-here" > .env
-   echo "OPENAI_MODEL=gpt-4o-mini" >> .env
+   echo "OPENAI_MODEL=gpt-6-luna" >> .env
+   echo "OPENAI_REASONING_EFFORT=none" >> .env
    echo "CONFIDENCE_THRESHOLD=0.7" >> .env
    ```
 
@@ -156,6 +157,21 @@ chisos/
 | Work meeting | "Project Alpha kickoff..." | `work/project-alpha/` | create_subfolder |
 | Journal | "Today was a good day..." | `personal/journal/` | append |
 
+### Model Eval (2026-10-30)
+
+`scripts/eval_categorizer.py` runs 15 representative notes × 3 trials against the
+live model and scores folder + tag accuracy.
+
+```bash
+cd backend
+.venv/bin/python ../scripts/eval_categorizer.py --trials 3
+```
+
+Results on `gpt-6-luna`: folder `45/45`, tags `45/45`, overall `45/45` (100%),
+cost ~`$0.01`. The rubric accepts broad/specific folder paths and counts a tag
+when two expected tags appear (compound/plural aware). This is a small internal
+regression eval, not a benchmark.
+
 ---
 
 ## 📊 API Costs
@@ -166,12 +182,13 @@ chisos/
 - **Negligible cost** for development
 
 ### Production Usage
-- **Average per categorization**: $0.0001-$0.0003
-- **500 categorizations/month**: ~$0.15/month
-- **1,000 categorizations/month**: ~$0.30/month
+- **Average per categorization**: ~$0.0001
+- **500 categorizations/month**: ~$0.05/month
+- **1,000 categorizations/month**: ~$0.10/month
 
 ### Cost Optimization
-- Using GPT-4o-mini (10x cheaper than GPT-4o)
+- Using GPT-6 Luna (cheapest GPT-6 tier)
+- `OPENAI_REASONING_EFFORT=none` (avoids reasoning-token output cost)
 - Temperature 0.3 (reduces token usage)
 - Structured outputs (no retry logic needed)
 - Can add caching later for duplicate text
@@ -232,13 +249,14 @@ chisos/
 
 ## 💡 Key Design Decisions
 
-### 1. GPT-4o-mini vs GPT-4o
-**Decision**: Use GPT-4o-mini  
+### 1. GPT-6 Luna vs larger GPT-6 models
+**Decision**: Use GPT-6 Luna
+
 **Rationale**: 
-- 10x cheaper ($0.15 vs $1.50 per 1M tokens)
-- Still highly accurate for categorization tasks
-- Fast response times (~200-500ms)
-- Can upgrade to GPT-4o via config if needed
+- Cheapest GPT-6 tier ($0.10 input / $0.50 output per 1M tokens)
+- Validated on a 15-note internal eval (100% overall, 45 runs)
+- Fast response times with `OPENAI_REASONING_EFFORT=none`
+- Can switch to a larger model via config if needed
 
 ### 2. Structured Outputs vs JSON Mode
 **Decision**: Use structured outputs with Pydantic  

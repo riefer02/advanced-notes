@@ -1,11 +1,11 @@
 # Chisos Backend
 
-Flask API server with OpenAI GPT-4o-mini-transcribe for speech-to-text and advanced notes management.
+Flask API server with OpenAI gpt-transcribe for speech-to-text and advanced notes management.
 
 ## Features
 
-- **Transcription**: OpenAI GPT-4o-mini-transcribe API
-- **AI Categorization**: GPT-4o-mini with structured outputs
+- **Transcription**: OpenAI gpt-transcribe API
+- **AI Categorization**: GPT-6 Luna with structured outputs
 - **Authentication**: Clerk JWT verification with user isolation
 - **Storage**: SQLite (dev) / PostgreSQL (prod) with full-text search
 - **Migrations**: Alembic for database schema management
@@ -20,6 +20,9 @@ uv sync
 # Create .env file with required variables
 cat > .env << EOF
 OPENAI_API_KEY=sk-your-key-here
+OPENAI_MODEL=gpt-6-luna
+OPENAI_REASONING_EFFORT=none
+TRANSCRIBE_MODEL=gpt-transcribe
 CLERK_DOMAIN=your-app.clerk.accounts.dev  # Clerk Dashboard > API Keys > "Issuer" (without https://)
 CLERK_SECRET_KEY=sk_test_your_secret_key  # Clerk Dashboard > API Keys > "Secret keys"
 EOF

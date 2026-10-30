@@ -18,7 +18,7 @@ from enum import StrEnum
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
 
-from .openai_provider import build_openai_client, chat_model
+from .openai_provider import build_openai_client, chat_model, chat_reasoning_extra_body
 
 
 class AskIntent(StrEnum):
@@ -123,6 +123,7 @@ class QueryPlanner:
                 ],
                 response_format=QueryPlan,
                 temperature=0.2,
+                extra_body=chat_reasoning_extra_body(self.model),
             )
 
             plan = completion.choices[0].message.parsed

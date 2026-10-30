@@ -1,5 +1,5 @@
 """
-AI Summarizer Service using OpenAI GPT-4o-mini
+AI Summarizer Service using OpenAI GPT-6 Luna
 
 This module provides an abstraction layer for generating digests from multiple notes.
 """
@@ -8,7 +8,7 @@ This module provides an abstraction layer for generating digests from multiple n
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
 
-from .openai_provider import build_openai_client, chat_model
+from .openai_provider import build_openai_client, chat_model, chat_reasoning_extra_body
 
 
 class DigestResult(BaseModel):
@@ -41,7 +41,7 @@ class SummarizationResult(BaseModel):
 
 class AISummarizerService:
     """
-    AI-powered note summarization using OpenAI GPT-4o-mini.
+    AI-powered note summarization using OpenAI GPT-6 Luna.
     """
     
     def __init__(
@@ -55,7 +55,7 @@ class AISummarizerService:
         
         Args:
             api_key: OpenAI API key. If None, reads from OPENAI_API_KEY env var
-            model: Model to use (default: gpt-4o-mini)
+            model: Model to use (default: gpt-6-luna)
         """
         self.client = client or build_openai_client(api_key)
         self.model = model or chat_model()
@@ -95,6 +95,7 @@ class AISummarizerService:
                 ],
                 response_format=DigestResult,
                 temperature=0.3,
+                extra_body=chat_reasoning_extra_body(self.model),
             )
 
             result = completion.choices[0].message.parsed

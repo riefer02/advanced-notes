@@ -3,7 +3,7 @@
 **Production-ready advanced notes application** with audio transcription using:
 
 - **Frontend**: Vite + React + TypeScript + Tailwind CSS
-- **Backend**: Flask + OpenAI GPT-4o-mini-transcribe (API-based)
+- **Backend**: Flask + OpenAI gpt-transcribe (API-based)
 - **Python tooling**: `uv` (fast package manager from Astral)
 - **Deployment-friendly**: No GPU required, pure API calls
 
@@ -110,13 +110,13 @@ chisos/
 ### Backend (`backend/`)
 
 1. **Transcription** (`app/asr.py`):
-   - Uses **OpenAI GPT-4o-mini-transcribe** API
+   - Uses **OpenAI gpt-transcribe** API
    - Supports: MP3, WAV, WebM, M4A, MP4, MPEG, MPGA (up to 25MB)
    - No local model download required
    - Fast, reliable, API-based transcription
 
 2. **AI Categorization** (`app/services/ai_categorizer.py`):
-   - Uses **OpenAI GPT-4o-mini** for semantic analysis
+   - Uses **OpenAI GPT-6 Luna** for semantic analysis
    - Generates folder paths, filenames, tags automatically
    - Structured JSON outputs for reliability
 
@@ -155,7 +155,7 @@ chisos/
   "text": "transcribed speech text",
   "meta": {
     "device": "openai-api",
-    "model": "gpt-4o-mini-transcribe",
+    "model": "gpt-transcribe",
     "language": "en",
     "duration": 3.45
   },
@@ -266,12 +266,17 @@ Check API usage via the `meta.model` field in responses.
 **Ask Notes returns 500**
 - Verify `OPENAI_API_KEY` is set
 - Ensure your OpenAI project has access to the configured models:
-  - `OPENAI_MODEL` (default: `gpt-4o-mini`)
+  - `OPENAI_MODEL` (default: `gpt-6-luna`)
+  - `TRANSCRIBE_MODEL` (default: `gpt-transcribe`)
   - `OPENAI_EMBEDDING_MODEL` (default: `text-embedding-3-small`)
 
 **Transcription fails with 401 error**
 - Check your API key is valid
 - Ensure you have credits/billing set up on OpenAI
+
+**Transcription fails with 404/model_not_found**
+- The project may not have access to `TRANSCRIBE_MODEL` yet
+- Check `GET /v1/models` or temporarily set `TRANSCRIBE_MODEL` to a model the project can use
 
 **Transcription too slow**
 - OpenAI API typically responds in 1-3 seconds
@@ -303,7 +308,7 @@ Check API usage via the `meta.model` field in responses.
 - **File size limits**: Use the caps in `app/config.py` (`MAX_AUDIO_BYTES`, `MAX_IMAGE_BYTES`, `MAX_AVATAR_BYTES`) and read with a bounded `file.read(limit + 1)`
 - **Rate limiting**: Use `flask-limiter`
 - **Authentication**: Add API keys or OAuth
-- **Streaming**: Implement chunked upload + streaming ASR (if NeMo supports)
+- **Streaming**: Stream a completed upload with `stream=True` (SSE transcript events), or use the Realtime API with `gpt-live-transcribe` for live mic audio
 - **Deployment**: Use Gunicorn/uWSGI instead of Flask dev server
   ```bash
   uv add gunicorn
@@ -323,11 +328,12 @@ Check API usage via the `meta.model` field in responses.
 
 ### Transcription
 
+- **Model**: `gpt-transcribe` for uploaded recordings. The `gpt-4o-*-transcribe` family shuts down on 2027-02-26.
 - **Cost monitoring**: Track OpenAI API usage on dashboard
-- **Model upgrade**: Switch to `gpt-4o-transcribe` for higher quality (more expensive)
-- **Diarization**: Use `gpt-4o-transcribe-diarize` for speaker labels
-- **Streaming**: Enable `stream=True` for real-time transcription
-- **Prompting**: Add custom prompts to improve accuracy for specific domains
+- **Quality**: Use `prompt`, `keywords`, and `languages` (via `extra_body`) for domain terms and multilingual audio
+- **Streaming a completed file**: `stream=True` returns SSE transcript events; it is not live audio
+- **Realtime**: Use a Realtime transcription session with `gpt-live-transcribe` and client-side VAD; see [realtime transcription docs](https://developers.openai.com/api/docs/guides/realtime-transcription)
+- **Diarization/timestamps**: No current non-deprecated OpenAI model. `gpt-4o-transcribe-diarize` and `whisper-1` shut down 2027-02-26, so don't build on them
 
 ---
 
@@ -335,8 +341,8 @@ Check API usage via the `meta.model` field in responses.
 
 | Component | Link |
 |-----------|------|
-| **OpenAI Transcription** | [Speech to Text Docs](https://platform.openai.com/docs/guides/speech-to-text) |
-| **GPT-4o-mini** | [Model Docs](https://platform.openai.com/docs/models/gpt-4o-mini) |
+| **OpenAI Transcription** | [Speech to Text Docs](https://developers.openai.com/api/docs/guides/speech-to-text) |
+| **GPT-6 Luna** | [Model Docs](https://developers.openai.com/api/docs/models/gpt-6-luna) |
 | **TanStack Query** | [React Query Docs](https://tanstack.com/query/latest) |
 | **SQLite FTS5** | [Full-Text Search](https://www.sqlite.org/fts5.html) |
 | **Vite** | [Getting Started](https://vite.dev/guide/) |
@@ -349,8 +355,8 @@ Check API usage via the `meta.model` field in responses.
 ## 🎯 Acceptance Criteria ✅
 
 - ✅ Vite frontend with Tailwind for recording/uploading audio
-- ✅ OpenAI API transcription (gpt-4o-mini-transcribe)
-- ✅ AI-powered categorization (GPT-4o-mini)
+- ✅ OpenAI API transcription (gpt-transcribe)
+- ✅ AI-powered categorization (GPT-6 Luna)
 - ✅ SQLite database storage with FTS5 search
 - ✅ 11 REST API endpoints for full CRUD
 - ✅ Split-pane layout with folder navigation
@@ -363,8 +369,8 @@ Check API usage via the `meta.model` field in responses.
 
 ## 🚧 Future Enhancements
 
-- [ ] Speaker diarization (gpt-4o-transcribe-diarize)
-- [ ] Streaming transcription with WebSocket
+- [ ] Realtime transcription with WebSocket (`gpt-live-transcribe`)
+- [ ] Speaker diarization (deferred: no non-deprecated OpenAI model as of Oct 2026)
 - [ ] Note editing UI with inline updates
 - [ ] Bulk operations (move, delete, export)
 - [ ] Export as Markdown/PDF

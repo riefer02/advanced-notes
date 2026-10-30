@@ -10,6 +10,7 @@ import { apiRequest, apiUpload, audioFormData } from './core'
 export interface TranscriptionMeta {
   device: string
   model: string
+  language?: string | null
   sample_rate?: number
   duration?: number
   duration_sec?: number

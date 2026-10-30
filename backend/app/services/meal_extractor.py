@@ -1,5 +1,5 @@
 """
-AI Meal Extraction Service using OpenAI GPT-4o-mini
+AI Meal Extraction Service using OpenAI GPT-6 Luna
 
 This module provides meal data extraction from voice transcriptions.
 Uses structured outputs with Pydantic models for reliable JSON responses.
@@ -11,7 +11,7 @@ from enum import StrEnum
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, Field
 
-from .openai_provider import build_openai_client, chat_model
+from .openai_provider import build_openai_client, chat_model, chat_reasoning_extra_body
 
 
 class MealType(StrEnum):
@@ -65,7 +65,7 @@ class MealExtractionResult(BaseModel):
 
 class MealExtractorService:
     """
-    AI-powered meal extraction using OpenAI GPT-4o-mini.
+    AI-powered meal extraction using OpenAI GPT-6 Luna.
 
     Features:
     - Extracts meal type (breakfast, lunch, dinner, snack)
@@ -85,7 +85,7 @@ class MealExtractorService:
 
         Args:
             api_key: OpenAI API key. If None, reads from OPENAI_API_KEY env var
-            model: Model to use (default: gpt-4o-mini for cost/speed balance)
+            model: Model to use (default: gpt-6-luna for cost/speed balance)
         """
         self.client = client or build_openai_client(api_key)
         self.model = model or chat_model()
@@ -134,6 +134,7 @@ class MealExtractorService:
                 ],
                 response_format=MealExtractionResult,
                 temperature=0.3,  # Lower temperature for more consistent extraction
+                extra_body=chat_reasoning_extra_body(self.model),
             )
 
             # Extract the parsed response

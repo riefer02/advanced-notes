@@ -1,19 +1,60 @@
 """
-Audio transcription using OpenAI GPT-4o-mini-transcribe.
+Audio transcription using OpenAI gpt-transcribe.
 
-Uses OpenAI's latest transcription model for easy deployment.
-Model: gpt-4o-mini-transcribe-2025-12-15 (pinned snapshot; newer, higher quality than whisper-1)
+gpt-transcribe is the current file-transcription model. The
+gpt-4o-*-transcribe family it replaces shuts down on 2027-02-26.
 """
 
+import logging
 import os
 import tempfile
 
 from .services.openai_provider import get_transcription_client, transcribe_model
 
+logger = logging.getLogger(__name__)
 
-def transcribe_bytes(audio_bytes: bytes, content_type: str = None):
+
+def _duration_seconds(response: object) -> float | None:
+    """Read billed audio duration from the response usage object.
+
+    gpt-transcribe is billed per minute and returns
+    ``usage: {"type": "duration", "seconds": ...}``. Token-billed models carry
+    no audio duration, so return None instead of inventing a value.
     """
-    Transcribe audio from raw bytes using OpenAI GPT-4o-mini-transcribe.
+    usage = getattr(response, "usage", None)
+    if isinstance(usage, dict):
+        if usage.get("type") != "duration":
+            return None
+        seconds = usage.get("seconds")
+    else:
+        if usage is None or getattr(usage, "type", None) != "duration":
+            return None
+        seconds = getattr(usage, "seconds", None)
+    if seconds is None:
+        return None
+    try:
+        return float(seconds)
+    except (TypeError, ValueError):
+        logger.warning("Transcription usage had an invalid duration: %r", seconds)
+        return None
+
+
+def _detected_language(response: object) -> str | None:
+    """Return the first detected language code, if the model reported one."""
+    languages = getattr(response, "languages", None) or []
+    if not languages:
+        return None
+    first = languages[0]
+    if isinstance(first, dict):
+        return first.get("code")
+    return getattr(first, "code", None)
+
+
+def transcribe_bytes(
+    audio_bytes: bytes, content_type: str | None = None
+) -> tuple[str, dict[str, str | float | None]]:
+    """
+    Transcribe audio from raw bytes using OpenAI gpt-transcribe.
 
     Supports: mp3, mp4, mpeg, mpga, m4a, wav, webm (up to 25MB)
 
@@ -70,26 +111,32 @@ def transcribe_bytes(audio_bytes: bytes, content_type: str = None):
         temp_path = temp_file.name
 
     try:
-        # Call OpenAI GPT-4o-mini-transcribe API
-        # Using json response format (text and verbose_json not supported by gpt-4o models)
+        model = transcribe_model()
+        # gpt-transcribe defaults to json; keep it explicit so we get the
+        # structured Transcription object (text + languages + usage).
         with open(temp_path, "rb") as audio_file:
             response = client.audio.transcriptions.create(
-                model=transcribe_model(),
+                model=model,
                 file=audio_file,
-                response_format="json",  # gpt-4o models support json or text
+                response_format="json",
             )
 
         # Extract text and metadata
         text = response.text
+        duration = _duration_seconds(response)
+        if duration is None:
+            logger.warning(
+                "Transcription response for %s had no duration usage; "
+                "quota and cost tracking will be skipped",
+                model,
+            )
 
         meta = {
             "device": "openai-api",
-            "model": transcribe_model(),
-            "language": response.language if hasattr(response, "language") else None,
-            "duration": response.duration if hasattr(response, "duration") else None,
-            "duration_sec": response.duration
-            if hasattr(response, "duration")
-            else None,
+            "model": model,
+            "language": _detected_language(response),
+            "duration": duration,
+            "duration_sec": duration,
         }
 
         return text, meta

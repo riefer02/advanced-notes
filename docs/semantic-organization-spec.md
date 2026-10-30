@@ -12,7 +12,7 @@
 | Phase       | Component            | Status      | Details                                   |
 | ----------- | -------------------- | ----------- | ----------------------------------------- |
 | **Phase 1** | Storage Layer        | ✅ Complete | Database-only (SQLite + FTS5)             |
-| **Phase 2** | AI Categorization    | ✅ Complete | OpenAI GPT-4o-mini with structured output |
+| **Phase 2** | AI Categorization    | ✅ Complete | OpenAI GPT-6 Luna with structured output |
 | **Phase 3** | Frontend Integration | ✅ Complete | TanStack Query + 5 React components       |
 
 ### 🎯 **Current Architecture**
@@ -47,14 +47,14 @@
 │  │ AI Categorizer  │   │ Storage Service         │     │
 │  │ (OpenAI)        │   │ (SQLite + FTS5)         │     │
 │  │                 │   │                         │     │
-│  │ • GPT-4o-mini   │   │ • Database-only storage │     │
+│  │ • GPT-6 Luna    │   │ • Database-only storage │     │
 │  │ • Structured    │   │ • Full-text search      │     │
 │  │   output        │   │ • Folder hierarchy      │     │
 │  │ • 0.7 threshold │   │ • Tag management        │     │
 │  └─────────────────┘   └─────────────────────────┘     │
 │           ↓                      ↓                       │
 │  ┌─────────────────────────────────────────────────┐    │
-│  │ OpenAI GPT-4o-mini-transcribe (ASR)            │    │
+│  │ OpenAI gpt-transcribe (ASR)                    │    │
 │  │ • API-based transcription                       │    │
 │  │ • Supports multiple audio formats               │    │
 │  └─────────────────────────────────────────────────┘    │
@@ -78,7 +78,7 @@ Backend receives audio blob
 ### **2. Transcription**
 
 ```
-OpenAI GPT-4o-mini-transcribe transcribes audio
+OpenAI gpt-transcribe transcribes audio
     ↓
 Returns: text + metadata (model, duration, etc.)
 ```
@@ -88,7 +88,7 @@ Returns: text + metadata (model, duration, etc.)
 ```
 AI Categorizer receives transcript + existing folders
     ↓
-OpenAI GPT-4o-mini analyzes content
+OpenAI GPT-6 Luna analyzes content
     ↓
 Returns structured output:
   - folder_path: "blog-ideas/react"
@@ -137,7 +137,7 @@ chisos/
 │   │   ├── asr.py                # OpenAI transcription
 │   │   ├── config.py             # Configuration + env vars
 │   │   └── services/
-│   │       ├── ai_categorizer.py # OpenAI GPT-4o-mini ✅
+│   │       ├── ai_categorizer.py # OpenAI GPT-6 Luna ✅
 │   │       ├── storage.py        # SQLAlchemy ORM + FTS (SQLite & Postgres) ✅
 │   │       └── models.py         # Pydantic data models ✅
 │   ├── tests/
@@ -199,7 +199,7 @@ chisos/
 
 #### **2. AI Categorization Service**
 
-- **Model:** OpenAI GPT-4o-mini
+- **Model:** OpenAI GPT-6 Luna
 - **Structured Output:** JSON schema with Pydantic
 - **Confidence Threshold:** 0.7 (configurable)
 - **Context:** Receives existing folder list for decisions
@@ -355,11 +355,17 @@ chisos/
 
 | Metric                      | Target | Status                    |
 | --------------------------- | ------ | ------------------------- |
-| **Categorization Accuracy** | >85%   | ✅ Achieved (GPT-4o-mini) |
+| **Categorization Accuracy** | >85%   | ✅ 100% (15 notes × 3 runs, internal eval) |
 | **Time to Save**            | <5s    | ✅ Achieved (~2-3s)       |
 | **Auto-refresh**            | <10s   | ✅ Achieved (5s)          |
 | **Keyboard Navigation**     | 100%   | ✅ Complete               |
 | **Mobile Responsive**       | Yes    | ✅ Complete               |
+
+Categorization accuracy was measured on 2026-10-30 with `scripts/eval_categorizer.py`:
+15 representative notes × 3 runs on `gpt-6-luna`, 100% overall. The rubric
+accepts broad/specific folder paths and counts a tag as matched when two expected
+tags appear (compound/plural aware). This is a small internal regression eval,
+not a benchmark.
 
 ---
 
@@ -370,7 +376,9 @@ chisos/
 ```bash
 # Backend (.env)
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-6-luna
+OPENAI_REASONING_EFFORT=none
+TRANSCRIBE_MODEL=gpt-transcribe
 CONFIDENCE_THRESHOLD=0.7
 FLASK_ENV=development
 
@@ -394,7 +402,7 @@ VITE_API_URL=http://localhost:5001
 
 - Python 3.11+
 - Flask + Flask-CORS
-- OpenAI API (GPT-4o-mini-transcribe & GPT-4o-mini)
+- OpenAI API (gpt-transcribe & GPT-6 Luna)
 - SQLite + FTS5
 - Pydantic v2
 

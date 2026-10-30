@@ -17,6 +17,8 @@ def create_app(*, services: Services | None = None, testing: bool = False):
     if testing:
         app.config["TESTING"] = True
     else:
+        # Warn if a deployment is still pinned to a model with a shutdown date.
+        Config.warn_deprecated_models()
         # Fail fast for misconfigured environments when audio clips are enabled.
         # (We intentionally do NOT require S3 config when the feature flag is off.)
         Config.validate_audio_clips()

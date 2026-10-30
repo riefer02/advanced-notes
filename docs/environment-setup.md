@@ -21,7 +21,9 @@ FLASK_ENV=development
 # OpenAI API Configuration
 # Get your key from: https://platform.openai.com/api-keys
 OPENAI_API_KEY=sk-proj-your-actual-api-key-here
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-6-luna
+OPENAI_REASONING_EFFORT=none
+TRANSCRIBE_MODEL=gpt-transcribe
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 
 # Categorization Settings
@@ -74,7 +76,9 @@ Copy this template to `backend/.env` and fill in your actual values:
 ```bash
 FLASK_ENV=development
 OPENAI_API_KEY=sk-proj-abc123...xyz789
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-6-luna
+OPENAI_REASONING_EFFORT=none
+TRANSCRIBE_MODEL=gpt-transcribe
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 CONFIDENCE_THRESHOLD=0.7
 ```
@@ -123,31 +127,37 @@ If successful, you'll see categorization results for test cases.
 
 ## API Costs & Usage
 
-### GPT-4o-mini Pricing (2025)
+### GPT-6 Luna Pricing (2026)
 
 | Metric | Cost |
 |--------|------|
-| Input tokens | $0.15 per 1M tokens |
-| Output tokens | $0.60 per 1M tokens |
-| Average per categorization | $0.0001 - $0.0003 |
-| 100 categorizations | ~$0.01 - $0.03 |
-| 1,000 categorizations | ~$0.10 - $0.30 |
+| Input tokens | $0.10 per 1M tokens |
+| Output tokens | $0.50 per 1M tokens |
+| Average per categorization | ~$0.0001 |
+| 100 categorizations | ~$0.01 |
+| 1,000 categorizations | ~$0.05 - $0.10 |
+
+### Transcription Pricing
+
+`gpt-transcribe` is **$0.0045 per audio minute** (~$0.27 per hour), billed by
+audio duration. That is 50% more than the outgoing `gpt-4o-mini-transcribe`
+($0.003/min).
 
 ### Typical Token Usage
 
-- **Average transcription**: 50-200 tokens
 - **Categorization prompt**: ~300 tokens
 - **Structured output**: ~100 tokens
 - **Total per request**: ~450-600 tokens
+- **Transcription**: billed per audio minute, not tokens
 
 **Example**: 
 - 500 categorizations/month
 - ~275,000 tokens/month
-- **Cost: ~$0.15/month** (negligible!)
+- **Cost: ~$0.05/month** with `OPENAI_REASONING_EFFORT=none`
 
 ### Cost Optimization Tips
 
-1. **Use GPT-4o-mini** (not GPT-4o) - 10x cheaper
+1. **Keep `OPENAI_REASONING_EFFORT=none`** for short structured-output calls; reasoning tokens are billed as output
 2. **Cache categorization results** - avoid re-analyzing identical text
 3. **Set usage limits** - prevent unexpected charges
 4. **Monitor usage** via OpenAI dashboard
@@ -160,20 +170,29 @@ If successful, you'll see categorization results for test cases.
 
 | Model | Speed | Cost | Best For |
 |-------|-------|------|----------|
-| **gpt-4o-mini** | ⚡ Fast | 💰 Cheap | Categorization (recommended) |
-| gpt-4o | ⚡ Fast | 💰💰 Moderate | Complex reasoning |
-| gpt-4-turbo | 🐢 Slower | 💰💰💰 Expensive | Legacy, not recommended |
+| **gpt-6-luna** | ⚡ Fast | 💰 Cheap | Categorization (default) |
+| gpt-6.1-terra | ⚡ Fast | 💰💰 Moderate | Higher-quality extraction |
+| gpt-6.1-sol | 🐢 Slower | 💰💰💰 Higher | Complex reasoning |
+
+`gpt-4o-mini` and the other GPT-4 series models shut down on 2027-01-14. The
+`gpt-4o-*-transcribe` family shuts down on 2027-02-26.
 
 ### Changing Models
 
 Edit `backend/.env`:
 
 ```bash
-# Use GPT-4o-mini (default, recommended)
-OPENAI_MODEL=gpt-4o-mini
+# Default (recommended)
+OPENAI_MODEL=gpt-6-luna
+OPENAI_REASONING_EFFORT=none
 
-# Or use GPT-4o for higher accuracy (10x more expensive)
-OPENAI_MODEL=gpt-4o
+# Or use a more capable model. Terra also supports "none"; Astra and 6.1 Sol
+# keep their default effort because they reject "none".
+OPENAI_MODEL=gpt-6.1-terra
+OPENAI_REASONING_EFFORT=none
+
+# Transcription model
+TRANSCRIBE_MODEL=gpt-transcribe
 ```
 
 ---
@@ -219,7 +238,9 @@ If a key is compromised:
 ```bash
 cd backend
 echo "OPENAI_API_KEY=sk-proj-your-key-here" > .env
-echo "OPENAI_MODEL=gpt-4o-mini" >> .env
+echo "OPENAI_MODEL=gpt-6-luna" >> .env
+echo "OPENAI_REASONING_EFFORT=none" >> .env
+echo "TRANSCRIBE_MODEL=gpt-transcribe" >> .env
 echo "CONFIDENCE_THRESHOLD=0.7" >> .env
 ```
 
@@ -261,13 +282,17 @@ Use your hosting platform's environment variable system:
 **Heroku:**
 ```bash
 heroku config:set OPENAI_API_KEY=sk-proj-...
-heroku config:set OPENAI_MODEL=gpt-4o-mini
+heroku config:set OPENAI_MODEL=gpt-6-luna
+heroku config:set OPENAI_REASONING_EFFORT=none
+heroku config:set TRANSCRIBE_MODEL=gpt-transcribe
 ```
 
 **AWS/Railway/Render:**
 Use their environment variable UI to add:
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
+- `OPENAI_REASONING_EFFORT`
+- `TRANSCRIBE_MODEL`
 - `CONFIDENCE_THRESHOLD`
 
 ### Security Hardening
@@ -282,8 +307,8 @@ Use their environment variable UI to add:
 
 ## Additional Resources
 
-- [OpenAI API Documentation](https://platform.openai.com/docs)
-- [OpenAI Pricing](https://openai.com/api/pricing/)
-- [OpenAI Best Practices](https://platform.openai.com/docs/guides/production-best-practices)
-- [Rate Limits Guide](https://platform.openai.com/docs/guides/rate-limits)
+- [OpenAI API Documentation](https://developers.openai.com/api/docs)
+- [OpenAI Pricing](https://developers.openai.com/api/docs/pricing)
+- [OpenAI Best Practices](https://developers.openai.com/api/docs/guides/production-best-practices)
+- [Rate Limits Guide](https://developers.openai.com/api/docs/guides/rate-limits)
 

@@ -355,7 +355,7 @@ def _transcribe_audio_clip(
         svc.usage_tracking.record_usage(
             user_id=user_id,
             service_type="transcription",
-            model=meta.get("model", "gpt-4o-mini-transcribe"),
+            model=meta.get("model") or Config.TRANSCRIBE_MODEL,
             audio_seconds=float(audio_duration),
             endpoint=endpoint,
         )

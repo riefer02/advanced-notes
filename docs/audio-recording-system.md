@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Chisos audio recording system enables users to record voice notes directly in the browser on both desktop and mobile devices. The system automatically transcribes recordings using OpenAI's GPT-4o-mini-transcribe model and organizes them with AI-powered categorization.
+The Chisos audio recording system enables users to record voice notes directly in the browser on both desktop and mobile devices. The system automatically transcribes recordings using OpenAI's `gpt-transcribe` model and organizes them with AI-powered categorization.
 
 ## Architecture
 
@@ -249,9 +249,9 @@ def transcribe():
 Maps MIME types to file extensions for OpenAI API:
 
 ```python
-def transcribe_bytes(audio_bytes: bytes, content_type: str = None):
+def transcribe_bytes(audio_bytes: bytes, content_type: str | None = None):
     """
-    Transcribe audio using OpenAI GPT-4o-mini-transcribe.
+    Transcribe audio using OpenAI gpt-transcribe.
     Supports: mp3, mp4, mpeg, mpga, m4a, wav, webm (up to 25MB)
     """
     # Map MIME types to extensions
@@ -282,12 +282,21 @@ def transcribe_bytes(audio_bytes: bytes, content_type: str = None):
         # Send to OpenAI
         with open(temp_path, "rb") as audio_file:
             response = client.audio.transcriptions.create(
-                model="gpt-4o-mini-transcribe",
+                model="gpt-transcribe",
                 file=audio_file,
                 response_format="json",
             )
         
-        return response.text, metadata
+        meta = {
+            "model": "gpt-transcribe",
+            "language": (response.languages or [{}])[0].get("code"),
+            "duration": (
+                response.usage.seconds
+                if response.usage and response.usage.type == "duration"
+                else None
+            ),
+        }
+        return response.text, meta
     finally:
         os.unlink(temp_path)
 ```
@@ -303,23 +312,27 @@ OpenAI's transcription API accepts:
 
 ### Model Details
 
-- **Model:** `gpt-4o-mini-transcribe`
+- **Model:** `gpt-transcribe`
 - **Advantages:**
-  - Higher quality than Whisper-1
+  - Higher quality than the outgoing `whisper-1` path
   - Better punctuation and formatting
   - Faster inference
   - More accurate for diverse accents
-  - Includes language detection
+  - Returns detected languages
+- **Context controls:** `prompt`, `keywords`, and `languages` can be sent as `extra_body` fields to improve domain terms and multilingual audio.
+- **Migration note:** The `gpt-4o-transcribe` and `gpt-4o-mini-transcribe` families shut down on 2027-02-26. `gpt-transcribe` has no dated snapshot, so `TRANSCRIBE_MODEL` uses the alias.
 
 ### Response Format
 
 ```json
 {
   "text": "Transcribed text with proper punctuation.",
-  "language": "en",
-  "duration": 12.5
+  "languages": [{"code": "en"}],
+  "usage": {"type": "duration", "seconds": 12.5}
 }
 ```
+
+The billed duration lives in `usage.seconds`; there is no top-level `duration` field. `backend/app/asr.py` maps it into the API response's `meta.duration` for quota tracking and note metadata.
 
 ## Mobile-Specific Considerations
 
@@ -446,9 +459,11 @@ print(f"Creating temp file with extension: {extension}")
    - IndexedDB storage for pending uploads
 
 4. **Real-Time Transcription**
-   - Stream audio chunks as they're recorded
-   - Display partial transcripts
-   - Faster user feedback
+   - Use a Realtime transcription session with `gpt-live-transcribe`
+   - Connect to `wss://api.openai.com/v1/realtime?intent=transcription` and send `session.update` with `type: "transcription"` and `turn_detection: null`
+   - Do VAD client-side, then `input_audio_buffer.commit` per turn
+   - Display `conversation.item.input_audio_transcription.delta` events and reconcile on `.completed`
+   - Note: `stream=True` on the file endpoint streams SSE for an already-uploaded file; it is not live audio
 
 5. **Audio Processing**
    - Noise reduction preprocessing

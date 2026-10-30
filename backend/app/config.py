@@ -5,6 +5,7 @@ Loads environment variables and provides centralized config access.
 """
 
 import os
+import warnings
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -43,6 +44,25 @@ class ContentConfig:
     MAX_QUERY_LENGTH = 2000
     CONTENT_EXCERPT_LENGTH = 2000
     SNIPPET_LENGTH = 220
+
+
+# OpenAI models this app has used that are already scheduled for shutdown.
+# Kept as a warning (not an error) so a deploy that still pins an old model in
+# an environment variable keeps working until the actual shutdown date.
+DEPRECATED_OPENAI_MODELS: dict[str, str] = {
+    "gpt-4o-mini": "2027-01-14",
+    "gpt-4o-mini-2024-07-18": "2027-01-14",
+    "gpt-4o": "2027-01-14",
+    "gpt-4o-2024-08-06": "2027-01-14",
+    "gpt-4o-2024-11-20": "2027-01-14",
+    "gpt-4.1": "2027-01-14",
+    "gpt-4.1-2025-04-14": "2027-01-14",
+    "whisper-1": "2027-02-26",
+    "gpt-4o-transcribe": "2027-02-26",
+    "gpt-4o-mini-transcribe": "2027-02-26",
+    "gpt-4o-mini-transcribe-2025-12-15": "2027-02-26",
+    "gpt-4o-transcribe-diarize": "2027-02-26",
+}
 
 
 class Config:
@@ -89,15 +109,19 @@ class Config:
 
     # OpenAI settings (used for both transcription and GPT categorization)
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
-    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-6-luna")
+    # Reasoning models (GPT-6/GPT-5/o-series) default to medium effort, which
+    # adds latency and output tokens to short structured-output calls. "none"
+    # keeps behavior close to the old gpt-4o-mini path and allows temperature.
+    OPENAI_REASONING_EFFORT: str = os.getenv("OPENAI_REASONING_EFFORT", "none")
     OPENAI_EMBEDDING_MODEL: str = os.getenv(
         "OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"
     )
 
     # Transcription settings
-    # Using a pinned snapshot for stability/reproducibility across deploys.
-    # (Newer, higher quality than whisper-1)
-    WHISPER_MODEL: str = "gpt-4o-mini-transcribe-2025-12-15"
+    # gpt-transcribe replaces the gpt-4o-*-transcribe family, which shuts down
+    # on 2027-02-26. It has no dated snapshot, so the alias is the only option.
+    TRANSCRIBE_MODEL: str = os.getenv("TRANSCRIBE_MODEL", "gpt-transcribe")
 
     # Storage settings (database-only, no file system storage)
     BASE_DIR: Path = Path(__file__).parent.parent  # backend/
@@ -234,12 +258,26 @@ class Config:
         return aliases.get(v, v)
 
     @classmethod
+    def warn_deprecated_models(cls) -> None:
+        """Warn (but don't fail) when an env var points at a retired model."""
+        for model in (cls.OPENAI_MODEL, cls.TRANSCRIBE_MODEL):
+            shutdown = DEPRECATED_OPENAI_MODELS.get(model)
+            if shutdown:
+                warnings.warn(
+                    f"OpenAI model {model!r} is deprecated and shuts down on "
+                    f"{shutdown}. Update OPENAI_MODEL/TRANSCRIBE_MODEL before then.",
+                    stacklevel=2,
+                )
+
+    @classmethod
     def validate(cls):
         """Validate required configuration"""
         errors = []
 
         if not cls.OPENAI_API_KEY:
             errors.append("OPENAI_API_KEY is not set")
+
+        cls.warn_deprecated_models()
 
         if errors:
             raise ValueError(f"Configuration errors: {', '.join(errors)}")
