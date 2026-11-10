@@ -214,7 +214,7 @@ Three rules for every feature:
 - **No mixed PRs.** Reliability and product changes ship separately.
 
 **Definition of done (every slice)**
-1. Backend tests pass (`406+` today), coverage stays ≥ 80%.
+1. Backend tests pass (`450+` today); CI gate is ≥50%, target stays ≥80%.
 2. Frontend lint, format, tests, and production build pass.
 3. Migration verified `upgrade head` **and** `downgrade` on SQLite; Postgres CI job green.
 4. New env vars documented in `.env.example` and `docs/railway-deployment.md`.

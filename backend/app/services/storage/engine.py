@@ -19,39 +19,6 @@ from ...database import Base, create_engine_for_url, get_engine, get_session_fac
 # SQLite FTS setup
 # ---------------------------------------------------------------------------
 
-SQLITE_FTS_STATEMENTS = [
-    """
-    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
-        note_id UNINDEXED,
-        title,
-        content,
-        tags,
-        tokenize = 'porter ascii'
-    )
-    """,
-    """
-    CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
-        INSERT INTO notes_fts(note_id, title, content, tags)
-        VALUES (new.id, new.title, new.content, new.tags);
-    END
-    """,
-    """
-    CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
-        UPDATE notes_fts SET
-            note_id = new.id,
-            title = new.title,
-            content = new.content,
-            tags = new.tags
-        WHERE note_id = old.id;
-    END
-    """,
-    """
-    CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
-        DELETE FROM notes_fts WHERE note_id = old.id;
-    END
-    """,
-]
-
 _SQLITE_SCHEMA_CACHE: dict[str, str] = {}
 
 
@@ -196,13 +163,8 @@ def _coerce_datetime(value: Any) -> datetime | None:
     if isinstance(value, datetime):
         return value
     if isinstance(value, str):
-        for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
-            try:
-                return datetime.fromisoformat(value) if "T" in value else datetime.strptime(value, fmt)
-            except ValueError:
-                continue
         try:
-            return datetime.fromisoformat(value.replace(" ", "T"))
+            return datetime.fromisoformat(value)
         except ValueError:
             return None
     return None

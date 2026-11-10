@@ -57,17 +57,17 @@ export interface Note {
   summary?: string | null
   content: string
   folder_path: string
-  filename: string
+  folder_id?: string | null
   tags: string[]
-  confidence: number
+  confidence: number | null
   transcription_duration: number | null
   model_version: string | null
   word_count: number
   created_at: string
   updated_at: string
-  source?: string
+  source: string
   language?: string | null
-  version?: number
+  version: number
   pinned_at?: string | null
   archived_at?: string | null
   deleted_at?: string | null

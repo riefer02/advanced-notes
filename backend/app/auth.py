@@ -6,6 +6,7 @@ This module provides JWT verification for Clerk authentication tokens.
 
 import logging
 import os
+import threading
 import time
 from functools import wraps
 from typing import Any
@@ -22,13 +23,13 @@ logger = logging.getLogger(__name__)
 
 # Clerk configuration from environment
 CLERK_DOMAIN = os.getenv('CLERK_DOMAIN', 'clerk.your-domain.com')
-CLERK_SECRET_KEY = os.getenv('CLERK_SECRET_KEY')
 
 # Cache for JWKS. Signing keys rotate, so entries expire; an unknown `kid`
 # forces an immediate refresh (see verify_clerk_token).
 _JWKS_TTL_SECONDS = 3600
 _jwks_cache: dict[str, Any] | None = None
 _jwks_cache_expires_at: float = 0.0
+_jwks_lock = threading.Lock()
 
 
 class JWKSUnavailableError(Exception):
@@ -63,24 +64,31 @@ def get_jwks(*, force_refresh: bool = False) -> dict[str, Any]:
         response.raise_for_status()
         return response.json()
 
-    try:
-        jwks = retry_with_backoff(
-            _fetch_jwks,
-            service="Clerk JWKS",
-            attempts=Config.JWKS_ATTEMPTS,
-        )
-    except Exception as e:
-        # Prefer a stale key set over logging everyone out during an outage:
-        # previously valid signing keys remain valid until Clerk revokes them.
-        if _jwks_cache is not None:
-            logger.warning("JWKS refresh failed, using cached keys: %s", e)
+    # Single-flight refresh: a key rotation must not make every in-flight
+    # request fetch JWKS at once.
+    with _jwks_lock:
+        now = time.monotonic()
+        if not force_refresh and _jwks_cache is not None and now < _jwks_cache_expires_at:
             return _jwks_cache
-        logger.error("Error fetching JWKS: %s", e)
-        raise JWKSUnavailableError(str(e)) from e
 
-    _jwks_cache = jwks
-    _jwks_cache_expires_at = time.monotonic() + _JWKS_TTL_SECONDS
-    return _jwks_cache
+        try:
+            jwks = retry_with_backoff(
+                _fetch_jwks,
+                service="Clerk JWKS",
+                attempts=Config.JWKS_ATTEMPTS,
+            )
+        except Exception as e:
+            # Prefer a stale key set over logging everyone out during an outage:
+            # previously valid signing keys remain valid until Clerk revokes them.
+            if _jwks_cache is not None:
+                logger.warning("JWKS refresh failed, using cached keys: %s", e)
+                return _jwks_cache
+            logger.error("Error fetching JWKS: %s", e)
+            raise JWKSUnavailableError(str(e)) from e
+
+        _jwks_cache = jwks
+        _jwks_cache_expires_at = time.monotonic() + _JWKS_TTL_SECONDS
+        return _jwks_cache
 
 
 def _find_key(jwks: dict[str, Any], kid: str) -> dict[str, Any] | None:

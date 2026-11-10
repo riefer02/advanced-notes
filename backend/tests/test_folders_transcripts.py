@@ -83,6 +83,31 @@ def test_empty_folder_stats_returns_404(client):
     assert response.status_code == 404
 
 
+def test_folder_path_is_normalized_on_create_and_update(client):
+    note = client.post(
+        "/api/notes",
+        json={
+            "title": "Padded",
+            "content": "body",
+            "folder_path": " Work // Q4 ",
+        },
+        headers=USER,
+    ).get_json()
+    assert note["folder_path"] == "Work/Q4"
+
+    listing = client.get(
+        "/api/notes", query_string={"folder": "Work/Q4"}, headers=USER
+    )
+    assert listing.get_json()["total"] == 1
+
+    updated = client.put(
+        f"/api/notes/{note['id']}",
+        json={"folder_path": "Personal // 2026"},
+        headers=USER,
+    ).get_json()
+    assert updated["folder_path"] == "Personal/2026"
+
+
 def test_transcripts_are_listed_for_a_note(client, app):
     note = _create(client, "Recorded", "inbox")
     storage = app.extensions["services"].storage

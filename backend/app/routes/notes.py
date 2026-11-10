@@ -6,6 +6,7 @@ from ..auth import require_auth
 from ..config import Config
 from ..services import s3_audio
 from ..services.container import get_services
+from ..services.folder_utils import normalize_folder_path
 from ..services.models import NoteMetadata
 from ..services.resilience import with_fallback
 from ..services.storage.notes import NOTE_VIEWS
@@ -82,8 +83,7 @@ def create_note():
         summary = str(summary_value).strip()[:1000] if summary_value else None
 
         raw_folder = str(data.get("folder_path") or "").strip()
-        folder_path = "/".join(part.strip() for part in raw_folder.split("/") if part.strip())
-        folder_path = folder_path[:500] or "inbox"
+        folder_path = normalize_folder_path(raw_folder)
 
         raw_tags = data.get("tags") or []
         if isinstance(raw_tags, str):

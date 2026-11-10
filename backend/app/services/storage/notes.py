@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import Text, case, cast, desc, func, or_, text
+from sqlalchemy.exc import IntegrityError
 
 from ...database import Folder as FolderORM
 from ...database import Note as NoteORM
@@ -17,6 +18,7 @@ from ...database import NoteRevision as NoteRevisionORM
 from ...database import NoteTag as NoteTagORM
 from ...database import Tag as TagORM
 from ...database import Transcript as TranscriptORM
+from ..folder_utils import normalize_folder_path
 from ..models import FolderNode, FolderStats, NoteMetadata, SearchResult
 from ..models import Note as NoteDTO
 from ..models import NoteRevision as NoteRevisionDTO
@@ -150,16 +152,11 @@ def _build_folder_tree(rows: list[Mapping[str, Any]]) -> FolderNode:
     return root
 
 
-def _normalize_folder_path(path: str | None) -> str:
-    parts = [part.strip() for part in (path or "").split("/") if part.strip()]
-    return "/".join(parts)[:500] or "inbox"
-
-
 class NoteStorageMixin:
     """Note CRUD, folders, tags, and search operations."""
 
     def _ensure_folder(self, session, user_id: str, path: str) -> str:
-        normalized = _normalize_folder_path(path)
+        normalized = normalize_folder_path(path)
         folder = (
             session.query(FolderORM)
             .filter(FolderORM.user_id == user_id, FolderORM.path == normalized)
@@ -175,8 +172,20 @@ class NoteStorageMixin:
                     normalized.rsplit("/", 1)[0] if "/" in normalized else None
                 ),
             )
-            session.add(folder)
-            session.flush()
+            try:
+                with session.begin_nested():
+                    session.add(folder)
+                    session.flush()
+            except IntegrityError:
+                # Another request created it concurrently; use the winner.
+                folder = (
+                    session.query(FolderORM)
+                    .filter(
+                        FolderORM.user_id == user_id,
+                        FolderORM.path == normalized,
+                    )
+                    .one()
+                )
         return folder.id
 
     def _sync_note_tags(self, session, note: NoteORM) -> None:
@@ -208,8 +217,19 @@ class NoteStorageMixin:
                     name=name[:100],
                     name_norm=name_norm,
                 )
-                session.add(tag)
-                session.flush()
+                try:
+                    with session.begin_nested():
+                        session.add(tag)
+                        session.flush()
+                except IntegrityError:
+                    tag = (
+                        session.query(TagORM)
+                        .filter(
+                            TagORM.user_id == note.user_id,
+                            TagORM.name_norm == name_norm,
+                        )
+                        .one()
+                    )
 
             session.add(
                 NoteTagORM(
@@ -228,7 +248,7 @@ class NoteStorageMixin:
             title=metadata.title,
             summary=metadata.summary,
             content=content,
-            folder_path=metadata.folder_path,
+            folder_path=normalize_folder_path(metadata.folder_path),
             tags=_serialize_tags(_normalize_tags(metadata.tags)),
             created_at=now,
             updated_at=now,
@@ -316,7 +336,9 @@ class NoteStorageMixin:
                 note.title = metadata.title or note.title
                 if metadata.summary is not None:
                     note.summary = metadata.summary
-                note.folder_path = metadata.folder_path or note.folder_path
+                note.folder_path = normalize_folder_path(
+                    metadata.folder_path or note.folder_path
+                )
                 note.folder_id = self._ensure_folder(
                     session, user_id, note.folder_path
                 )
@@ -344,19 +366,20 @@ class NoteStorageMixin:
             return True
 
     def delete_note(self, user_id: str, note_id: str) -> bool:
-        """Move a note to Trash. Audio and embeddings are kept for restore."""
+        """Move a note to Trash. Idempotent for already-trashed notes."""
         with self._session_scope() as session:
             note = (
                 session.query(NoteORM)
                 .filter(
                     NoteORM.id == note_id,
                     NoteORM.user_id == user_id,
-                    NoteORM.deleted_at.is_(None),
                 )
                 .one_or_none()
             )
             if not note:
                 return False
+            if note.deleted_at is not None:
+                return True
             note.deleted_at = datetime.utcnow()
             note.updated_at = datetime.utcnow()
             session.add(note)
@@ -508,7 +531,7 @@ class NoteStorageMixin:
             note.title = revision.title
             note.summary = revision.summary
             note.content = revision.content
-            note.folder_path = revision.folder_path
+            note.folder_path = normalize_folder_path(revision.folder_path)
             note.folder_id = self._ensure_folder(
                 session, user_id, note.folder_path
             )
@@ -585,8 +608,8 @@ class NoteStorageMixin:
 
         -1 not found, -2 target exists, -3 invalid move.
         """
-        old = _normalize_folder_path(old_path)
-        new = _normalize_folder_path(new_path)
+        old = normalize_folder_path(old_path)
+        new = normalize_folder_path(new_path)
         if new == old or new.startswith(f"{old}/"):
             return -3
 
@@ -743,6 +766,7 @@ class NoteStorageMixin:
                 .filter(
                     NoteORM.user_id == user_id,
                     NoteORM.tags.isnot(None),
+                    NoteORM.updated_at >= datetime.utcnow() - timedelta(days=7),
                     *_visibility_clauses(),
                 )
                 .all()
@@ -781,6 +805,7 @@ class NoteStorageMixin:
                     func.lower(cast(NoteORM.tags, Text)).like(
                         f'%"{name_norm}"%'
                     ),
+                    NoteORM.updated_at >= datetime.utcnow() - timedelta(days=7),
                     *_visibility_clauses(),
                 )
                 .all()
@@ -906,6 +931,7 @@ class NoteStorageMixin:
                 n.summary,
                 n.content,
                 n.folder_path,
+                n.folder_id,
                 n.tags,
                 n.created_at,
                 n.updated_at,

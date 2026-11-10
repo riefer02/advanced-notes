@@ -6,6 +6,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import desc, func, or_
+from sqlalchemy.exc import IntegrityError
 
 from ...database import Friendship as FriendshipORM
 from ...database import ResourceShare as ResourceShareORM
@@ -77,15 +78,6 @@ class SharingStorageMixin:
             p = (
                 session.query(UserProfileORM)
                 .filter(UserProfileORM.user_id == user_id)
-                .one_or_none()
-            )
-            return self._profile_to_dto(p) if p else None
-
-    def get_user_profile_by_id(self, profile_id: str) -> UserProfileDTO | None:
-        with self._session_scope() as session:
-            p = (
-                session.query(UserProfileORM)
-                .filter(UserProfileORM.id == profile_id)
                 .one_or_none()
             )
             return self._profile_to_dto(p) if p else None
@@ -222,8 +214,16 @@ class SharingStorageMixin:
                 created_at=now,
                 updated_at=now,
             )
-            session.add(friendship)
-            session.flush()
+            try:
+                with session.begin_nested():
+                    session.add(friendship)
+                    session.flush()
+            except IntegrityError:
+                friendship = (
+                    session.query(FriendshipORM)
+                    .filter(FriendshipORM.pair_key == pair_key)
+                    .one()
+                )
             return self._friendship_to_dto(friendship)
 
     def get_friendship(self, friendship_id: str) -> FriendshipDTO | None:
@@ -370,8 +370,21 @@ class SharingStorageMixin:
                 created_at=now,
                 updated_at=now,
             )
-            session.add(share)
-            session.flush()
+            try:
+                with session.begin_nested():
+                    session.add(share)
+                    session.flush()
+            except IntegrityError:
+                share = (
+                    session.query(ResourceShareORM)
+                    .filter(
+                        ResourceShareORM.owner_id == owner_id,
+                        ResourceShareORM.shared_with_id == shared_with_id,
+                        ResourceShareORM.resource_type == resource_type,
+                        ResourceShareORM.resource_key == resource_key,
+                    )
+                    .one()
+                )
             return self._share_to_dto(share)
 
     def get_resource_share(self, share_id: str) -> ResourceShareDTO | None:
@@ -407,19 +420,6 @@ class SharingStorageMixin:
             shares = q.order_by(desc(ResourceShareORM.created_at)).all()
             return [self._share_to_dto(s) for s in shares]
 
-    def list_accepted_shares_for_resource(self, owner_id: str, resource_type: str) -> list[ResourceShareDTO]:
-        with self._session_scope() as session:
-            shares = (
-                session.query(ResourceShareORM)
-                .filter(
-                    ResourceShareORM.owner_id == owner_id,
-                    ResourceShareORM.resource_type == resource_type,
-                    ResourceShareORM.status == "accepted",
-                )
-                .all()
-            )
-            return [self._share_to_dto(s) for s in shares]
-
     def get_share_between(
         self,
         owner_id: str,
@@ -440,14 +440,6 @@ class SharingStorageMixin:
                 .one_or_none()
             )
             return self._share_to_dto(s) if s else None
-
-    def delete_share(self, share_id: str) -> bool:
-        with self._session_scope() as session:
-            s = session.query(ResourceShareORM).filter(ResourceShareORM.id == share_id).one_or_none()
-            if not s:
-                return False
-            session.delete(s)
-            return True
 
     def has_access(
         self,
@@ -485,6 +477,7 @@ class SharingStorageMixin:
                     ResourceShareORM.resource_type == "meal_calendar",
                     ResourceShareORM.status == "accepted",
                     ResourceShareORM.permission == "edit",
+                    ResourceShareORM.resource_key == "",
                 )
                 .all()
             )

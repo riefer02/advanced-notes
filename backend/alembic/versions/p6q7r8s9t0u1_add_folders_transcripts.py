@@ -71,30 +71,56 @@ def upgrade() -> None:
         if key in folder_ids:
             continue
         folder_id = str(uuid4())
-        bind.execute(
+        params = {
+            "id": folder_id,
+            "user_id": user_id,
+            "path": path,
+            "name": path.rsplit("/", 1)[-1],
+            "parent": path.rsplit("/", 1)[0] if "/" in path else None,
+        }
+        if dialect == "postgresql":
+            bind.execute(
+                sa.text(
+                    "INSERT INTO folders "
+                    "(id, user_id, path, name, parent_path, created_at, updated_at) "
+                    "VALUES (:id, :user_id, :path, :name, :parent, "
+                    "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) "
+                    "ON CONFLICT (user_id, path) DO NOTHING"
+                ),
+                params,
+            )
+        else:
+            bind.execute(
+                sa.text(
+                    "INSERT OR IGNORE INTO folders "
+                    "(id, user_id, path, name, parent_path, created_at, updated_at) "
+                    "VALUES (:id, :user_id, :path, :name, :parent, "
+                    "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                params,
+            )
+        existing = bind.execute(
             sa.text(
-                "INSERT INTO folders "
-                "(id, user_id, path, name, parent_path, created_at, updated_at) "
-                "VALUES (:id, :user_id, :path, :name, :parent, "
-                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                "SELECT id FROM folders WHERE user_id = :user_id AND path = :path"
             ),
-            {
-                "id": folder_id,
-                "user_id": user_id,
-                "path": path,
-                "name": path.rsplit("/", 1)[-1],
-                "parent": path.rsplit("/", 1)[0] if "/" in path else None,
-            },
-        )
-        folder_ids[key] = folder_id
+            {"user_id": user_id, "path": path},
+        ).scalar()
+        if existing:
+            folder_ids[key] = existing
 
-    notes = bind.execute(sa.text("SELECT id, user_id, folder_path FROM notes")).fetchall()
+    notes = bind.execute(
+        sa.text("SELECT id, user_id, folder_path FROM notes")
+    ).fetchall()
     for note_id, user_id, folder_path in notes:
-        folder_id = folder_ids.get((user_id, _normalize(folder_path)))
+        path = _normalize(folder_path)
+        folder_id = folder_ids.get((user_id, path))
         if folder_id:
             bind.execute(
-                sa.text("UPDATE notes SET folder_id = :folder_id WHERE id = :id"),
-                {"folder_id": folder_id, "id": note_id},
+                sa.text(
+                    "UPDATE notes SET folder_id = :folder_id, folder_path = :path "
+                    "WHERE id = :id"
+                ),
+                {"folder_id": folder_id, "path": path, "id": note_id},
             )
 
     op.create_table(

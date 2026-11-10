@@ -52,6 +52,8 @@ jobs:
         run: pnpm run build
         env:
           VITE_SITE_URL: http://localhost:5173
+          VITE_API_URL: http://localhost:5001
+          VITE_CLERK_PUBLISHABLE_KEY: pk_test_ci_dummy
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

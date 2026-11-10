@@ -39,6 +39,7 @@ def upgrade() -> None:
 
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
+        op.execute("SET LOCAL TimeZone = 'UTC'")
         op.execute(
             """
             INSERT INTO usage_counters
@@ -46,7 +47,7 @@ def upgrade() -> None:
                  estimated_cost_usd, updated_at)
             SELECT
                 user_id,
-                date_trunc('month', created_at)::date,
+                date_trunc('month', created_at AT TIME ZONE 'UTC')::date,
                 service_type,
                 CASE WHEN service_type = 'transcription'
                      THEN COALESCE(SUM(audio_duration_seconds), 0) / 60.0
@@ -54,13 +55,17 @@ def upgrade() -> None:
                 COALESCE(SUM(estimated_cost_usd), 0),
                 CURRENT_TIMESTAMP
             FROM token_usage
-            GROUP BY user_id, date_trunc('month', created_at)::date, service_type
+            GROUP BY
+                user_id,
+                date_trunc('month', created_at AT TIME ZONE 'UTC')::date,
+                service_type
+            ON CONFLICT (user_id, period_start, service_type) DO NOTHING
             """
         )
     else:
         op.execute(
             """
-            INSERT INTO usage_counters
+            INSERT OR IGNORE INTO usage_counters
                 (user_id, period_start, service_type, units,
                  estimated_cost_usd, updated_at)
             SELECT

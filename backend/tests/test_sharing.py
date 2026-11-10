@@ -1224,3 +1224,27 @@ class TestProfileEnhancements:
         data = resp.get_json()
         # Default fallback when no email is available
         assert data["display_name"] == "User"
+
+
+def test_previous_release_can_insert_friendships_without_pair_key(app):
+    """pair_key is nullable + partially unique so a rollback cannot break writes."""
+    from app.database import Friendship
+
+    storage = app.extensions["services"].storage
+    with storage._session_scope() as session:
+        session.add(
+            Friendship(
+                id="old-1",
+                requester_id="old-a",
+                addressee_id="old-b",
+                status="pending",
+            )
+        )
+        session.add(
+            Friendship(
+                id="old-2",
+                requester_id="old-c",
+                addressee_id="old-d",
+                status="pending",
+            )
+        )

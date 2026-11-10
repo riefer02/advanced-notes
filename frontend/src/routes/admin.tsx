@@ -142,6 +142,7 @@ export default function AdminPage() {
             size="sm"
             onClick={() => outboxRetryMutation.mutate()}
             loading={outboxRetryMutation.isPending}
+            disabled={summary?.database.ok === false}
           >
             Retry email outbox
           </Button>
@@ -181,6 +182,16 @@ export default function AdminPage() {
             } and reclaimed ${outboxRetryMutation.data.reclaimed} stuck row${
               outboxRetryMutation.data.reclaimed === 1 ? '' : 's'
             }.`}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {(statusMutation.isError || testAlertMutation.isError || outboxRetryMutation.isError) && (
+        <Alert variant="destructive">
+          <AlertTitle>Admin action failed</AlertTitle>
+          <AlertDescription>
+            {(statusMutation.error || testAlertMutation.error || outboxRetryMutation.error)
+              ?.message || 'Please retry.'}
           </AlertDescription>
         </Alert>
       )}
@@ -275,7 +286,7 @@ export default function AdminPage() {
           <CardDescription>Grouped by route, exception type, and 10-minute bucket.</CardDescription>
         </CardHeader>
         <CardContent>
-          {summary && summary.errors.top_24h.length > 0 ? (
+          {summary && (summary.errors.top_24h?.length ?? 0) > 0 ? (
             <div className="divide-y">
               {summary.errors.top_24h.map((item) => (
                 <div
@@ -292,6 +303,10 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
+          ) : summary && !summary.database.ok ? (
+            <p className="text-sm text-red-700">
+              Database is unreachable; error data may be incomplete.
+            </p>
           ) : (
             <p className="text-sm text-gray-600">No server errors recorded. Good.</p>
           )}
@@ -308,6 +323,8 @@ export default function AdminPage() {
         <CardContent>
           {reportsQuery.isLoading ? (
             <p className="text-sm text-gray-600">Loading reports…</p>
+          ) : reportsQuery.isError ? (
+            <p className="text-sm text-red-600">Could not load reports.</p>
           ) : reports.length === 0 ? (
             <p className="text-sm text-gray-600">No reports.</p>
           ) : (
@@ -331,7 +348,9 @@ export default function AdminPage() {
           <CardDescription>Newest 25 errors and degraded-dependency events.</CardDescription>
         </CardHeader>
         <CardContent>
-          {events.length === 0 ? (
+          {eventsQuery.isError ? (
+            <p className="text-sm text-red-600">Could not load ops events.</p>
+          ) : events.length === 0 ? (
             <p className="text-sm text-gray-600">No events recorded.</p>
           ) : (
             <div className="divide-y">

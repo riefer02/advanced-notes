@@ -109,6 +109,16 @@ def test_editing_a_trashed_note_is_rejected(client):
     assert response.status_code == 409
 
 
+def test_delete_is_idempotent(client):
+    note = _create(client, content="delete twice")
+
+    first = client.delete(f"/api/notes/{note['id']}", headers=USER)
+    second = client.delete(f"/api/notes/{note['id']}", headers=USER)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+
 def test_permanent_delete_requires_trash_and_purges_revisions(client, app):
     note = _create(client, content="v1", title="v1")
     client.put(f"/api/notes/{note['id']}", json={"content": "v2"}, headers=USER)

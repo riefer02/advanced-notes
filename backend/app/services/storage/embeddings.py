@@ -337,8 +337,9 @@ class EmbeddingStorageMixin:
             return 0.65 * s + 0.35 * f
 
         ranked_ids = sorted(note_ids, key=blended, reverse=True)
-        # Filter visibility before truncating so archived/trashed notes cannot
-        # consume the result slots.
+        # Cap the body fetch; visibility filtering can drop a few, so keep a
+        # small margin instead of materializing up to 400 full notes.
+        ranked_ids = ranked_ids[: max(limit * 3, limit)]
         notes = self.get_notes_by_ids(user_id, ranked_ids)
         note_by_id = {n.id: n for n in notes}
         ranked_ids = [nid for nid in ranked_ids if nid in note_by_id][:limit]

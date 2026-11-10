@@ -25,7 +25,23 @@ def upgrade() -> None:
     if bind.dialect.name != "postgresql":
         return
 
+    op.execute("SET LOCAL lock_timeout = '5s'")
+    op.execute("SET LOCAL statement_timeout = '240s'")
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+
+    # Embeddings are derived data. Drop rows that cannot become a 1536-dim
+    # vector instead of aborting the whole deploy; they will be regenerated.
+    for table in ("meal_embeddings", "vinyl_embeddings"):
+        op.execute(
+            f"""
+            DELETE FROM {table}
+            WHERE embedding IS NULL
+               OR embedding !~ '^\\s*\\[[-+0-9eE.,\\s]*\\]\\s*$'
+               OR array_length(
+                    string_to_array(btrim(btrim(embedding), '[]'), ','), 1
+                  ) <> 1536
+            """
+        )
 
     op.execute(
         "ALTER TABLE meal_embeddings "
@@ -58,14 +74,34 @@ def upgrade() -> None:
     )
 
     op.execute(
-        "ALTER TABLE meal_embeddings ADD CONSTRAINT "
-        "uq_meal_embeddings_user_meal_model "
-        "UNIQUE (user_id, meal_entry_id, embedding_model)"
+        """
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'uq_meal_embeddings_user_meal_model'
+          ) THEN
+            ALTER TABLE meal_embeddings ADD CONSTRAINT
+              uq_meal_embeddings_user_meal_model
+              UNIQUE (user_id, meal_entry_id, embedding_model);
+          END IF;
+        END $$;
+        """
     )
     op.execute(
-        "ALTER TABLE vinyl_embeddings ADD CONSTRAINT "
-        "uq_vinyl_embeddings_user_record_model "
-        "UNIQUE (user_id, vinyl_record_id, embedding_model)"
+        """
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'uq_vinyl_embeddings_user_record_model'
+          ) THEN
+            ALTER TABLE vinyl_embeddings ADD CONSTRAINT
+              uq_vinyl_embeddings_user_record_model
+              UNIQUE (user_id, vinyl_record_id, embedding_model);
+          END IF;
+        END $$;
+        """
     )
 
     op.execute(
@@ -88,11 +124,11 @@ def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS ix_vinyl_embeddings_hnsw")
     op.execute("DROP INDEX IF EXISTS ix_meal_embeddings_hnsw")
     op.execute(
-        "ALTER TABLE vinyl_embeddings DROP CONSTRAINT "
+        "ALTER TABLE IF EXISTS vinyl_embeddings DROP CONSTRAINT IF EXISTS "
         "uq_vinyl_embeddings_user_record_model"
     )
     op.execute(
-        "ALTER TABLE meal_embeddings DROP CONSTRAINT "
+        "ALTER TABLE IF EXISTS meal_embeddings DROP CONSTRAINT IF EXISTS "
         "uq_meal_embeddings_user_meal_model"
     )
     op.execute(

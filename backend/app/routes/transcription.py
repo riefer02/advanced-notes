@@ -13,7 +13,6 @@ from ..services.models import NoteMetadata
 from ..services.resilience import require_external, with_fallback
 from ._helpers import (
     _AudioTranscriptionError,
-    _cleanup_stale_pending_audio_clips,
     _maybe_send_cost_alert,
     _transcribe_audio_clip,
     api_error,
@@ -257,8 +256,6 @@ def create_audio_clip_upload():
     user_id = g.user_id
     svc = get_services()
     data = request.get_json(silent=True) or {}
-
-    _cleanup_stale_pending_audio_clips(user_id, svc)
 
     mime_type = (data.get("mime_type") or "").strip().lower()
     if not mime_type:

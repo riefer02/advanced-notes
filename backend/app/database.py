@@ -23,6 +23,7 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     event,
+    text,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -916,8 +917,9 @@ class Friendship(Base):
     id = Column(String(36), primary_key=True)
     requester_id = Column(String(255), nullable=False)
     addressee_id = Column(String(255), nullable=False)
-    # Normalized unordered pair: "low|high". Makes A->B and B->A unique.
-    pair_key = Column(String(512), nullable=False, server_default="")
+    # Normalized unordered pair: "low|high". Nullable so the previous release
+    # can still insert during a rollback (NULLs are distinct in a unique index).
+    pair_key = Column(String(512), nullable=True)
     status = Column(String(20), nullable=False, server_default="pending")
 
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
@@ -934,7 +936,9 @@ class Friendship(Base):
             "addressee_id",
             unique=True,
         ),
-        Index("idx_friendships_pair_key", "pair_key", unique=True),
+        Index("idx_friendships_pair_key", "pair_key", unique=True,
+              postgresql_where=text("pair_key IS NOT NULL"),
+              sqlite_where=text("pair_key IS NOT NULL")),
         Index("idx_friendships_addressee_status", "addressee_id", "status"),
     )
 
@@ -1100,7 +1104,14 @@ def create_engine_for_url(database_url: str | None = None) -> Engine:
         }
     else:
         options.update(
-            connect_args={"connect_timeout": Config.DB_CONNECT_TIMEOUT_SECONDS},
+            connect_args={
+                "connect_timeout": Config.DB_CONNECT_TIMEOUT_SECONDS,
+                "options": (
+                    f"-c statement_timeout={Config.DB_STATEMENT_TIMEOUT_MS} "
+                    "-c idle_in_transaction_session_timeout="
+                    f"{Config.DB_IDLE_TRANSACTION_TIMEOUT_MS}"
+                ),
+            },
             pool_size=Config.DB_POOL_SIZE,
             max_overflow=Config.DB_MAX_OVERFLOW,
             pool_timeout=Config.DB_POOL_TIMEOUT_SECONDS,

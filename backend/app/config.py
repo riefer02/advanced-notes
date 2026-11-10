@@ -79,7 +79,7 @@ class Config:
     # hung provider cannot pin sync gunicorn workers indefinitely.
     OPENAI_TIMEOUT_SECONDS: float = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30"))
     OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS: float = float(
-        os.getenv("OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS", "120")
+        os.getenv("OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS", "90")
     )
     # A retry must fit inside the request budget: 2 attempts at 30s is 60s
     # per call, and /ask makes up to three calls. Keep gunicorn's timeout
@@ -101,6 +101,12 @@ class Config:
     DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "10"))
     DB_POOL_TIMEOUT_SECONDS: int = int(os.getenv("DB_POOL_TIMEOUT_SECONDS", "10"))
     DB_POOL_RECYCLE_SECONDS: int = int(os.getenv("DB_POOL_RECYCLE_SECONDS", "1800"))
+    DB_STATEMENT_TIMEOUT_MS: int = int(
+        os.getenv("DB_STATEMENT_TIMEOUT_MS", "20000")
+    )
+    DB_IDLE_TRANSACTION_TIMEOUT_MS: int = int(
+        os.getenv("DB_IDLE_TRANSACTION_TIMEOUT_MS", "60000")
+    )
     SQLITE_LOCK_TIMEOUT_SECONDS: int = int(os.getenv("SQLITE_LOCK_TIMEOUT_SECONDS", "15"))
 
     # Flask settings
@@ -306,11 +312,20 @@ class Config:
 
     @classmethod
     def validate(cls):
-        """Validate required configuration"""
+        """Validate required configuration with one explicit error list."""
         errors = []
 
         if not cls.OPENAI_API_KEY:
             errors.append("OPENAI_API_KEY is not set")
+        if cls.environment_name() in {"production", "prod", "staging"}:
+            if not os.getenv("CLERK_DOMAIN"):
+                errors.append("CLERK_DOMAIN is not set")
+            if not os.getenv("FRONTEND_URL"):
+                errors.append("FRONTEND_URL is not set")
+            if not os.getenv("DATABASE_URL") and os.getenv(
+                "ALLOW_SQLITE", ""
+            ).lower() not in {"1", "true", "yes"}:
+                errors.append("DATABASE_URL is not set")
 
         cls.warn_deprecated_models()
 
