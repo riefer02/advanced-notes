@@ -221,6 +221,18 @@ export interface UpdateNoteInput {
   tags?: string[]
 }
 
+export interface CreateNoteInput {
+  title?: string
+  summary?: string | null
+  content: string
+  folder_path?: string
+  tags?: string[]
+}
+
+export async function createNote(input: CreateNoteInput): Promise<Note> {
+  return apiRequest<Note>('POST', '/api/notes', { body: input })
+}
+
 export async function fetchNoteAudio(noteId: string): Promise<NoteAudioResponse> {
   return apiRequest<NoteAudioResponse>('GET', `/api/notes/${noteId}/audio`)
 }

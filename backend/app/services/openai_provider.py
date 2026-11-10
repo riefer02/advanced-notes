@@ -19,6 +19,7 @@ def build_openai_client(
     api_key: str | None = None,
     *,
     timeout: float | None = None,
+    max_retries: int | None = None,
 ) -> OpenAI:
     key = api_key or Config.OPENAI_API_KEY
     if not key:
@@ -26,7 +27,7 @@ def build_openai_client(
     return OpenAI(
         api_key=key,
         timeout=timeout or Config.OPENAI_TIMEOUT_SECONDS,
-        max_retries=Config.OPENAI_MAX_RETRIES,
+        max_retries=Config.OPENAI_MAX_RETRIES if max_retries is None else max_retries,
     )
 
 
@@ -37,7 +38,13 @@ def get_openai_client() -> OpenAI:
 
 @lru_cache(maxsize=1)
 def get_transcription_client() -> OpenAI:
-    return build_openai_client(timeout=Config.OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS)
+    # Transcription is the longest single call; do not retry it inside the
+    # request budget. A failed upload is retried by the user with the blob
+    # still available in the UI.
+    return build_openai_client(
+        timeout=Config.OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS,
+        max_retries=0,
+    )
 
 
 def chat_model() -> str:

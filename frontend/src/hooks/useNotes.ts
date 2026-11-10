@@ -2,7 +2,13 @@
  * TanStack Query hooks for data fetching and mutations
  */
 
-import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  keepPreviousData,
+  type QueryClient,
+} from '@tanstack/react-query'
 import * as api from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 
@@ -13,7 +19,10 @@ import { queryKeys } from '../lib/queryKeys'
 function invalidateNoteQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.folders.all })
   queryClient.invalidateQueries({ queryKey: queryKeys.notes.all })
+  queryClient.invalidateQueries({ queryKey: queryKeys.notes.detailPrefix })
+  queryClient.invalidateQueries({ queryKey: queryKeys.notes.searchPrefix })
   queryClient.invalidateQueries({ queryKey: queryKeys.tags.all })
+  queryClient.invalidateQueries({ queryKey: queryKeys.dashboard })
 }
 
 // ============================================================================
@@ -77,6 +86,8 @@ export function useSearchNotes(query: string) {
     queryFn: () => api.searchNotes(query),
     enabled: query.trim().length > 0, // Only search if query is not empty
     staleTime: 30000, // Search results stay fresh for 30 seconds
+    // Refining a query should not blank the list into a skeleton.
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -121,6 +132,23 @@ export function useTranscribeAudio() {
 }
 
 /**
+ * Create a manual (typed) note.
+ * Seed the detail cache so opening it immediately never refetches, then
+ * refresh list, folders, tags, search, and the dashboard.
+ */
+export function useCreateNote() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: api.CreateNoteInput) => api.createNote(input),
+    onSuccess: (note) => {
+      queryClient.setQueryData(queryKeys.notes.detail(note.id), note)
+      invalidateNoteQueries(queryClient)
+    },
+  })
+}
+
+/**
  * Update note mutation
  * Refreshes the list, folders, tags, and the selected note detail.
  */
@@ -146,7 +174,12 @@ export function useDeleteNote() {
 
   return useMutation({
     mutationFn: (noteId: string) => api.deleteNote(noteId),
-    onSuccess: () => invalidateNoteQueries(queryClient),
+    onSuccess: (_result, noteId) => {
+      // Drop the deleted note's caches entirely so it cannot be reopened.
+      queryClient.removeQueries({ queryKey: queryKeys.notes.detail(noteId) })
+      queryClient.removeQueries({ queryKey: queryKeys.notes.audio(noteId) })
+      invalidateNoteQueries(queryClient)
+    },
   })
 }
 

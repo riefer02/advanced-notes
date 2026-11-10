@@ -16,13 +16,23 @@ _FLUSH_INTERVAL_SECONDS = 15
 
 
 def start_email_worker(app, interval: float = _FLUSH_INTERVAL_SECONDS) -> threading.Thread:
+    def beat(storage) -> None:  # noqa: ANN001
+        try:
+            storage.upsert_heartbeat("email-outbox", detail=f"interval={interval}s")
+        except Exception:  # noqa: BLE001 - heartbeat is advisory
+            logger.debug("Failed to record email worker heartbeat", exc_info=True)
+
     def loop() -> None:
+        with app.app_context():
+            beat(app.extensions["services"].storage)
         while True:
             try:
                 with app.app_context():
-                    email = app.extensions["services"].email
-                    email.maybe_enqueue_daily_digest()
-                    email.flush()
+                    svc = app.extensions["services"]
+                    beat(svc.storage)
+                    svc.email.maybe_enqueue_daily_digest()
+                    svc.email.maybe_enqueue_ops_digest()
+                    svc.email.flush()
             except Exception:  # noqa: BLE001 - the loop must survive
                 logger.exception("Email outbox flush failed")
             time.sleep(interval)

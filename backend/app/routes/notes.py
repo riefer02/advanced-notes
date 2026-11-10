@@ -27,15 +27,96 @@ def list_notes():
         limit, offset = parse_pagination(default_limit=50, max_limit=100)
 
         notes = svc.storage.list_notes(user_id=user_id, folder=folder, limit=limit, offset=offset)
+        total = svc.storage.get_note_count(user_id=user_id, folder=folder)
 
         return jsonify(
             {
                 "notes": [note.model_dump() for note in notes],
-                "total": len(notes),
+                "total": total,
                 "limit": limit,
                 "offset": offset,
             }
         )
+
+    except Exception as e:
+        return api_error_from_exception(e)
+
+
+@bp.post("/notes")
+@require_auth
+def create_note():
+    """Create a manual (typed) note without audio transcription.
+
+    The AI pipeline is optional here: the user's text is saved exactly as
+    written, with a lightweight embedding refresh so it is still reachable
+    from semantic search.
+    """
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        data = request.get_json(silent=True) or {}
+
+        content = str(data.get("content") or "").strip()
+        if not content:
+            return api_error("content is required", 400)
+        if len(content) > 200_000:
+            return api_error("content must be 200,000 characters or less", 400)
+
+        raw_title = str(data.get("title") or "").strip()
+        first_line = content.splitlines()[0].strip()
+        title = (raw_title or first_line or "Untitled note")[:500]
+
+        summary_value = data.get("summary")
+        summary = str(summary_value).strip()[:1000] if summary_value else None
+
+        raw_folder = str(data.get("folder_path") or "").strip()
+        folder_path = "/".join(part.strip() for part in raw_folder.split("/") if part.strip())
+        folder_path = folder_path[:500] or "inbox"
+
+        raw_tags = data.get("tags") or []
+        if isinstance(raw_tags, str):
+            raw_tags = raw_tags.split(",")
+        tags: list[str] = []
+        for tag in raw_tags if isinstance(raw_tags, list) else []:
+            cleaned = str(tag).strip().lower()[:50]
+            if cleaned and cleaned not in tags:
+                tags.append(cleaned)
+            if len(tags) >= 20:
+                break
+
+        metadata = NoteMetadata(
+            title=title,
+            summary=summary,
+            folder_path=folder_path,
+            tags=tags,
+            confidence=1.0,  # human-authored, not an AI guess
+            transcription_duration=None,
+            model_version="manual",
+        )
+
+        note_id = svc.storage.save_note(user_id, content, metadata)
+        note = svc.storage.get_note(user_id, note_id)
+
+        if note is None:
+            return api_error("Failed to create note", 500)
+
+        # Best-effort: never fail a saved note because the embedding call failed.
+        with_fallback(
+            lambda: svc.embeddings.upsert_for_note(
+                storage=svc.storage,
+                user_id=user_id,
+                note_id=note.id,
+                title=note.title,
+                content=note.content,
+                tags=note.tags,
+                summary=note.summary,
+            ),
+            fallback=None,
+            service="embeddings",
+        )
+
+        return jsonify(note.model_dump()), 201
 
     except Exception as e:
         return api_error_from_exception(e)

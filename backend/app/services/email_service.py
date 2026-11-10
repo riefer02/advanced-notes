@@ -13,7 +13,6 @@ import logging
 import re
 import time
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
 
 import boto3
 from botocore.config import Config as BotoConfig
@@ -143,15 +142,17 @@ class EmailService:
         user_id: str | None = None,
         request_id: str | None = None,
         timestamp: str | None = None,
+        dedupe_path: str | None = None,
     ) -> bool:
         """Queue a structured server-error alert.
 
-        Deduped per endpoint + exception type in 10-minute buckets, so four
-        Gunicorn workers cannot send four copies of the same incident.
+        Deduped per route template + exception type in 10-minute buckets, so a
+        single broken session cannot create one email per resource id.
         """
         resolved_path = path or endpoint or "(unknown)"
         bucket = int(time.time() // _ERROR_BUCKET_SECONDS)
-        dedupe_key = f"error:{method or '?'}:{resolved_path}:{error_type}:{bucket}"
+        dedupe_target = dedupe_path or resolved_path
+        dedupe_key = f"error:{method or '?'}:{dedupe_target}:{error_type}:{bucket}"
 
         body = "\n".join(
             [
@@ -181,6 +182,7 @@ class EmailService:
     def send_problem_report_notification(
         self,
         *,
+        report_id: str,
         message: str | None,
         page: str | None,
         ip: str | None,
@@ -193,6 +195,7 @@ class EmailService:
             [
                 "A user reported a problem",
                 "",
+                f"Report ID: {report_id}",
                 f"Message: {message or '(none provided)'}",
                 f"Page: {page or '(unknown)'}",
                 f"Contact: {contact_email or '(none)'}",
@@ -202,7 +205,7 @@ class EmailService:
             ]
         )
         return self._enqueue(
-            dedupe_key=f"problem:{uuid4()}",
+            dedupe_key=f"problem:{report_id}",
             subject="[Chisos][Report] User-reported problem",
             body=body,
         )
@@ -259,6 +262,91 @@ class EmailService:
             dedupe_key=f"digest:new_users:{now.date().isoformat()}",
             subject=f"[Chisos][Digest] {len(profiles)} new users",
             body="\n".join(lines),
+        )
+
+    def maybe_enqueue_ops_digest(self) -> bool:
+        """Send one daily operations summary when there is something to report.
+
+        Silence is intentional: an all-clear email every day trains the admin
+        to ignore the channel. A quiet day produces no message; the readiness
+        endpoint and external monitor cover liveness independently.
+        """
+        if self.storage is None:
+            return False
+
+        now = datetime.now(UTC)
+        if now.hour < Config.OPS_DIGEST_HOUR_UTC:
+            return False
+
+        since = (now - timedelta(hours=24)).replace(tzinfo=None)
+        errors = self.storage.count_ops_events_since(since, min_status=500)
+        top = self.storage.top_ops_fingerprints_since(since, limit=5)
+        outbox = self.storage.get_outbox_stats()
+        reports = self.storage.count_problem_reports_since(since)
+        email_events = self.storage.count_email_events_since(since)
+        worker_seen = self.storage.get_heartbeat("email-outbox")
+
+        counts = outbox.get("counts", {})
+        significant = bool(
+            errors
+            or counts.get("failed", 0)
+            or counts.get("pending", 0)
+            or reports
+            or email_events
+        )
+        if not significant:
+            return False
+
+        lines = [
+            "Chisos daily operations digest",
+            "",
+            f"Environment: {Config.environment_name()}",
+            f"Release: {Config.release_sha() or 'unknown'}",
+            "",
+            f"Server errors (24h): {errors}",
+        ]
+        for item in top:
+            lines.append(
+                f"- {item['count']}x {item['error_type'] or 'Error'} on "
+                f"{item['route'] or '(unknown)'} (last {item['last_seen_at']})"
+            )
+
+        lines.extend(
+            [
+                "",
+                "Email outbox: "
+                f"{counts.get('pending', 0)} pending, "
+                f"{counts.get('sending', 0)} sending, "
+                f"{counts.get('failed', 0)} failed, "
+                f"{counts.get('sent', 0)} sent",
+                (
+                    f"Oldest pending age: {outbox['oldest_pending_age_seconds']}s"
+                    if outbox.get("oldest_pending_age_seconds") is not None
+                    else "Oldest pending: none"
+                ),
+                f"Email bounces/complaints (24h): {email_events}",
+                f"Problem reports (24h): {reports}",
+                f"Email worker heartbeat: "
+                f"{worker_seen.isoformat() if worker_seen else 'missing'}",
+            ]
+        )
+
+        return self._enqueue(
+            dedupe_key=f"digest:ops:{now.date().isoformat()}",
+            subject=f"[Chisos][Digest] Ops {now.date().isoformat()}",
+            body="\n".join(lines),
+        )
+
+    def send_test_alert(self) -> bool:
+        """Queue a test message to verify the whole admin notification path."""
+        return self._enqueue(
+            dedupe_key=f"test-alert:{int(time.time())}",
+            subject="[Chisos][Ops] Test alert",
+            body=(
+                "This is a test alert from Chisos.\n\n"
+                "If you received it, SES delivery and the admin recipient "
+                "configuration are working."
+            ),
         )
 
     # ------------------------------------------------------------------

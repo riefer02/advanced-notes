@@ -71,7 +71,10 @@ class NotificationStorageMixin:
                         EmailOutboxORM.id == row.id,
                         EmailOutboxORM.status == "pending",
                     )
-                    .update({"status": "sending"}, synchronize_session=False)
+                    .update(
+                        {"status": "sending", "claimed_at": now},
+                        synchronize_session=False,
+                    )
                 )
                 if updated:
                     claimed.append(
@@ -123,6 +126,7 @@ class NotificationStorageMixin:
                         "sent_at": datetime.utcnow(),
                         "attempts": EmailOutboxORM.attempts + 1,
                         "last_error": None,
+                        "claimed_at": None,
                     },
                     synchronize_session=False,
                 )
@@ -148,6 +152,7 @@ class NotificationStorageMixin:
 
             row.attempts = (row.attempts or 0) + 1
             row.last_error = error[:2000]
+            row.claimed_at = None
 
             if row.attempts >= max_attempts:
                 row.status = "failed"
@@ -160,3 +165,47 @@ class NotificationStorageMixin:
 
             session.add(row)
             return True
+
+    def requeue_failed_emails(self, limit: int = 100) -> int:
+        """Move failed outbox rows back to pending for an admin retry."""
+        with self._session_scope() as session:
+            rows = (
+                session.query(EmailOutboxORM)
+                .filter(EmailOutboxORM.status == "failed")
+                .order_by(EmailOutboxORM.created_at)
+                .limit(max(1, limit))
+                .all()
+            )
+            for row in rows:
+                row.status = "pending"
+                row.attempts = 0
+                row.last_error = None
+                row.next_attempt_at = None
+                row.claimed_at = None
+                session.add(row)
+            return len(rows)
+
+    def reclaim_stuck_emails(
+        self, older_than_minutes: int = 5, limit: int = 100
+    ) -> int:
+        """Return rows stranded in ``sending`` by a crashed worker to pending."""
+        cutoff = datetime.utcnow() - timedelta(minutes=max(1, older_than_minutes))
+        with self._session_scope() as session:
+            rows = (
+                session.query(EmailOutboxORM)
+                .filter(EmailOutboxORM.status == "sending")
+                .filter(
+                    or_(
+                        EmailOutboxORM.claimed_at.is_(None),
+                        EmailOutboxORM.claimed_at <= cutoff,
+                    )
+                )
+                .limit(max(1, limit))
+                .all()
+            )
+            for row in rows:
+                row.status = "pending"
+                row.claimed_at = None
+                row.next_attempt_at = None
+                session.add(row)
+            return len(rows)

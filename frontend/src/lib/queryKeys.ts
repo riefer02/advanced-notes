@@ -4,8 +4,13 @@ export const queryKeys = {
     list: (folder?: string, limit?: number, offset?: number) =>
       ['notes', folder, limit, offset] as const,
     detail: (noteId: string) => ['note', noteId] as const,
+    // Detail and search live in their own roots, so mutations must target
+    // these prefixes explicitly (invalidating ['notes'] alone misses them).
+    detailPrefix: ['note'] as const,
     audio: (noteId: string) => ['noteAudio', noteId] as const,
+    audioPrefix: ['noteAudio'] as const,
     search: (query: string) => ['search', query] as const,
+    searchPrefix: ['search'] as const,
     byTag: (tag: string | null, limit?: number) => ['notes', 'tag', tag, limit] as const,
   },
   folders: { all: ['folders'] as const },

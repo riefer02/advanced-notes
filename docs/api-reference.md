@@ -98,6 +98,32 @@ Convenience endpoint: return the note’s primary (most recent ready) audio clip
 
 ## Notes
 
+### POST `/notes`
+
+Create a **manual (typed) note** without audio or AI categorization.
+
+**Request Body:**
+```json
+{
+  "title": "Optional title (defaults to the first line)",
+  "content": "The note body. Required and must not be blank.",
+  "summary": "Optional short summary",
+  "folder_path": "inbox",
+  "tags": ["ideas", "product"]
+}
+```
+
+Validation:
+- `content` is required (max 200,000 characters).
+- `title` defaults to the first non-empty line, max 500 characters.
+- `folder_path` defaults to `inbox`; empty path segments are collapsed.
+- Tags are lowercased, de-duplicated, and capped at 20.
+
+**Response:** `201 Created` with the created note. `model_version` is `manual`
+and `confidence` is `1.0`, which distinguishes human-authored notes from
+transcribed ones. A best-effort embedding refresh runs after the save, so the
+note is also reachable from semantic search.
+
 ### GET `/notes`
 
 List notes with optional filtering.
@@ -106,6 +132,8 @@ List notes with optional filtering.
 - `folder` (optional): Filter by folder path (e.g., `blog-ideas/react`)
 - `limit` (optional, default: 50): Maximum results
 - `offset` (optional, default: 0): Pagination offset
+
+`total` is the true number of matching notes for the user, not the page size.
 
 **Response:** `200 OK`
 ```json
@@ -377,16 +405,74 @@ Ask a natural-language question about your notes. The backend uses AI to create 
 
 ---
 
+## Administration
+
+All `/admin/*` endpoints require a Clerk user id listed in `ADMIN_USER_IDS`.
+Email addresses are not an authorization boundary. Non-admins receive `403`.
+
+### GET `/admin/ops/summary`
+
+One-screen operational snapshot: database health, 1h/24h error counts, top
+error fingerprints, email-outbox state, worker heartbeat age, open problem
+reports, and whether admin email is configured.
+
+### GET `/admin/reports`
+
+List persisted problem reports. Query: `status` (`new|triaged|resolved|ignored`),
+`limit`, `offset`.
+
+### POST `/admin/reports/<report_id>/status`
+
+Body `{"status": "triaged"}`. Moves a report through triage.
+
+### GET `/admin/ops/events`
+
+Recent server-error and degraded-dependency events. `GET /admin/ops/events/<id>`
+returns one event including the traceback.
+
+### POST `/admin/test-alert`
+
+Queues a test email through the same outbox/SES path. Returns
+`{"queued": bool, "email_configured": bool, "recipients": int}`.
+
+### POST `/admin/outbox/retry`
+
+Requeues failed emails and reclaims rows stranded in `sending` by a crashed
+worker. Body is optional: `{"limit": 100, "include_stuck": true}`. Returns
+`{"requeued": int, "reclaimed": int}`.
+
+---
+
 ## Utility
 
 ### GET `/health`
 
-Health check endpoint.
+Cheap liveness check.
 
 **Response:** `200 OK`
 ```json
 {
   "status": "ok"
+}
+```
+
+### GET `/health/ready`
+
+Readiness check for an external uptime monitor. Verifies the database, the
+email outbox backlog, and (in production-like environments) the email worker
+heartbeat.
+
+**Response:** `200 OK` when healthy, `503 Service Unavailable` when degraded.
+```json
+{
+  "status": "ok",
+  "environment": "production",
+  "release": "abc1234",
+  "components": {
+    "database": { "status": "ok" },
+    "outbox": { "status": "ok", "oldest_pending_age_seconds": null, "counts": {} },
+    "worker": { "status": "ok", "heartbeat_age_seconds": 4 }
+  }
 }
 ```
 

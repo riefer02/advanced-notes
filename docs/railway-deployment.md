@@ -74,6 +74,11 @@
 | `CONFIDENCE_THRESHOLD` | `0.7`                              | AI confidence threshold                   |
 | `FRONTEND_URL`         | `https://your-frontend-domain.com` | For CORS (your custom domain)             |
 | `DATABASE_URL`         | (auto-set)                         | PostgreSQL connection (reference from DB) |
+| `ADMIN_EMAILS`         | `you@example.com`                  | Admin alert recipients (comma-separated)  |
+| `ADMIN_USER_IDS`       | Clerk `sub` values                 | Allows `/api/admin/*` and `/admin` page   |
+| `OPS_DIGEST_HOUR_UTC`  | `9`                                | Daily ops digest hour (UTC)               |
+| `OPS_WORKER_STALE_SECONDS` | `120`                          | Readiness fails if worker is older        |
+| `OPS_OUTBOX_STALE_SECONDS` | `900`                         | Readiness fails if outbox is backed up    |
 
 **Model access preflight:** the code defaults change with the deploy. Confirm
 the project can use both models before deploying; if either is missing, set the
@@ -120,7 +125,7 @@ curl -s https://api.openai.com/v1/models \
 - **Type:** SQLite
 - **Location:** `backend/.notes.db`
 - **Search:** FTS5 full-text search
-- **Auto-selected** when `DATABASE_URL` not set
+- **Auto-selected** when `DATABASE_URL` is not set and the environment is not production
 - **Migrations:** Run with `uv run alembic upgrade head`
 
 ### Production (Railway)
@@ -128,10 +133,15 @@ curl -s https://api.openai.com/v1/models \
 - **Type:** PostgreSQL
 - **Connection:** Via `DATABASE_URL` environment variable
 - **Search:** `tsvector` + `ts_rank` full-text search
-- **Auto-selected** when `DATABASE_URL` is set
-- **Migrations:** Auto-run on deployment via `Procfile` release command
+- **Required:** in `production`/`prod`/`staging` a missing `DATABASE_URL` is a
+  startup error. This prevents an accidental boot on ephemeral SQLite.
+  `ALLOW_SQLITE=true` overrides it only for an intentional single-process setup.
+- **Migrations:** Run once per deploy via `backend/migrate.py`, which takes a
+  PostgreSQL advisory lock so concurrent replicas cannot race the same revision.
 
-The storage layer (`backend/app/services/storage.py`) automatically configures the SQLAlchemy engine, enabling SQLite+FTS5 locally and PostgreSQL `tsvector` search in production based on `DATABASE_URL`.
+The storage layer (`backend/app/services/storage/`) configures the SQLAlchemy
+engine, enabling SQLite+FTS5 locally and PostgreSQL `tsvector` search in
+production based on `DATABASE_URL`.
 
 ### Database Migrations
 
@@ -253,12 +263,17 @@ git push
 ### Database connection fails
 
 - **Cause:** `DATABASE_URL` reference not added to backend service
-- **Solution:** In backend Variables → Add Reference → Select Postgres → DATABASE_URL
+- **Symptom:** startup fails with "DATABASE_URL is required in production/staging"
+  (the app deliberately refuses to fall back to an ephemeral SQLite file)
+- **Solution:** In backend Variables → Add Reference → Select Postgres → DATABASE_URL.
+  Only set `ALLOW_SQLITE=true` if you intentionally want single-process SQLite.
 
 ### Migration fails on deployment
 
-- **Cause:** Missing dependencies, syntax error, or database connection issue
-- **Solution:** Check Railway logs with `railway logs`, test migration locally first with `uv run alembic upgrade head`
+- **Cause:** Missing dependencies, syntax error, database connection issue, or a
+  migration that cannot acquire the advisory lock within 60 seconds
+- **Solution:** Check Railway logs with `railway logs`, test migration locally first
+  with `uv run alembic upgrade head` (a clean SQLite run is part of CI)
 
 ### Frontend can't reach backend API
 

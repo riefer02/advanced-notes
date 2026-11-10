@@ -9,7 +9,7 @@ export function reportProblem(data: {
   message?: string
   page?: string
   email?: string
-}): Promise<{ status: string }> {
+}): Promise<{ status: string; report_id?: string }> {
   return apiRequest('POST', '/api/report-problem', {
     body: data,
     timeoutMs: 10000,

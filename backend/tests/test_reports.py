@@ -38,9 +38,38 @@ def test_report_is_queued_and_acknowledged(app):
     )
 
     assert response.status_code == 202
+    payload = response.get_json()
+    assert payload["status"] == "received"
+    assert payload["report_id"]
+
+    # The report is durable even if the notification path later fails.
+    stored = app.extensions["services"].storage.list_problem_reports()
+    assert len(stored) == 1
+    assert stored[0]["id"] == payload["report_id"]
+    assert stored[0]["message"] == "The dashboard is blank"
+    assert stored[0]["page"] == "/dashboard"
+    assert stored[0]["notified_at"] is not None
+
     assert len(recorder.reports) == 1
+    assert recorder.reports[0]["report_id"] == payload["report_id"]
     assert recorder.reports[0]["page"] == "/dashboard"
     assert recorder.reports[0]["message"] == "The dashboard is blank"
+
+
+def test_report_is_not_acknowledged_when_persistence_fails(app, monkeypatch):
+    def _boom(**kwargs):  # noqa: ANN003
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(
+        app.extensions["services"].storage, "create_problem_report", _boom
+    )
+
+    response = app.test_client().post(
+        "/api/report-problem", json={"message": "broken"}
+    )
+
+    assert response.status_code == 503
+    assert response.get_json()["error"]
 
 
 def test_reports_are_rate_limited_per_ip(app):

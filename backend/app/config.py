@@ -77,11 +77,14 @@ class Config:
 
     # External call timeouts / retries. Every client must be bounded so a
     # hung provider cannot pin sync gunicorn workers indefinitely.
-    OPENAI_TIMEOUT_SECONDS: float = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "45"))
+    OPENAI_TIMEOUT_SECONDS: float = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30"))
     OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS: float = float(
         os.getenv("OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS", "120")
     )
-    OPENAI_MAX_RETRIES: int = int(os.getenv("OPENAI_MAX_RETRIES", "2"))
+    # A retry must fit inside the request budget: 2 attempts at 30s is 60s
+    # per call, and /ask makes up to three calls. Keep gunicorn's timeout
+    # above the worst-case total (see Procfile).
+    OPENAI_MAX_RETRIES: int = int(os.getenv("OPENAI_MAX_RETRIES", "1"))
     # Must match the pgvector column width used by the embedding tables.
     EMBEDDING_DIMENSIONS: int = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
     JWKS_TIMEOUT_SECONDS: float = float(os.getenv("JWKS_TIMEOUT_SECONDS", "5"))
@@ -177,11 +180,43 @@ class Config:
         os.getenv("MONTHLY_COST_ALERT_THRESHOLD_USD", "5.0")
     )
 
+    # Operations / admin access. ADMIN_USER_IDS is a comma-separated list of
+    # Clerk "sub" values; email addresses are NOT an authorization boundary.
+    ADMIN_USER_IDS: str | None = os.getenv("ADMIN_USER_IDS")
+    OPS_DIGEST_HOUR_UTC: int = int(os.getenv("OPS_DIGEST_HOUR_UTC", "9"))
+    OPS_WORKER_STALE_SECONDS: int = int(os.getenv("OPS_WORKER_STALE_SECONDS", "120"))
+    OPS_OUTBOX_STALE_SECONDS: int = int(os.getenv("OPS_OUTBOX_STALE_SECONDS", "900"))
+
     @classmethod
     def admin_emails(cls) -> list[str]:
         """Admin recipients: ADMIN_EMAILS (comma-separated) or ADMIN_EMAIL."""
         raw = os.getenv("ADMIN_EMAILS") or cls.ADMIN_EMAIL or ""
         return [address.strip() for address in raw.split(",") if address.strip()]
+
+    @classmethod
+    def admin_user_ids(cls) -> list[str]:
+        """Clerk user IDs allowed to call /api/admin/*."""
+        raw = os.getenv("ADMIN_USER_IDS") or cls.ADMIN_USER_IDS or ""
+        return [value.strip() for value in raw.split(",") if value.strip()]
+
+    @classmethod
+    def environment_name(cls) -> str:
+        """Deployment environment label (never a secret)."""
+        return (cls.APP_ENV or cls.FLASK_ENV or "development").strip().lower()
+
+    @classmethod
+    def release_sha(cls) -> str | None:
+        """Best-effort commit identifier for ops events and readiness."""
+        return (
+            os.getenv("RAILWAY_GIT_COMMIT_SHA")
+            or os.getenv("GIT_COMMIT_SHA")
+            or os.getenv("RENDER_GIT_COMMIT")
+        )
+
+    @classmethod
+    def require_worker_heartbeat(cls) -> bool:
+        """Only production-like deployments should fail readiness for workers."""
+        return cls.environment_name() in {"production", "prod", "staging"}
 
     @classmethod
     def email_enabled(cls) -> bool:

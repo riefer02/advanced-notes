@@ -444,6 +444,8 @@ class EmailOutbox(Base):
     attempts = Column(Integer, nullable=False, server_default="0")
     last_error = Column(Text, nullable=True)
     next_attempt_at = Column(TIMESTAMP, nullable=True)
+    # When a worker claims the row. Used to reclaim rows stranded by a crash.
+    claimed_at = Column(TIMESTAMP, nullable=True)
 
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
     sent_at = Column(TIMESTAMP, nullable=True)
@@ -496,6 +498,79 @@ class Feedback(Base):
     __table_args__ = (
         Index("idx_feedback_user_id", "user_id"),
         Index("idx_feedback_created", "created_at"),
+    )
+
+
+class ProblemReport(Base):
+    """
+    Durable record of a user-submitted "report a problem" message.
+
+    Unlike the email outbox, this row is committed before any notification is
+    attempted, so a broken mail path can never lose a report.
+    """
+
+    __tablename__ = "problem_reports"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=True)
+    message = Column(Text, nullable=True)
+    page = Column(String(500), nullable=True)
+    contact_email = Column(String(320), nullable=True)
+    ip = Column(String(64), nullable=True)
+    user_agent = Column(String(300), nullable=True)
+    status = Column(String(30), nullable=False, server_default="new")
+    notified_at = Column(TIMESTAMP, nullable=True)
+
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_problem_reports_user_id", "user_id"),
+        Index("idx_problem_reports_status_created", "status", "created_at"),
+        Index("idx_problem_reports_created", "created_at"),
+    )
+
+
+class ServiceHeartbeat(Base):
+    """Last-seen timestamp for a background component (worker, digest job)."""
+
+    __tablename__ = "service_heartbeats"
+
+    name = Column(String(64), primary_key=True)
+    last_seen_at = Column(TIMESTAMP, nullable=False)
+    detail = Column(Text, nullable=True)
+
+
+class OpsEvent(Base):
+    """Durable operational event (server error or degraded dependency).
+
+    This is the queryable record behind /api/admin/ops/summary and the daily
+    ops digest. It is intentionally separate from the email outbox so a broken
+    mail path still leaves an auditable trail.
+    """
+
+    __tablename__ = "ops_events"
+
+    id = Column(String(36), primary_key=True)
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    environment = Column(String(50), nullable=True)
+    release = Column(String(100), nullable=True)
+    request_id = Column(String(64), nullable=True)
+    method = Column(String(10), nullable=True)
+    # Route template (e.g. /notes/<note_id>), not the raw path, so one broken
+    # session cannot create an alert per note id.
+    route = Column(String(255), nullable=True)
+    path = Column(String(500), nullable=True)
+    status = Column(Integer, nullable=False, server_default="500")
+    error_type = Column(String(100), nullable=True)
+    message = Column(Text, nullable=True)
+    traceback = Column(Text, nullable=True)
+    user_id = Column(String(255), nullable=True)
+    fingerprint = Column(String(255), nullable=False)
+
+    __table_args__ = (
+        Index("idx_ops_events_created", "created_at"),
+        Index("idx_ops_events_fingerprint_created", "fingerprint", "created_at"),
+        Index("idx_ops_events_status_created", "status", "created_at"),
     )
 
 
@@ -727,28 +802,50 @@ def _normalize_database_url(url: str) -> str:
     return url
 
 
+def _is_production_env() -> bool:
+    """Return True for deployment environments that must not use SQLite.
+
+    Checks APP_ENV/ENV (preferred) as well as FLASK_ENV so a Railway service
+    with only one of them set cannot silently boot on an ephemeral file.
+    """
+    env = (
+        os.getenv("APP_ENV")
+        or os.getenv("ENV")
+        or os.getenv("FLASK_ENV")
+        or ""
+    ).strip().lower()
+    return env in {"production", "prod", "staging"}
+
+
 def get_database_url() -> str:
     """
-    Get database URL from environment, defaulting to SQLite.
-    
-    Returns:
-        Database connection string
+    Get database URL from environment, defaulting to SQLite in development.
+
+    Production/staging must provide DATABASE_URL. Set ALLOW_SQLITE=true only
+    for an intentional, single-process deployment.
     """
     database_url = os.getenv("DATABASE_URL")
-    
+
     if database_url:
         # PostgreSQL
         return _normalize_database_url(database_url)
-    
-    # Debug/Safety check
-    flask_env = os.getenv("FLASK_ENV", "development")
-    if flask_env == "production":
-        # In production, we must have DATABASE_URL. Do not fallback to SQLite.
-        # Check if we have RAILWAY_TCP_PROXY_DOMAIN as an alternative indicator
-        raise ValueError("DATABASE_URL environment variable is not set in production environment!")
+
+    allow_sqlite = os.getenv("ALLOW_SQLITE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+    if _is_production_env() and not allow_sqlite:
+        raise ValueError(
+            "DATABASE_URL is required in production/staging. Refusing to fall "
+            "back to an ephemeral SQLite file (set ALLOW_SQLITE=true only if "
+            "that is intentional)."
+        )
 
     # SQLite (development)
     from pathlib import Path
+
     db_path = Path(__file__).parent.parent / ".notes.db"
     print(f"WARNING: using SQLite database at {db_path}")
     return f"sqlite:///{db_path}"

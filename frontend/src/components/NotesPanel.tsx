@@ -6,10 +6,15 @@ import TagCloud from './TagCloud'
 import SlideOver from './ui/SlideOver'
 import NoteDetail from './NoteDetail'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useNotes, useSearchNotes, useNotesByTag, useDeleteNote } from '../hooks/useNotes'
+import { useNotes, useSearchNotes, useNotesByTag, useDeleteNote, useNote } from '../hooks/useNotes'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 
-export default function NotesPanel() {
+interface NotesPanelProps {
+  focusNoteId?: string | null
+  onFocusHandled?: () => void
+}
+
+export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelProps) {
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null)
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -24,8 +29,24 @@ export default function NotesPanel() {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const deleteNoteMutation = useDeleteNote()
 
+  // A capture action (record/transcribe or manual save) can ask the panel to
+  // open a specific note, including from a deep link.
+  const { data: focusedNote } = useNote(focusNoteId ?? '')
+  useEffect(() => {
+    if (focusNoteId && focusedNote) {
+      setSelectedNote(focusedNote)
+      onFocusHandled?.()
+    }
+  }, [focusNoteId, focusedNote, onFocusHandled])
+
   // Get counts for different views. Only one source is active at a time.
-  const { data: allNotes } = useNotes(undefined, 50, 0, !debouncedSearch && !selectedTag)
+  const { data: allNotes } = useNotes(
+    undefined,
+    50,
+    0,
+    !debouncedSearch && !selectedTag && !selectedFolder
+  )
+  const { data: folderNotes } = useNotes(selectedFolder ?? undefined, 50, 0, !!selectedFolder)
   const { data: searchResults } = useSearchNotes(debouncedSearch)
   const { data: tagNotes } = useNotesByTag(selectedTag)
 
@@ -34,8 +55,8 @@ export default function NotesPanel() {
     : selectedTag
       ? tagNotes?.length || 0
       : selectedFolder
-        ? 0 // Will be calculated by NotesList (we don't have this easily here without filtering)
-        : allNotes?.notes?.length || 0
+        ? folderNotes?.total || 0
+        : allNotes?.total || 0
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -232,34 +253,31 @@ export default function NotesPanel() {
               </button>
 
               {showFolders && (
-                <>
-                  <FolderTree
-                    selectedFolder={selectedFolder}
-                    onSelectFolder={(folder) => {
-                      setSelectedFolder(folder)
-                      setSelectedTag(null) // Clear tag selection when folder is selected
-                    }}
-                  />
-                  {selectedFolder && (
-                    <div className="mt-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                        Notes in {selectedFolder}
-                      </h3>
-                      <NotesList
-                        folder={selectedFolder}
-                        onTagClick={(tag) => {
-                          setSelectedTag(tag)
-                          setSelectedFolder(null)
-                        }}
-                        onNoteSelect={setSelectedNote}
-                        selectedNoteId={selectedNote?.id}
-                      />
-                    </div>
-                  )}
-                </>
+                <FolderTree
+                  selectedFolder={selectedFolder}
+                  onSelectFolder={(folder) => {
+                    setSelectedFolder(folder)
+                    setSelectedTag(null) // Clear tag selection when folder is selected
+                  }}
+                />
               )}
 
-              {!showFolders && !selectedFolder && (
+              {selectedFolder ? (
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                    Notes in {selectedFolder}
+                  </h3>
+                  <NotesList
+                    folder={selectedFolder}
+                    onTagClick={(tag) => {
+                      setSelectedTag(tag)
+                      setSelectedFolder(null)
+                    }}
+                    onNoteSelect={setSelectedNote}
+                    selectedNoteId={selectedNote?.id}
+                  />
+                </div>
+              ) : (
                 <NotesList
                   onTagClick={(tag) => setSelectedTag(tag)}
                   onNoteSelect={setSelectedNote}

@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react'
-import { useAuth } from '@clerk/clerk-react'
+import { useEffect, type ReactNode } from 'react'
+import { useAuth, useClerk } from '@clerk/clerk-react'
 
-import { setAuthTokenGetter } from '../lib/api'
+import { setAuthTokenGetter, setUnauthorizedHandler } from '../lib/api/core'
 
 /**
  * Wires Clerk's `getToken` into the API layer before any route mounts.
@@ -13,6 +13,21 @@ import { setAuthTokenGetter } from '../lib/api'
  */
 export function AuthTokenBridge({ children }: { children: ReactNode }) {
   const { getToken } = useAuth()
+  const clerk = useClerk()
+
   setAuthTokenGetter(getToken)
+
+  useEffect(() => {
+    let redirecting = false
+    setUnauthorizedHandler(() => {
+      if (redirecting) return
+      redirecting = true
+      void clerk.signOut({ redirectUrl: '/sign-in' }).finally(() => {
+        redirecting = false
+      })
+    })
+    return () => setUnauthorizedHandler(null)
+  }, [clerk])
+
   return <>{children}</>
 }

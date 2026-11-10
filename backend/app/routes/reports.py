@@ -62,7 +62,26 @@ def report_problem():
         )
 
     try:
-        get_services().email.send_problem_report_notification(
+        svc = get_services()
+        # Persist first: a broken mail path must never lose a report.
+        report_id = svc.storage.create_problem_report(
+            user_id=user_id,
+            message=message or None,
+            page=page or request.referrer or None,
+            contact_email=contact_email or None,
+            ip=ip,
+            user_agent=request.user_agent.string[:300] or None,
+        )
+    except Exception:
+        logger.exception("Failed to persist problem report")
+        return api_error(
+            "Could not record your report right now. Please email support directly.",
+            503,
+        )
+
+    try:
+        queued = svc.email.send_problem_report_notification(
+            report_id=report_id,
             message=message,
             page=page or request.referrer or "",
             ip=ip,
@@ -70,7 +89,9 @@ def report_problem():
             user_agent=request.user_agent.string[:300],
             contact_email=contact_email,
         )
-    except Exception:  # noqa: BLE001 - the user still gets an acknowledgment
-        logger.exception("Failed to queue problem report")
+        if queued:
+            svc.storage.mark_problem_report_notified(report_id)
+    except Exception:  # noqa: BLE001 - the report is already safely stored
+        logger.exception("Failed to queue problem report notification")
 
-    return jsonify({"status": "received"}), 202
+    return jsonify({"status": "received", "report_id": report_id}), 202

@@ -81,6 +81,11 @@ export function AppHeader({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem asChild>
+              <Link to="/notes" search={{ compose: true }}>
+                Write a Note
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
               <Link to="/notes">Record a Note</Link>
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={onOpenAsk}>Ask Notes</DropdownMenuItem>

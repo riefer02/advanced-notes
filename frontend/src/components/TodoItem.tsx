@@ -72,7 +72,7 @@ export default function TodoItem({ todo, showNoteLink = true }: TodoItemProps) {
           {showNoteLink && todo.note_id ? (
             <Link
               to="/notes"
-              search={{ noteId: todo.note_id }}
+              search={{ note: todo.note_id }}
               className="text-blue-600 hover:underline"
             >
               View source note

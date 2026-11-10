@@ -105,14 +105,15 @@ export default function NotesList({
           {isSearchMode
             ? 'Try adjusting your search terms or browse all notes'
             : isTagMode
-              ? 'Create notes with this tag by recording new audio notes'
-              : 'Start recording your first voice note to get organized with AI-powered tagging'}
+              ? 'Create notes with this tag by recording audio or writing a note'
+              : 'Record a voice note or write one yourself — both are organized with AI-powered tagging'}
         </p>
         {!isSearchMode && !isTagMode && (
           <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
             <p className="text-xs text-gray-500">
-              Use the <span className="font-semibold text-gray-700">Start Recording</span> button in
-              the left panel to create your first note.
+              Use the <span className="font-semibold text-gray-700">Record / Upload</span> or{' '}
+              <span className="font-semibold text-gray-700">Write</span> tab in the Capture panel to
+              create your first note.
             </p>
           </div>
         )}

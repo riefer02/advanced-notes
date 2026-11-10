@@ -16,6 +16,13 @@ export class RequestTimeoutError extends Error {
   }
 }
 
+export class AuthError extends Error {
+  constructor() {
+    super('Your session expired. Please sign in again.')
+    this.name = 'AuthError'
+  }
+}
+
 function timeoutSignal(ms: number): AbortSignal {
   if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
     return AbortSignal.timeout(ms)
@@ -73,6 +80,39 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 }
 
 // ============================================================================
+// Unauthorized handling
+// ============================================================================
+
+let unauthorizedHandler: (() => void) | null = null
+
+/** Register a session-expired callback (wired to Clerk in the app shell). */
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler
+}
+
+async function throwResponseError(response: Response, fallbackPrefix: string): Promise<never> {
+  const errorText = await response.text()
+  let errorMessage: string
+  try {
+    const errorJson = JSON.parse(errorText)
+    errorMessage = errorJson.error || `${fallbackPrefix}: ${response.status}`
+  } catch {
+    errorMessage = errorText || `${fallbackPrefix}: ${response.status}`
+  }
+
+  if (response.status === 401) {
+    try {
+      unauthorizedHandler?.()
+    } catch {
+      // Never let the handler hide the original failure.
+    }
+    throw new AuthError()
+  }
+
+  throw new Error(errorMessage)
+}
+
+// ============================================================================
 // Generic API Request Helper
 // ============================================================================
 
@@ -123,15 +163,7 @@ export async function apiRequest<T>(
   )
 
   if (!response.ok) {
-    const errorText = await response.text()
-    let errorMessage: string
-    try {
-      const errorJson = JSON.parse(errorText)
-      errorMessage = errorJson.error || `Request failed: ${response.status}`
-    } catch {
-      errorMessage = errorText || `Request failed: ${response.status}`
-    }
-    throw new Error(errorMessage)
+    await throwResponseError(response, 'Request failed')
   }
 
   if (response.status === 204) {
@@ -159,15 +191,7 @@ export async function apiUpload<T>(
   )
 
   if (!response.ok) {
-    const errorText = await response.text()
-    let errorMessage: string
-    try {
-      const errorJson = JSON.parse(errorText)
-      errorMessage = errorJson.error || `Upload failed: ${response.status}`
-    } catch {
-      errorMessage = errorText || `Upload failed: ${response.status}`
-    }
-    throw new Error(errorMessage)
+    await throwResponseError(response, 'Upload failed')
   }
 
   return response.json()

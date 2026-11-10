@@ -10,7 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 
 interface NoteDetailProps {
   note: Note & { snippet?: string; rank?: number }
-  onDelete: () => void
+  /** Omit for read-only contexts (e.g. a summary's source note). */
+  onDelete?: () => void
   onUpdated?: (note: Note) => void
 }
 
@@ -274,19 +275,21 @@ export default function NoteDetail({ note, onDelete, onUpdated }: NoteDetailProp
           </div>
 
           {/* Actions */}
-          <div className="border-t border-gray-200 pt-6">
-            <Button variant="destructive" onClick={onDelete} className="w-full">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                />
-              </svg>
-              Delete Note
-            </Button>
-          </div>
+          {onDelete && (
+            <div className="border-t border-gray-200 pt-6">
+              <Button variant="destructive" onClick={onDelete} className="w-full">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
+                </svg>
+                Delete Note
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>

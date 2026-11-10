@@ -1,5 +1,13 @@
 import { useNavigate } from '@tanstack/react-router'
-import { Mic, MessageSquare, FileText, UtensilsCrossed, Disc3, MessageCircle } from 'lucide-react'
+import {
+  Mic,
+  MessageSquare,
+  FileText,
+  UtensilsCrossed,
+  Disc3,
+  MessageCircle,
+  PenLine,
+} from 'lucide-react'
 
 import {
   CommandDialog,
@@ -18,6 +26,7 @@ interface CommandPaletteProps {
 }
 
 const QUICK_ACTIONS = [
+  { label: 'Write a Note', action: 'write' as const, icon: PenLine },
   { label: 'Record a Note', to: '/notes' as const, icon: Mic },
   { label: 'Ask Notes', action: 'ask' as const, icon: MessageSquare },
   { label: 'Create Summary', to: '/summaries' as const, icon: FileText },
@@ -37,6 +46,8 @@ export function CommandPalette({ isOpen, onClose, onOpenAsk }: CommandPalettePro
   const handleActionSelect = (action: (typeof QUICK_ACTIONS)[number]) => {
     if ('action' in action && action.action === 'ask') {
       onOpenAsk()
+    } else if ('action' in action && action.action === 'write') {
+      void navigate({ to: '/notes', search: { compose: true } })
     } else if ('to' in action) {
       void navigate({ to: action.to })
     }

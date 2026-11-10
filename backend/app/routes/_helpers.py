@@ -6,6 +6,7 @@ lifecycle used across route modules.
 """
 
 import logging
+import re
 import traceback
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -24,6 +25,25 @@ logger = logging.getLogger(__name__)
 
 # Dedup state for cost alerts — resets on deploy (acceptable for personal project)
 _cost_alert_sent_for_month: str | None = None
+
+# Accept only a bounded, log-safe inbound request id; otherwise generate one.
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{8,64}$")
+_ERROR_BUCKET_SECONDS = 600
+
+
+def _route_template() -> str:
+    """Route pattern (e.g. /notes/<note_id>) instead of the raw path."""
+    rule = request.url_rule
+    return rule.rule if rule is not None else request.path
+
+
+def _safe_request_id() -> str:
+    candidate = (request.headers.get("X-Request-ID") or "").strip()
+    return candidate if _REQUEST_ID_RE.match(candidate) else str(uuid4())
+
+
+def _error_bucket() -> int:
+    return int(datetime.now(UTC).timestamp() // _ERROR_BUCKET_SECONDS)
 
 
 def _maybe_send_cost_alert(svc) -> None:  # noqa: ANN001
@@ -83,12 +103,28 @@ def api_error_from_exception(
     if isinstance(exc, ExternalServiceError):
         # A provider outage is not our bug: report it as unavailable, with a
         # safe message that does not include the upstream error.
+        route = _route_template()
         logger.warning(
             "External service unavailable on %s %s: %s",
             request.method,
             request.path,
             exc.service,
         )
+        # Record it for the digest without emailing one alert per request.
+        with suppress(Exception):
+            get_services().storage.record_ops_event(
+                fingerprint=f"{request.method}:{route}:{type(exc).__name__}:{_error_bucket()}",
+                status=503,
+                error_type=type(exc).__name__,
+                message=f"External service unavailable: {exc.service}",
+                method=request.method,
+                route=route,
+                path=request.path,
+                user_id=getattr(g, "user_id", None),
+                request_id=_safe_request_id(),
+                environment=Config.environment_name(),
+                release=Config.release_sha(),
+            )
         return api_error(exc.message, 503)
 
     report_server_error(exc, status=status)
@@ -96,12 +132,13 @@ def api_error_from_exception(
 
 
 def report_server_error(exc: Exception, *, status: int = 500) -> None:
-    """Log a server error and queue a structured admin alert.
+    """Log a server error, persist an ops event, and queue an admin alert.
 
     Called both from caught route errors and the Flask 500 handler, so the
     errors we actually handle are not invisible to the admin.
     """
-    request_id = request.headers.get("X-Request-ID") or str(uuid4())
+    route = _route_template()
+    request_id = _safe_request_id()
     traceback_text = "".join(
         traceback.format_exception(type(exc), exc, exc.__traceback__)
     )
@@ -114,6 +151,24 @@ def report_server_error(exc: Exception, *, status: int = 500) -> None:
         exc_info=(type(exc), exc, exc.__traceback__),
     )
 
+    # The database is the durable, queryable record. If it is down this fails
+    # too, which is exactly why the email outbox is a separate fallback.
+    with suppress(Exception):
+        get_services().storage.record_ops_event(
+            fingerprint=f"{request.method}:{route}:{type(exc).__name__}:{_error_bucket()}",
+            status=status,
+            error_type=type(exc).__name__,
+            message=str(exc),
+            traceback_text=traceback_text,
+            method=request.method,
+            route=route,
+            path=request.path,
+            user_id=getattr(g, "user_id", None),
+            request_id=request_id,
+            environment=Config.environment_name(),
+            release=Config.release_sha(),
+        )
+
     try:
         get_services().email.send_error_notification(
             error_type=type(exc).__name__,
@@ -121,12 +176,26 @@ def report_server_error(exc: Exception, *, status: int = 500) -> None:
             traceback_text=traceback_text,
             method=request.method,
             path=request.path,
+            dedupe_path=route,
             status=status,
             user_id=getattr(g, "user_id", None),
             request_id=request_id,
         )
     except Exception:  # noqa: BLE001 - reporting must never mask the original error
         logger.exception("Failed to queue server error notification")
+
+
+def require_admin(f):
+    """Require an authenticated Clerk user listed in ADMIN_USER_IDS."""
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user_id = getattr(g, "user_id", None)
+        if not user_id or user_id not in Config.admin_user_ids():
+            return api_error("Forbidden", 403)
+        return f(*args, **kwargs)
+
+    return decorated
 
 
 def parse_pagination(default_limit: int = 50, max_limit: int = 100) -> tuple[int, int]:

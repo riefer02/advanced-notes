@@ -11,6 +11,7 @@ from sqlalchemy import desc
 from ...database import AskHistory as AskHistoryORM
 from ...database import Digest as DigestORM
 from ...database import Feedback as FeedbackORM
+from ...database import ProblemReport as ProblemReportORM
 from ...database import UserSettings as UserSettingsORM
 from ..models import AskHistory as AskHistoryDTO
 from ..models import Digest as DigestDTO
@@ -356,3 +357,88 @@ class SettingsStorageMixin:
             feedback.email_sent = True
             session.add(feedback)
             return True
+
+    # -----------------------------------------------------------------------
+    # Problem reports
+    # -----------------------------------------------------------------------
+
+    def create_problem_report(
+        self,
+        *,
+        user_id: str | None,
+        message: str | None,
+        page: str | None,
+        contact_email: str | None,
+        ip: str | None,
+        user_agent: str | None,
+    ) -> str:
+        """Commit a problem report and return its id.
+
+        This must succeed before the caller acknowledges the report, so the
+        row is written before any best-effort notification is attempted.
+        """
+        report_id = str(uuid4())
+        report = ProblemReportORM(
+            id=report_id,
+            user_id=user_id,
+            message=message,
+            page=page,
+            contact_email=contact_email,
+            ip=ip,
+            user_agent=user_agent,
+            status="new",
+            created_at=datetime.utcnow(),
+        )
+
+        with self._session_scope() as session:
+            session.add(report)
+
+        return report_id
+
+    def mark_problem_report_notified(self, report_id: str) -> bool:
+        with self._session_scope() as session:
+            report = (
+                session.query(ProblemReportORM)
+                .filter(ProblemReportORM.id == report_id)
+                .one_or_none()
+            )
+            if not report:
+                return False
+            report.notified_at = datetime.utcnow()
+            session.add(report)
+            return True
+
+    def list_problem_reports(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        status: str | None = None,
+    ) -> list[dict]:
+        """List reports for administrator triage (no user scoping by design)."""
+        with self._session_scope() as session:
+            query = session.query(ProblemReportORM)
+            if status:
+                query = query.filter(ProblemReportORM.status == status)
+            rows = (
+                query.order_by(desc(ProblemReportORM.created_at))
+                .offset(max(offset, 0))
+                .limit(max(limit, 1))
+                .all()
+            )
+            return [
+                {
+                    "id": row.id,
+                    "user_id": row.user_id,
+                    "message": row.message,
+                    "page": row.page,
+                    "contact_email": row.contact_email,
+                    "ip": row.ip,
+                    "user_agent": row.user_agent,
+                    "status": row.status,
+                    "notified_at": row.notified_at.isoformat()
+                    if row.notified_at
+                    else None,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                }
+                for row in rows
+            ]

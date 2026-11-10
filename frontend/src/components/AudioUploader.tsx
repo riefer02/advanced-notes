@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranscribeAudio } from '../hooks/useNotes'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
 import type { TranscriptionResponse } from '../lib/api'
@@ -7,10 +7,14 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 
 interface AudioUploaderProps {
   recordButtonRef?: React.RefObject<HTMLButtonElement>
+  onNoteCreated?: (noteId: string) => void
 }
 
-export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
+export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioUploaderProps) {
   const [lastResult, setLastResult] = useState<TranscriptionResponse | null>(null)
+  const [lastBlob, setLastBlob] = useState<Blob | null>(null)
+  const [lastBlobUrl, setLastBlobUrl] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Use TanStack Query mutation
   const transcribeMutation = useTranscribeAudio()
@@ -22,14 +26,31 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
     startRecording,
     stopRecording,
     clearError,
-  } = useAudioRecorder((audioBlob) => transcribeMutation.mutate(audioBlob))
+  } = useAudioRecorder((audioBlob) => {
+    // Keep the blob so a failed transcription can be retried without re-recording.
+    setLastBlob(audioBlob)
+    transcribeMutation.mutate(audioBlob)
+  })
 
   // When transcription succeeds, notify the NotesPanel
   useEffect(() => {
     if (transcribeMutation.isSuccess && transcribeMutation.data) {
       setLastResult(transcribeMutation.data)
+      const noteId = transcribeMutation.data.categorization?.note_id
+      if (noteId) onNoteCreated?.(noteId)
     }
-  }, [transcribeMutation.isSuccess, transcribeMutation.data])
+  }, [transcribeMutation.isSuccess, transcribeMutation.data, onNoteCreated])
+
+  // Manage the download URL lifecycle for the retained blob.
+  useEffect(() => {
+    if (!lastBlob) {
+      setLastBlobUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(lastBlob)
+    setLastBlobUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [lastBlob])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -37,13 +58,22 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
+  const handleFileSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    // Allow selecting the same file again after a failure.
+    event.target.value = ''
+    if (!file) return
+    setLastBlob(file)
+    transcribeMutation.mutate(file)
+  }
+
   return (
     <div className="mx-auto max-w-2xl p-6 space-y-4">
-      {/* Record Audio */}
+      {/* Record or upload audio */}
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">Record Audio</label>
+        <label className="block text-sm font-medium text-gray-700">Record or upload audio</label>
         <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {!isRecording ? (
               <Button
                 ref={recordButtonRef}
@@ -66,11 +96,36 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
                 Stop Recording ({formatTime(recordingTime)})
               </Button>
             )}
+
+            {!isRecording && (
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={transcribeMutation.isPending}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                  />
+                </svg>
+                Upload audio
+              </Button>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="audio/*"
+              className="hidden"
+              onChange={handleFileSelected}
+            />
           </div>
           {!isRecording && (
             <p className="text-xs text-gray-500">
-              💡 Tip: Use <span className="font-semibold text-gray-700">Start Recording</span> to
-              capture a note.
+              💡 Record a thought, or upload an existing audio file (MP3, WAV, M4A, WebM).
             </p>
           )}
         </div>
@@ -91,7 +146,7 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
       )}
 
       {transcribeMutation.isPending && (
-        <div className="flex items-center space-x-2 text-blue-600">
+        <div className="flex items-center space-x-2 text-blue-600" role="status">
           <svg
             className="animate-spin h-5 w-5"
             xmlns="http://www.w3.org/2000/svg"
@@ -118,11 +173,33 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
 
       {transcribeMutation.isError && (
         <Alert variant="destructive">
-          <AlertTitle>Error</AlertTitle>
+          <AlertTitle>Transcription failed</AlertTitle>
           <AlertDescription>
-            {transcribeMutation.error instanceof Error
-              ? transcribeMutation.error.message
-              : 'Transcription failed'}
+            <p>
+              {transcribeMutation.error instanceof Error
+                ? transcribeMutation.error.message
+                : 'Transcription failed'}
+            </p>
+            {lastBlob && (
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => transcribeMutation.mutate(lastBlob)}
+                >
+                  Retry transcription
+                </Button>
+                {lastBlobUrl && (
+                  <a
+                    href={lastBlobUrl}
+                    download={`chisos-recording-${Date.now()}.webm`}
+                    className="text-sm underline"
+                  >
+                    Download recording
+                  </a>
+                )}
+              </div>
+            )}
           </AlertDescription>
         </Alert>
       )}
@@ -137,14 +214,30 @@ export default function AudioUploader({ recordButtonRef }: AudioUploaderProps) {
                 clipRule="evenodd"
               />
             </svg>
-            <h2 className="text-lg font-semibold text-green-900">Transcript Ready!</h2>
+            <h2 className="text-lg font-semibold text-green-900">Transcript ready!</h2>
           </div>
+
+          {lastResult.categorization && (
+            <div className="mb-3 space-y-1">
+              <p className="font-medium text-green-900">{lastResult.categorization.title}</p>
+              <p className="text-xs text-green-800">
+                Filed in{' '}
+                <span className="font-semibold">{lastResult.categorization.folder_path}</span>
+                {lastResult.categorization.tags?.length > 0 && (
+                  <> · {lastResult.categorization.tags.join(', ')}</>
+                )}
+              </p>
+            </div>
+          )}
+
           <div className="bg-white rounded-lg p-4 border border-green-200 max-h-96 overflow-y-auto">
             <p className="whitespace-pre-wrap text-gray-800 text-base leading-relaxed">
               {lastResult.text}
             </p>
           </div>
-          <p className="text-xs text-green-700 mt-3">✓ Saved and organized automatically</p>
+          <p className="text-xs text-green-700 mt-3">
+            ✓ Saved and organized automatically — it is already in your notes list.
+          </p>
         </div>
       )}
     </div>

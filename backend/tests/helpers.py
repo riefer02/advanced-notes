@@ -231,6 +231,8 @@ class FakeEmailService:
         return False
     def send_problem_report_notification(self, **kwargs):
         return False
+    def send_test_alert(self):
+        return False
 
 
 # ============================================================================

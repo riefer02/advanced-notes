@@ -8,6 +8,7 @@ from .engine import StorageEngine
 from .meals import MealStorageMixin
 from .notes import NoteStorageMixin
 from .notifications import NotificationStorageMixin
+from .ops import OpsStorageMixin
 from .settings import SettingsStorageMixin
 from .sharing import SharingStorageMixin
 from .todos import TodoStorageMixin
@@ -24,6 +25,7 @@ class NoteStorage(
     SharingStorageMixin,
     SettingsStorageMixin,
     NotificationStorageMixin,
+    OpsStorageMixin,
     StorageEngine,
 ):
     """
@@ -42,6 +44,7 @@ class NoteStorage(
     - SharingStorageMixin: Profiles, friendships, resource shares
     - SettingsStorageMixin: User settings, digests, ask history, feedback
     - NotificationStorageMixin: Admin email outbox
+    - OpsStorageMixin: Ops events, heartbeats, outbox health
     - StorageEngine: Connection management, session scoping
     """
 

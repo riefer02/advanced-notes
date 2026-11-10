@@ -17,7 +17,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 function RootComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const isAppRoute = NAV_ITEMS.some((item) => pathname.startsWith(item.to))
+  // Admin is an authenticated app route but deliberately absent from the
+  // sidebar; the API enforces ADMIN_USER_IDS.
+  const isAppRoute =
+    pathname.startsWith('/admin') || NAV_ITEMS.some((item) => pathname.startsWith(item.to))
 
   return (
     <>

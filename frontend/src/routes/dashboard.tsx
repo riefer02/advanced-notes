@@ -7,6 +7,7 @@ import {
   Disc3,
   Mic,
   MessageSquare,
+  PenLine,
   ArrowRight,
 } from 'lucide-react'
 
@@ -69,6 +70,12 @@ function DashboardPage() {
             Quick Actions
           </h2>
           <div className="flex flex-wrap gap-2">
+            <Link to="/notes" search={{ compose: true }}>
+              <Button variant="outline" size="sm">
+                <PenLine className="h-4 w-4 mr-1.5" />
+                Write a Note
+              </Button>
+            </Link>
             <Link to="/notes">
               <Button variant="outline" size="sm">
                 <Mic className="h-4 w-4 mr-1.5" />

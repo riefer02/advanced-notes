@@ -535,6 +535,62 @@ def test_get_note_404_when_other_user(client, app):  # noqa: ANN001 - pytest fix
     assert resp.status_code == 404
 
 
+def test_create_manual_note(client, app):  # noqa: ANN001 - pytest fixtures
+    resp = client.post(
+        "/api/notes",
+        json={
+            "title": "Grocery idea",
+            "content": "Try the new ramen place on 5th",
+            "folder_path": "inbox",
+            "tags": ["Food", "food", "Ideas"],
+        },
+        headers={"X-Test-User-Id": "user-a"},
+    )
+
+    assert resp.status_code == 201
+    note = resp.get_json()
+    assert note["title"] == "Grocery idea"
+    assert note["content"] == "Try the new ramen place on 5th"
+    assert note["model_version"] == "manual"
+    assert note["folder_path"] == "inbox"
+    assert note["tags"] == ["food", "ideas"]
+    assert note["word_count"] == 7
+
+    # It must be visible through the normal user-scoped list, with a real total.
+    listing = client.get("/api/notes", headers={"X-Test-User-Id": "user-a"}).get_json()
+    assert listing["total"] == 1
+    assert listing["notes"][0]["id"] == note["id"]
+
+    # A different user cannot see it.
+    other = client.get("/api/notes", headers={"X-Test-User-Id": "user-b"}).get_json()
+    assert other["total"] == 0
+
+
+def test_create_manual_note_defaults_title_from_content(client):  # noqa: ANN001
+    resp = client.post(
+        "/api/notes",
+        json={"content": "First line becomes the title\nSecond line stays in body"},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+
+    assert resp.status_code == 201
+    note = resp.get_json()
+    assert note["title"] == "First line becomes the title"
+    assert note["folder_path"] == "inbox"
+    assert note["tags"] == []
+
+
+def test_create_manual_note_requires_content(client):  # noqa: ANN001
+    resp = client.post(
+        "/api/notes",
+        json={"content": "   ", "title": "Empty"},
+        headers={"X-Test-User-Id": "user-a"},
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"]
+
+
 def test_ask_requires_query_field(client):  # noqa: ANN001 - pytest fixtures
     resp = client.post("/api/ask", json={}, headers={"X-Test-User-Id": "user-a"})
     assert resp.status_code == 400

@@ -14,6 +14,10 @@ Complete documentation for the Chisos advanced notes project.
 - **[Railway Deployment Guide](./railway-deployment.md)** - Production deployment on Railway (architecture, environment variables, monitoring)
 - **[Deployment Lessons](./deployment-lessons.md)** - Critical learnings from production deployments (migrations, environment variables)
 
+### Operations & Planning
+- **[Improvement Roadmap](./roadmap.md)** - What is done, what is next, and when (honest status + exit criteria)
+- **[Incident Runbook](./incident-runbook.md)** - Five-minute triage and recovery playbook for the administrator
+
 ### Technical Specifications
 - **[Semantic Organization Spec](./semantic-organization-spec.md)** - AI-powered note categorization architecture
 - **[REST API Reference](./api-reference.md)** - Complete API endpoint documentation
@@ -45,6 +49,8 @@ Complete documentation for the Chisos advanced notes project.
 ### For Operators
 
 - **Environment Setup**: [environment-setup.md](./environment-setup.md)
+- **Incident Response**: [incident-runbook.md](./incident-runbook.md)
+- **Roadmap & Status**: [roadmap.md](./roadmap.md)
 - **API Configuration**: See environment setup guide
 - **Troubleshooting**: Available in each guide
 
