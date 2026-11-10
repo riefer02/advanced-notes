@@ -15,6 +15,11 @@ from ..models import ResourceShareResponse as ResourceShareDTO
 from ..models import UserProfileResponse as UserProfileDTO
 
 
+def _friend_pair_key(user_a: str, user_b: str) -> str:
+    low, high = sorted((user_a, user_b))
+    return f"{low}|{high}"
+
+
 class SharingStorageMixin:
     """User profiles, friendships, and resource sharing operations."""
 
@@ -189,12 +194,30 @@ class SharingStorageMixin:
     # -----------------------------------------------------------------------
 
     def create_friendship(self, requester_id: str, addressee_id: str) -> FriendshipDTO:
+        pair_key = _friend_pair_key(requester_id, addressee_id)
         with self._session_scope() as session:
             now = datetime.utcnow()
+            existing = (
+                session.query(FriendshipORM)
+                .filter(FriendshipORM.pair_key == pair_key)
+                .one_or_none()
+            )
+            if existing:
+                # Re-request after decline/revoke reactivates the same row
+                # instead of violating the unique pair constraint.
+                if existing.status not in ("accepted", "pending"):
+                    existing.requester_id = requester_id
+                    existing.addressee_id = addressee_id
+                    existing.status = "pending"
+                    existing.updated_at = now
+                    session.flush()
+                return self._friendship_to_dto(existing)
+
             friendship = FriendshipORM(
                 id=str(uuid4()),
                 requester_id=requester_id,
                 addressee_id=addressee_id,
+                pair_key=pair_key,
                 status="pending",
                 created_at=now,
                 updated_at=now,
@@ -212,12 +235,7 @@ class SharingStorageMixin:
         with self._session_scope() as session:
             f = (
                 session.query(FriendshipORM)
-                .filter(
-                    or_(
-                        (FriendshipORM.requester_id == user_a) & (FriendshipORM.addressee_id == user_b),
-                        (FriendshipORM.requester_id == user_b) & (FriendshipORM.addressee_id == user_a),
-                    )
-                )
+                .filter(FriendshipORM.pair_key == _friend_pair_key(user_a, user_b))
                 .one_or_none()
             )
             return self._friendship_to_dto(f) if f else None
@@ -280,10 +298,7 @@ class SharingStorageMixin:
                 session.query(FriendshipORM)
                 .filter(
                     FriendshipORM.status == "accepted",
-                    or_(
-                        (FriendshipORM.requester_id == user_a) & (FriendshipORM.addressee_id == user_b),
-                        (FriendshipORM.requester_id == user_b) & (FriendshipORM.addressee_id == user_a),
-                    ),
+                    FriendshipORM.pair_key == _friend_pair_key(user_a, user_b),
                 )
                 .one_or_none()
             )
@@ -318,14 +333,38 @@ class SharingStorageMixin:
         shared_with_id: str,
         resource_type: str,
         permission: str = "view",
+        resource_id: str | None = None,
     ) -> ResourceShareDTO:
+        resource_key = resource_id or ""
         with self._session_scope() as session:
             now = datetime.utcnow()
+            existing = (
+                session.query(ResourceShareORM)
+                .filter(
+                    ResourceShareORM.owner_id == owner_id,
+                    ResourceShareORM.shared_with_id == shared_with_id,
+                    ResourceShareORM.resource_type == resource_type,
+                    ResourceShareORM.resource_key == resource_key,
+                )
+                .one_or_none()
+            )
+            if existing:
+                # Re-share after revoke/decline reactivates the existing row.
+                if existing.status not in ("accepted", "pending"):
+                    existing.status = "pending"
+                    existing.permission = permission
+                    existing.resource_id = resource_id
+                    existing.updated_at = now
+                    session.flush()
+                return self._share_to_dto(existing)
+
             share = ResourceShareORM(
                 id=str(uuid4()),
                 owner_id=owner_id,
                 shared_with_id=shared_with_id,
                 resource_type=resource_type,
+                resource_id=resource_id,
+                resource_key=resource_key,
                 permission=permission,
                 status="pending",
                 created_at=now,
@@ -381,7 +420,14 @@ class SharingStorageMixin:
             )
             return [self._share_to_dto(s) for s in shares]
 
-    def get_share_between(self, owner_id: str, shared_with_id: str, resource_type: str) -> ResourceShareDTO | None:
+    def get_share_between(
+        self,
+        owner_id: str,
+        shared_with_id: str,
+        resource_type: str,
+        resource_id: str | None = None,
+    ) -> ResourceShareDTO | None:
+        resource_key = resource_id or ""
         with self._session_scope() as session:
             s = (
                 session.query(ResourceShareORM)
@@ -389,6 +435,7 @@ class SharingStorageMixin:
                     ResourceShareORM.owner_id == owner_id,
                     ResourceShareORM.shared_with_id == shared_with_id,
                     ResourceShareORM.resource_type == resource_type,
+                    ResourceShareORM.resource_key == resource_key,
                 )
                 .one_or_none()
             )
@@ -402,10 +449,18 @@ class SharingStorageMixin:
             session.delete(s)
             return True
 
-    def has_access(self, viewer_id: str, owner_id: str, resource_type: str, min_permission: str = "view") -> bool:
+    def has_access(
+        self,
+        viewer_id: str,
+        owner_id: str,
+        resource_type: str,
+        min_permission: str = "view",
+        resource_id: str | None = None,
+    ) -> bool:
         if viewer_id == owner_id:
             return True
         allowed = ["view", "edit"] if min_permission == "view" else ["edit"]
+        resource_key = resource_id or ""
         with self._session_scope() as session:
             s = (
                 session.query(ResourceShareORM)
@@ -413,6 +468,7 @@ class SharingStorageMixin:
                     ResourceShareORM.owner_id == owner_id,
                     ResourceShareORM.shared_with_id == viewer_id,
                     ResourceShareORM.resource_type == resource_type,
+                    ResourceShareORM.resource_key == resource_key,
                     ResourceShareORM.status == "accepted",
                     ResourceShareORM.permission.in_(allowed),
                 )
@@ -460,6 +516,7 @@ class SharingStorageMixin:
             owner_id=s.owner_id,
             shared_with_id=s.shared_with_id,
             resource_type=s.resource_type,
+            resource_id=s.resource_id,
             permission=s.permission,
             status=s.status,
             created_at=s.created_at,

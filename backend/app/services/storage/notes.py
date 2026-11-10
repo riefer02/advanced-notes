@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import Text, case, cast, desc, func, or_, text
+from sqlalchemy import case, cast, desc, func, or_, text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from ...database import Note as NoteORM
 from ...database import NoteEmbedding as NoteEmbeddingORM
 from ...database import NoteRevision as NoteRevisionORM
+from ...database import NoteTag as NoteTagORM
+from ...database import Tag as TagORM
 from ..models import FolderNode, FolderStats, NoteMetadata, SearchResult
 from ..models import Note as NoteDTO
 from ..models import NoteRevision as NoteRevisionDTO
@@ -23,6 +26,38 @@ NOTE_VIEW_ACTIVE = "active"
 NOTE_VIEW_ARCHIVED = "archived"
 NOTE_VIEW_TRASH = "trash"
 NOTE_VIEWS = (NOTE_VIEW_ACTIVE, NOTE_VIEW_ARCHIVED, NOTE_VIEW_TRASH)
+
+_FTS_TOKEN_RE = re.compile(r"[\w'’-]+", re.UNICODE)
+
+
+def _normalize_tags(tags: list[str] | None) -> list[str]:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in tags or []:
+        name = str(raw).strip().lower()[:50]
+        if name and name not in seen:
+            seen.add(name)
+            cleaned.append(name)
+        if len(cleaned) >= 20:
+            break
+    return cleaned
+
+
+def _fts5_query(query: str, max_terms: int = 16) -> str:
+    """Turn arbitrary user text into a safe FTS5 MATCH expression.
+
+    Parameter binding prevents SQL injection but not FTS5 syntax errors:
+    ``react OR`` or ``foo"bar`` raise OperationalError and become a 500. Quote
+    every token, escape embedded quotes, and add a prefix wildcard outside the
+    quotes.
+    """
+    tokens = _FTS_TOKEN_RE.findall(query or "")[:max_terms]
+    if not tokens:
+        return '""'
+    parts = ['"' + token.replace('"', '""') + '"' for token in tokens]
+    if len(parts[-1]) > 4:
+        parts[-1] += "*"
+    return " AND ".join(parts)
 
 
 def _visibility_clauses(view: str = NOTE_VIEW_ACTIVE) -> list:
@@ -116,6 +151,46 @@ def _build_folder_tree(rows: list[Mapping[str, Any]]) -> FolderNode:
 class NoteStorageMixin:
     """Note CRUD, folders, tags, and search operations."""
 
+    def _sync_note_tags(self, session, note: NoteORM) -> None:
+        """Keep normalized tags in sync with the legacy notes.tags JSON cache."""
+        session.query(NoteTagORM).filter(
+            NoteTagORM.note_id == note.id
+        ).delete(synchronize_session=False)
+
+        seen: set[str] = set()
+        for raw_name in _deserialize_tags(note.tags):
+            name = str(raw_name).strip()
+            name_norm = name.lower()[:100]
+            if not name_norm or name_norm in seen:
+                continue
+            seen.add(name_norm)
+
+            tag = (
+                session.query(TagORM)
+                .filter(
+                    TagORM.user_id == note.user_id,
+                    TagORM.name_norm == name_norm,
+                )
+                .one_or_none()
+            )
+            if tag is None:
+                tag = TagORM(
+                    id=str(uuid4()),
+                    user_id=note.user_id,
+                    name=name[:100],
+                    name_norm=name_norm,
+                )
+                session.add(tag)
+                session.flush()
+
+            session.add(
+                NoteTagORM(
+                    note_id=note.id,
+                    tag_id=tag.id,
+                    user_id=note.user_id,
+                )
+            )
+
     def save_note(self, user_id: str, content: str, metadata: NoteMetadata) -> str:
         note_id = str(uuid4())
         now = datetime.utcnow()
@@ -126,7 +201,7 @@ class NoteStorageMixin:
             summary=metadata.summary,
             content=content,
             folder_path=metadata.folder_path,
-            tags=_serialize_tags(metadata.tags),
+            tags=_serialize_tags(_normalize_tags(metadata.tags)),
             created_at=now,
             updated_at=now,
             word_count=len(content.split()),
@@ -140,6 +215,7 @@ class NoteStorageMixin:
 
         with self._session_scope() as session:
             session.add(db_note)
+            self._sync_note_tags(session, db_note)
 
         return note_id
 
@@ -210,7 +286,7 @@ class NoteStorageMixin:
                 if metadata.summary is not None:
                     note.summary = metadata.summary
                 note.folder_path = metadata.folder_path or note.folder_path
-                note.tags = _serialize_tags(metadata.tags)
+                note.tags = _serialize_tags(_normalize_tags(metadata.tags))
                 note.confidence = (
                     metadata.confidence
                     if metadata.confidence is not None
@@ -226,6 +302,7 @@ class NoteStorageMixin:
                     note.source = metadata.source
                 if metadata.language is not None:
                     note.language = metadata.language
+                self._sync_note_tags(session, note)
 
             note.version = max(1, note.version or 1) + 1
             note.updated_at = datetime.utcnow()
@@ -400,6 +477,7 @@ class NoteStorageMixin:
             note.folder_path = revision.folder_path
             note.tags = revision.tags
             note.word_count = revision.word_count or len(revision.content.split())
+            self._sync_note_tags(session, note)
             note.version = max(1, note.version or 1) + 1
             note.updated_at = datetime.utcnow()
             session.add(note)
@@ -479,6 +557,23 @@ class NoteStorageMixin:
     def get_all_tags(self, user_id: str) -> list[str]:
         with self._session_scope() as session:
             rows = (
+                session.query(TagORM.name)
+                .join(NoteTagORM, NoteTagORM.tag_id == TagORM.id)
+                .join(NoteORM, NoteORM.id == NoteTagORM.note_id)
+                .filter(
+                    NoteORM.user_id == user_id,
+                    *_visibility_clauses(),
+                )
+                .distinct()
+                .order_by(TagORM.name)
+                .all()
+            )
+            normalized = [row[0] for row in rows]
+            if normalized:
+                return normalized
+
+            # Legacy fallback for databases not yet backfilled.
+            rows = (
                 session.query(NoteORM.tags)
                 .filter(
                     NoteORM.user_id == user_id,
@@ -495,11 +590,35 @@ class NoteStorageMixin:
         return sorted(tags)
 
     def get_notes_by_tag(self, user_id: str, tag: str, limit: int = 50) -> list[NoteDTO]:
+        name_norm = tag.strip().lower()
         with self._session_scope() as session:
+            has_normalized_tags = (
+                session.query(TagORM.id)
+                .filter(TagORM.user_id == user_id)
+                .first()
+                is not None
+            )
+
+            if has_normalized_tags:
+                notes = (
+                    session.query(NoteORM)
+                    .join(NoteTagORM, NoteTagORM.note_id == NoteORM.id)
+                    .join(TagORM, TagORM.id == NoteTagORM.tag_id)
+                    .filter(
+                        NoteORM.user_id == user_id,
+                        TagORM.name_norm == name_norm,
+                        *_visibility_clauses(),
+                    )
+                    .order_by(NoteORM.updated_at.desc())
+                    .limit(limit)
+                    .all()
+                )
+                return [_note_to_dto(note) for note in notes]
+
+            # Legacy fallback for databases not yet backfilled.
             query = session.query(NoteORM).filter(
                 NoteORM.user_id == user_id, *_visibility_clauses()
             )
-
             if self.dialect == "postgresql":
                 contains = cast(NoteORM.tags, JSONB).op("@>")(json.dumps([tag]))
                 query = query.filter(contains)
@@ -543,23 +662,42 @@ class NoteStorageMixin:
                 return None
 
             tag_rows = (
-                session.query(NoteORM.tags)
+                session.query(TagORM.name, func.count(NoteTagORM.tag_id))
+                .join(NoteTagORM, NoteTagORM.tag_id == TagORM.id)
+                .join(NoteORM, NoteORM.id == NoteTagORM.note_id)
                 .filter(
                     NoteORM.user_id == user_id,
-                    NoteORM.tags.isnot(None),
                     self._folder_filter_clause(folder),
                     *_visibility_clauses(),
                 )
+                .group_by(TagORM.name)
+                .order_by(func.count(NoteTagORM.tag_id).desc())
+                .limit(5)
                 .all()
             )
+            top_tags = [name for name, _count in tag_rows]
 
-        tag_counts: dict[str, int] = {}
-        for (value,) in tag_rows:
-            for tag in _deserialize_tags(value):
-                tag_counts[tag] = tag_counts.get(tag, 0) + 1
-
-        most_common = sorted(tag_counts.items(), key=lambda item: item[1], reverse=True)[:5]
-        top_tags = [tag for tag, _ in most_common]
+            if not top_tags:
+                legacy_rows = (
+                    session.query(NoteORM.tags)
+                    .filter(
+                        NoteORM.user_id == user_id,
+                        NoteORM.tags.isnot(None),
+                        self._folder_filter_clause(folder),
+                        *_visibility_clauses(),
+                    )
+                    .all()
+                )
+                tag_counts: dict[str, int] = {}
+                for (value,) in legacy_rows:
+                    for tag in _deserialize_tags(value):
+                        tag_counts[tag] = tag_counts.get(tag, 0) + 1
+                top_tags = [
+                    tag
+                    for tag, _count in sorted(
+                        tag_counts.items(), key=lambda item: item[1], reverse=True
+                    )[:5]
+                ]
 
         return FolderStats(
             path=folder,
@@ -632,7 +770,7 @@ class NoteStorageMixin:
                     sql,
                     {
                         "user_id": user_id,
-                        "match_query": query,
+                        "match_query": _fts5_query(query),
                         "limit": max(limit, 1),
                     },
                 )
@@ -654,40 +792,57 @@ class NoteStorageMixin:
         return results
 
     def _search_notes_postgres(self, user_id: str, query: str, limit: int) -> list[SearchResult]:
-        ts_query = func.plainto_tsquery("english", query)
-
-        title_vector = func.setweight(func.to_tsvector("english", func.coalesce(NoteORM.title, "")), "A")
-        content_vector = func.setweight(func.to_tsvector("english", func.coalesce(NoteORM.content, "")), "B")
-        tags_vector = func.setweight(
-            func.to_tsvector("english", func.coalesce(cast(NoteORM.tags, Text), "")),
-            "C",
-        )
-        search_vector = title_vector.op("||")(content_vector).op("||")(tags_vector)
-        rank_expr = func.ts_rank_cd(search_vector, ts_query)
-        snippet_expr = func.ts_headline(
-            "english",
-            NoteORM.content,
-            ts_query,
-            "MaxWords=50, MinWords=25, ShortWord=3",
+        # `search_vector` is a generated STORED column with a GIN index; it is
+        # created by migration for Postgres only (SQLite uses FTS5).
+        sql = text(
+            """
+            SELECT
+                n.id,
+                ts_rank_cd(n.search_vector, q, 32) AS rank,
+                ts_headline(
+                    'simple',
+                    n.content,
+                    q,
+                    'StartSel=<mark>, StopSel=</mark>, MaxFragments=2, MaxWords=24, MinWords=8'
+                ) AS snippet
+            FROM notes n, websearch_to_tsquery('simple', :query) AS q
+            WHERE n.user_id = :user_id
+              AND n.deleted_at IS NULL
+              AND n.archived_at IS NULL
+              AND n.search_vector @@ q
+            ORDER BY rank DESC
+            LIMIT :limit
+            """
         )
 
         with self._session_scope() as session:
             rows = (
-                session.query(NoteORM, rank_expr.label("rank"), snippet_expr.label("snippet"))
-                .filter(NoteORM.user_id == user_id, *_visibility_clauses())
-                .filter(search_vector.op("@@")(ts_query))
-                .order_by(desc("rank"))
-                .limit(max(limit, 1))
+                session.execute(
+                    sql,
+                    {
+                        "user_id": user_id,
+                        "query": query,
+                        "limit": max(limit, 1),
+                    },
+                )
+                .mappings()
                 .all()
             )
 
+        ids = [row["id"] for row in rows]
+        notes = self.get_notes_by_ids(user_id, ids)
+        note_by_id = {note.id: note for note in notes}
+
         results: list[SearchResult] = []
-        for note, rank_value, snippet in rows:
+        for row in rows:
+            note = note_by_id.get(row["id"])
+            if note is None:
+                continue
             results.append(
                 SearchResult(
-                    note=_note_to_dto(note),
-                    rank=float(rank_value or 0.0),
-                    snippet=snippet or "",
+                    note=note,
+                    rank=float(row.get("rank") or 0.0),
+                    snippet=row.get("snippet") or "",
                 )
             )
         return results

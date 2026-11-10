@@ -121,6 +121,46 @@ class NoteRevision(Base):
     )
 
 
+class Tag(Base):
+    """Normalized per-user tag. `name_norm` is the case-insensitive identity."""
+
+    __tablename__ = "tags"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False)
+    name = Column(String(100), nullable=False)
+    name_norm = Column(String(100), nullable=False)
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name_norm", name="uq_tags_user_name_norm"),
+        Index("idx_tags_user_name", "user_id", "name"),
+    )
+
+
+class NoteTag(Base):
+    """Join table between notes and normalized tags."""
+
+    __tablename__ = "note_tags"
+
+    note_id = Column(
+        String(36),
+        ForeignKey("notes.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    tag_id = Column(
+        String(36),
+        ForeignKey("tags.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id = Column(String(255), nullable=False)
+
+    __table_args__ = (
+        Index("idx_note_tags_user_tag", "user_id", "tag_id"),
+        Index("idx_note_tags_tag_note", "tag_id", "note_id"),
+    )
+
+
 class Digest(Base):
     """
     Digest table for storing generated summaries of notes.
@@ -213,6 +253,12 @@ class NoteEmbedding(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "note_id",
+            "embedding_model",
+            name="uq_note_embeddings_user_note_model",
+        ),
         Index("idx_note_embeddings_user_note", "user_id", "note_id"),
         Index("idx_note_embeddings_user_model", "user_id", "embedding_model"),
         Index("idx_note_embeddings_user_updated", "user_id", "updated_at"),
@@ -462,10 +508,33 @@ class UsageQuota(Base):
     # Monthly limits
     transcription_minutes_limit = Column(Integer, nullable=False, server_default="100")
     ai_calls_limit = Column(Integer, nullable=False, server_default="500")
-
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
 
     __table_args__ = (Index("idx_usage_quotas_user_id", "user_id"),)
+
+
+class UsageCounter(Base):
+    """Monthly usage counter, one row per user/service/period.
+
+    Keeps quota checks O(1) instead of scanning every token_usage row for the
+    month. `token_usage` remains the immutable audit log.
+    """
+
+    __tablename__ = "usage_counters"
+
+    user_id = Column(String(255), primary_key=True)
+    period_start = Column(Date, primary_key=True)
+    service_type = Column(String(50), primary_key=True)
+    # Minutes for transcription; call count for AI services.
+    units = Column(Float, nullable=False, server_default="0")
+    estimated_cost_usd = Column(Float, nullable=False, server_default="0")
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_usage_counters_user_period", "user_id", "period_start"),
+    )
 
 
 class EmailOutbox(Base):
@@ -784,6 +853,8 @@ class Friendship(Base):
     id = Column(String(36), primary_key=True)
     requester_id = Column(String(255), nullable=False)
     addressee_id = Column(String(255), nullable=False)
+    # Normalized unordered pair: "low|high". Makes A->B and B->A unique.
+    pair_key = Column(String(512), nullable=False, server_default="")
     status = Column(String(20), nullable=False, server_default="pending")
 
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
@@ -800,6 +871,7 @@ class Friendship(Base):
             "addressee_id",
             unique=True,
         ),
+        Index("idx_friendships_pair_key", "pair_key", unique=True),
         Index("idx_friendships_addressee_status", "addressee_id", "status"),
     )
 
@@ -813,6 +885,11 @@ class ResourceShare(Base):
     owner_id = Column(String(255), nullable=False)
     shared_with_id = Column(String(255), nullable=False)
     resource_type = Column(String(50), nullable=False)
+    # NULL = the whole collection/calendar (backward compatible).
+    resource_id = Column(String(36), nullable=True)
+    # resource_id or "" for a collection-wide share; keeps uniqueness portable
+    # across SQLite and Postgres (NULLs are distinct in a unique index).
+    resource_key = Column(String(64), nullable=False, server_default="")
     permission = Column(String(20), nullable=False, server_default="view")
     status = Column(String(20), nullable=False, server_default="pending")
 
@@ -829,6 +906,7 @@ class ResourceShare(Base):
             "owner_id",
             "shared_with_id",
             "resource_type",
+            "resource_key",
             unique=True,
         ),
         Index("idx_resource_shares_recipient_status", "shared_with_id", "status"),

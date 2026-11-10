@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from sqlalchemy import bindparam, cast, or_, text
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.exc import IntegrityError
 
 from ...database import MealEmbedding as MealEmbeddingORM
 from ...database import Note as NoteORM
@@ -30,34 +31,55 @@ class EmbeddingStorageMixin:
         embedding_value: str,
     ) -> None:
         now = datetime.utcnow()
-        with self._session_scope() as session:
-            existing = (
-                session.query(NoteEmbeddingORM)
-                .filter(
+
+        def _update_existing() -> None:
+            with self._session_scope() as session:
+                session.query(NoteEmbeddingORM).filter(
                     NoteEmbeddingORM.user_id == user_id,
                     NoteEmbeddingORM.note_id == note_id,
                     NoteEmbeddingORM.embedding_model == embedding_model,
+                ).update(
+                    {
+                        "content_hash": content_hash,
+                        "embedding": embedding_value,
+                        "updated_at": now,
+                    },
+                    synchronize_session=False,
                 )
-                .one_or_none()
-            )
-            if existing:
-                existing.content_hash = content_hash
-                existing.embedding = embedding_value
-                existing.updated_at = now
-                session.add(existing)
-                return
 
-            db_emb = NoteEmbeddingORM(
-                id=str(uuid4()),
-                user_id=user_id,
-                note_id=note_id,
-                embedding_model=embedding_model,
-                content_hash=content_hash,
-                embedding=embedding_value,
-                created_at=now,
-                updated_at=now,
-            )
-            session.add(db_emb)
+        try:
+            with self._session_scope() as session:
+                existing = (
+                    session.query(NoteEmbeddingORM)
+                    .filter(
+                        NoteEmbeddingORM.user_id == user_id,
+                        NoteEmbeddingORM.note_id == note_id,
+                        NoteEmbeddingORM.embedding_model == embedding_model,
+                    )
+                    .one_or_none()
+                )
+                if existing:
+                    existing.content_hash = content_hash
+                    existing.embedding = embedding_value
+                    existing.updated_at = now
+                    session.add(existing)
+                    return
+
+                session.add(
+                    NoteEmbeddingORM(
+                        id=str(uuid4()),
+                        user_id=user_id,
+                        note_id=note_id,
+                        embedding_model=embedding_model,
+                        content_hash=content_hash,
+                        embedding=embedding_value,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+        except IntegrityError:
+            # Another worker won the insert race; update its row instead.
+            _update_existing()
 
     def get_note_embedding(
         self, user_id: str, note_id: str, embedding_model: str

@@ -6,12 +6,17 @@ Tracks all OpenAI API calls and enforces per-user quotas.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 
-from ..database import TokenUsage, UsageQuota, get_session
+from ..database import TokenUsage, UsageCounter, UsageQuota, get_session
+
+# Quota "AI calls" currently counts these service types (unchanged behavior).
+AI_CALL_SERVICE_TYPES = ("categorization", "chat", "summarization")
 
 # Cost estimates per model (USD)
 # These are approximate and should be updated as pricing changes.
@@ -128,11 +133,22 @@ class UsageTrackingService:
         """
         self._session_factory = session_factory
 
+    @contextmanager
     def _get_session(self):
-        """Get a database session."""
+        """Yield a session that commits on success for both factory modes."""
         if self._session_factory:
-            return self._session_factory()
-        return get_session()
+            session = self._session_factory()
+            try:
+                yield session
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+        else:
+            with get_session() as session:
+                yield session
 
     def _get_period_bounds(self) -> tuple[datetime, datetime]:
         """Get the start and end of the current billing period (monthly)."""
@@ -214,6 +230,12 @@ class UsageTrackingService:
         )
 
         record_id = str(uuid4())
+        period_start = self._get_period_bounds()[0].date()
+        units = (
+            (audio_seconds or 0.0) / 60.0
+            if service_type == "transcription"
+            else 1.0
+        )
 
         with self._get_session() as session:
             record = TokenUsage(
@@ -229,23 +251,117 @@ class UsageTrackingService:
                 estimated_cost_usd=estimated_cost,
             )
             session.add(record)
+            self._increment_usage_counter(
+                session,
+                user_id=user_id,
+                period_start=period_start,
+                service_type=service_type,
+                units=units,
+                estimated_cost=estimated_cost,
+            )
 
         return record_id
+
+    def _increment_usage_counter(
+        self,
+        session,
+        *,
+        user_id: str,
+        period_start,
+        service_type: str,
+        units: float,
+        estimated_cost: float,
+    ) -> None:
+        """Upsert one monthly counter row in the same transaction as the log."""
+        now = datetime.utcnow()
+        values = {
+            "user_id": user_id,
+            "period_start": period_start,
+            "service_type": service_type,
+            "units": units,
+            "estimated_cost_usd": estimated_cost,
+            "updated_at": now,
+        }
+        dialect = session.bind.dialect.name if session.bind is not None else ""
+
+        if dialect == "postgresql":
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            stmt = pg_insert(UsageCounter).values(**values)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["user_id", "period_start", "service_type"],
+                set_={
+                    "units": UsageCounter.units + units,
+                    "estimated_cost_usd": (
+                        UsageCounter.estimated_cost_usd + estimated_cost
+                    ),
+                    "updated_at": now,
+                },
+            )
+            session.execute(stmt)
+            return
+
+        if dialect == "sqlite":
+            from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+            stmt = sqlite_insert(UsageCounter).values(**values)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["user_id", "period_start", "service_type"],
+                set_={
+                    "units": UsageCounter.units + units,
+                    "estimated_cost_usd": (
+                        UsageCounter.estimated_cost_usd + estimated_cost
+                    ),
+                    "updated_at": now,
+                },
+            )
+            session.execute(stmt)
+            return
+
+        existing = (
+            session.query(UsageCounter)
+            .filter(
+                UsageCounter.user_id == user_id,
+                UsageCounter.period_start == period_start,
+                UsageCounter.service_type == service_type,
+            )
+            .one_or_none()
+        )
+        if existing:
+            existing.units = (existing.units or 0.0) + units
+            existing.estimated_cost_usd = (
+                existing.estimated_cost_usd or 0.0
+            ) + estimated_cost
+            existing.updated_at = now
+            session.add(existing)
+        else:
+            session.add(UsageCounter(**values))
 
     def get_or_create_quota(self, user_id: str) -> UsageQuota:
         """
         Get or create a user's quota record.
 
-        Args:
-            user_id: The user ID
-
-        Returns:
-            The user's quota record
+        Handles the concurrent first-request race: two requests can both see no
+        row, and the loser must read the winner's row instead of raising.
         """
-        with self._get_session() as session:
-            quota = session.query(UsageQuota).filter(UsageQuota.user_id == user_id).first()
 
-            if not quota:
+        def _load() -> UsageQuota | None:
+            with self._get_session() as session:
+                quota = (
+                    session.query(UsageQuota)
+                    .filter(UsageQuota.user_id == user_id)
+                    .first()
+                )
+                if quota:
+                    session.expunge(quota)
+                return quota
+
+        existing = _load()
+        if existing:
+            return existing
+
+        try:
+            with self._get_session() as session:
                 quota = UsageQuota(
                     id=str(uuid4()),
                     user_id=user_id,
@@ -255,10 +371,13 @@ class UsageTrackingService:
                 )
                 session.add(quota)
                 session.flush()
-
-            # Detach from session to return
-            session.expunge(quota)
-            return quota
+                session.expunge(quota)
+                return quota
+        except IntegrityError:
+            created = _load()
+            if created:
+                return created
+            raise
 
     def get_current_usage(self, user_id: str) -> UsageSummary:
         """
@@ -274,46 +393,71 @@ class UsageTrackingService:
         quota = self.get_or_create_quota(user_id)
 
         with self._get_session() as session:
-            # Get transcription usage (sum of audio_duration_seconds)
-            from sqlalchemy import func as sqlfunc
-
-            transcription_result = (
-                session.query(sqlfunc.sum(TokenUsage.audio_duration_seconds))
+            counters = (
+                session.query(UsageCounter)
                 .filter(
-                    TokenUsage.user_id == user_id,
-                    TokenUsage.service_type == "transcription",
-                    TokenUsage.created_at >= period_start,
-                    TokenUsage.created_at < period_end,
+                    UsageCounter.user_id == user_id,
+                    UsageCounter.period_start == period_start.date(),
                 )
-                .scalar()
+                .all()
             )
-            transcription_seconds = transcription_result or 0.0
-            transcription_minutes = transcription_seconds / 60.0
 
-            # Get AI calls count (categorization, chat, summarization)
-            ai_calls_result = (
-                session.query(sqlfunc.count(TokenUsage.id))
-                .filter(
-                    TokenUsage.user_id == user_id,
-                    TokenUsage.service_type.in_(["categorization", "chat", "summarization"]),
-                    TokenUsage.created_at >= period_start,
-                    TokenUsage.created_at < period_end,
+            if counters:
+                transcription_minutes = sum(
+                    float(counter.units or 0.0)
+                    for counter in counters
+                    if counter.service_type == "transcription"
                 )
-                .scalar()
-            )
-            ai_calls = ai_calls_result or 0
+                ai_calls = int(
+                    sum(
+                        float(counter.units or 0.0)
+                        for counter in counters
+                        if counter.service_type in AI_CALL_SERVICE_TYPES
+                    )
+                )
+                estimated_cost = sum(
+                    float(counter.estimated_cost_usd or 0.0)
+                    for counter in counters
+                )
+            else:
+                # Backward compatibility: counters are backfilled by migration,
+                # but this keeps a partially migrated database correct.
+                from sqlalchemy import func as sqlfunc
 
-            # Get total estimated cost
-            cost_result = (
-                session.query(sqlfunc.sum(TokenUsage.estimated_cost_usd))
-                .filter(
-                    TokenUsage.user_id == user_id,
-                    TokenUsage.created_at >= period_start,
-                    TokenUsage.created_at < period_end,
+                transcription_result = (
+                    session.query(sqlfunc.sum(TokenUsage.audio_duration_seconds))
+                    .filter(
+                        TokenUsage.user_id == user_id,
+                        TokenUsage.service_type == "transcription",
+                        TokenUsage.created_at >= period_start,
+                        TokenUsage.created_at < period_end,
+                    )
+                    .scalar()
                 )
-                .scalar()
-            )
-            estimated_cost = cost_result or 0.0
+                transcription_minutes = (transcription_result or 0.0) / 60.0
+
+                ai_calls_result = (
+                    session.query(sqlfunc.count(TokenUsage.id))
+                    .filter(
+                        TokenUsage.user_id == user_id,
+                        TokenUsage.service_type.in_(list(AI_CALL_SERVICE_TYPES)),
+                        TokenUsage.created_at >= period_start,
+                        TokenUsage.created_at < period_end,
+                    )
+                    .scalar()
+                )
+                ai_calls = int(ai_calls_result or 0)
+
+                cost_result = (
+                    session.query(sqlfunc.sum(TokenUsage.estimated_cost_usd))
+                    .filter(
+                        TokenUsage.user_id == user_id,
+                        TokenUsage.created_at >= period_start,
+                        TokenUsage.created_at < period_end,
+                    )
+                    .scalar()
+                )
+                estimated_cost = cost_result or 0.0
 
         return UsageSummary(
             user_id=user_id,

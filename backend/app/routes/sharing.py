@@ -460,6 +460,9 @@ def create_share():
         shared_with_id = data.get("shared_with_id")
         resource_type = data.get("resource_type")
         permission = data.get("permission", "view")
+        resource_id = data.get("resource_id")
+        if resource_id is not None:
+            resource_id = str(resource_id).strip()[:36] or None
 
         if not shared_with_id or not resource_type:
             return api_error("shared_with_id and resource_type are required")
@@ -475,11 +478,19 @@ def create_share():
         if not svc.storage.are_friends(user_id, shared_with_id):
             return api_error("Must be friends to share", 403)
 
-        existing = svc.storage.get_share_between(user_id, shared_with_id, resource_type)
+        existing = svc.storage.get_share_between(
+            user_id, shared_with_id, resource_type, resource_id=resource_id
+        )
         if existing and existing.status in ("pending", "accepted"):
             return api_error("Share already exists", 409)
 
-        share = svc.storage.create_resource_share(user_id, shared_with_id, resource_type, permission)
+        share = svc.storage.create_resource_share(
+            user_id,
+            shared_with_id,
+            resource_type,
+            permission,
+            resource_id=resource_id,
+        )
         return jsonify(share.model_dump()), 201
     except Exception as e:
         return api_error_from_exception(e)

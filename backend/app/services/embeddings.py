@@ -160,6 +160,16 @@ class EmbeddingsService:
                 summary=summary,
             )
             h = content_hash(embedding_text)
+
+            # Re-embedding unchanged content wastes money and adds latency.
+            existing = storage.get_note_embedding(
+                user_id=user_id,
+                note_id=note_id,
+                embedding_model=self.model,
+            )
+            if existing and existing.get("content_hash") == h:
+                return True
+
             vec = self.embed_text(embedding_text)
 
             if not vec:

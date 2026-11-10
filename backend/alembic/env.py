@@ -39,6 +39,10 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ANN001
     """
     if type_ == "table" and name.startswith("notes_fts"):
         return False
+    # Postgres-only generated FTS column; it is intentionally absent from the
+    # ORM so SQLite's create_all cannot try to compile to_tsvector.
+    if type_ == "column" and name == "search_vector":
+        return False
     return True
 
 # other values from the config, defined by the needs of env.py,
