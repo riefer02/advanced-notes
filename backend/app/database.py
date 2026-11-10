@@ -499,6 +499,12 @@ class MealEmbedding(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "meal_entry_id",
+            "embedding_model",
+            name="uq_meal_embeddings_user_meal_model",
+        ),
         Index("idx_meal_embeddings_user_meal", "user_id", "meal_entry_id"),
         Index("idx_meal_embeddings_user_model", "user_id", "embedding_model"),
     )
@@ -858,6 +864,12 @@ class VinylEmbedding(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "vinyl_record_id",
+            "embedding_model",
+            name="uq_vinyl_embeddings_user_record_model",
+        ),
         Index("idx_vinyl_embeddings_user_record", "user_id", "vinyl_record_id"),
         Index("idx_vinyl_embeddings_user_model", "user_id", "embedding_model"),
     )

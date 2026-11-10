@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import re
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import case, cast, desc, func, or_, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Text, case, cast, desc, func, or_, text
 
 from ...database import Folder as FolderORM
 from ...database import Note as NoteORM
@@ -729,7 +727,7 @@ class NoteStorageMixin:
 
     def get_all_tags(self, user_id: str) -> list[str]:
         with self._session_scope() as session:
-            rows = (
+            normalized_rows = (
                 session.query(TagORM.name)
                 .join(NoteTagORM, NoteTagORM.tag_id == TagORM.id)
                 .join(NoteORM, NoteORM.id == NoteTagORM.note_id)
@@ -738,15 +736,9 @@ class NoteStorageMixin:
                     *_visibility_clauses(),
                 )
                 .distinct()
-                .order_by(TagORM.name)
                 .all()
             )
-            normalized = [row[0] for row in rows]
-            if normalized:
-                return normalized
-
-            # Legacy fallback for databases not yet backfilled.
-            rows = (
+            legacy_rows = (
                 session.query(NoteORM.tags)
                 .filter(
                     NoteORM.user_id == user_id,
@@ -756,50 +748,53 @@ class NoteStorageMixin:
                 .all()
             )
 
-        tags: set[str] = set()
-        for (value,) in rows:
-            tags.update(_deserialize_tags(value))
-
-        return sorted(tags)
+        names = {str(name).strip().lower() for (name,) in normalized_rows if name}
+        for (value,) in legacy_rows:
+            names.update(
+                tag.strip().lower()
+                for tag in _deserialize_tags(value)
+                if tag.strip()
+            )
+        return sorted(names)
 
     def get_notes_by_tag(self, user_id: str, tag: str, limit: int = 50) -> list[NoteDTO]:
         name_norm = tag.strip().lower()
         with self._session_scope() as session:
-            has_normalized_tags = (
-                session.query(TagORM.id)
-                .filter(TagORM.user_id == user_id)
-                .first()
-                is not None
-            )
-
-            if has_normalized_tags:
-                notes = (
-                    session.query(NoteORM)
-                    .join(NoteTagORM, NoteTagORM.note_id == NoteORM.id)
-                    .join(TagORM, TagORM.id == NoteTagORM.tag_id)
-                    .filter(
-                        NoteORM.user_id == user_id,
-                        TagORM.name_norm == name_norm,
-                        *_visibility_clauses(),
-                    )
-                    .order_by(NoteORM.updated_at.desc())
-                    .limit(limit)
-                    .all()
+            normalized_notes = (
+                session.query(NoteORM)
+                .join(NoteTagORM, NoteTagORM.note_id == NoteORM.id)
+                .join(TagORM, TagORM.id == NoteTagORM.tag_id)
+                .filter(
+                    NoteORM.user_id == user_id,
+                    TagORM.name_norm == name_norm,
+                    *_visibility_clauses(),
                 )
-                return [_note_to_dto(note) for note in notes]
-
-            # Legacy fallback for databases not yet backfilled.
-            query = session.query(NoteORM).filter(
-                NoteORM.user_id == user_id, *_visibility_clauses()
+                .all()
             )
-            if self.dialect == "postgresql":
-                contains = cast(NoteORM.tags, JSONB).op("@>")(json.dumps([tag]))
-                query = query.filter(contains)
-            else:
-                query = query.filter(NoteORM.tags.like(f'%"{tag}"%'))
 
-            notes = query.order_by(NoteORM.updated_at.desc()).limit(limit).all()
-            return [_note_to_dto(note) for note in notes]
+            # Union the legacy cache so an old app instance mid-rollout cannot
+            # make tags disappear. Remove this after the contract release.
+            legacy_notes = (
+                session.query(NoteORM)
+                .filter(
+                    NoteORM.user_id == user_id,
+                    func.lower(cast(NoteORM.tags, Text)).like(
+                        f'%"{name_norm}"%'
+                    ),
+                    *_visibility_clauses(),
+                )
+                .all()
+            )
+
+        merged = {note.id: note for note in normalized_notes}
+        for note in legacy_notes:
+            merged.setdefault(note.id, note)
+        ordered = sorted(
+            merged.values(),
+            key=lambda note: note.updated_at or datetime.min,
+            reverse=True,
+        )[:limit]
+        return [_note_to_dto(note) for note in ordered]
 
     def get_note_count(
         self,
