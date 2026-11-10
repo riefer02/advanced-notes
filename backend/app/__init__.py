@@ -17,8 +17,10 @@ def create_app(*, services: Services | None = None, testing: bool = False):
     if testing:
         app.config["TESTING"] = True
     else:
-        # Fail fast with one explicit message for misconfigured deployments.
-        Config.validate()
+        # Fail fast with one explicit message for real deployments. Tests that
+        # inject a full Services container are allowed to bypass client config.
+        if services is None:
+            Config.validate()
         # Require S3 only when audio clips are enabled.
         Config.validate_audio_clips()
 
