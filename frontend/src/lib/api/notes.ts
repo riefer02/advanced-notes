@@ -344,20 +344,12 @@ export async function fetchDigests(limit = 50, offset = 0): Promise<DigestsRespo
   return apiRequest<DigestsResponse>('GET', '/api/digests', { params: { limit, offset } })
 }
 
-export async function fetchDigest(digestId: string): Promise<DigestHistoryItem> {
-  return apiRequest<DigestHistoryItem>('GET', `/api/digests/${digestId}`)
-}
-
 export async function deleteDigest(digestId: string): Promise<void> {
   await apiRequest<{ success: boolean }>('DELETE', `/api/digests/${digestId}`)
 }
 
 export async function fetchAskHistory(limit = 50, offset = 0): Promise<AskHistoryResponse> {
   return apiRequest<AskHistoryResponse>('GET', '/api/ask-history', { params: { limit, offset } })
-}
-
-export async function fetchAskHistoryItem(askId: string): Promise<AskHistoryItem> {
-  return apiRequest<AskHistoryItem>('GET', `/api/ask-history/${askId}`)
 }
 
 export async function deleteAskHistoryItem(askId: string): Promise<void> {

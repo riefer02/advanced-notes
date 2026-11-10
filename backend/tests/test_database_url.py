@@ -31,7 +31,7 @@ def test_already_explicit_or_non_postgres_urls_are_unchanged():
     assert _normalize_database_url("sqlite:////tmp/test.db") == "sqlite:////tmp/test.db"
 
 
-@pytest.mark.parametrize("env_key", ["APP_ENV", "ENV", "FLASK_ENV"])
+@pytest.mark.parametrize("env_key", ["APP_ENV", "FLASK_ENV"])
 def test_production_without_database_url_refuses_sqlite(monkeypatch, env_key):
     _clear_db_env(monkeypatch)
     monkeypatch.setenv(env_key, "production")

@@ -1,30 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   submitFeedback,
-  fetchFeedback,
   type Feedback,
   type FeedbackType,
   type FeedbackListResponse,
 } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 
-interface FeedbackParams {
-  limit?: number
-  offset?: number
-}
-
 export interface CreateFeedbackData {
   feedback_type: FeedbackType
   title: string
   description?: string
   rating?: number
-}
-
-export function useFeedbackList(params?: FeedbackParams) {
-  return useQuery({
-    queryKey: queryKeys.feedback(params),
-    queryFn: () => fetchFeedback(params),
-  })
 }
 
 export function useSubmitFeedback() {

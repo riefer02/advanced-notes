@@ -188,7 +188,6 @@ advanced-notes/
 ```bash
 OPENAI_API_KEY=sk-...  # Required for transcription + categorization
 OPENAI_MODEL=gpt-4o-mini
-CONFIDENCE_THRESHOLD=0.7
 FLASK_ENV=development
 ```
 

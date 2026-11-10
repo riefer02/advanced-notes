@@ -60,7 +60,7 @@ def upgrade() -> None:
     rows = conn.execute(
         sa.text(
             "SELECT id, user_id, tags FROM notes "
-            "WHERE tags IS NOT NULL AND tags::text <> ''"
+            "WHERE tags IS NOT NULL AND CAST(tags AS TEXT) <> ''"
         )
     ).fetchall()
 

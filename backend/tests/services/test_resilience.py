@@ -4,10 +4,21 @@ import pytest
 
 from app.services.resilience import (
     ExternalServiceError,
+    RequestBudget,
     require_external,
     retry_with_backoff,
     with_fallback,
 )
+
+
+def test_request_budget_tracks_remaining_time():
+    expired = RequestBudget(0)
+    assert expired.expired()
+    assert expired.remaining() == 0.0
+
+    budget = RequestBudget(60)
+    assert not budget.expired()
+    assert 0.0 < budget.remaining() <= 60.0
 
 
 def test_retry_succeeds_after_transient_failures(monkeypatch):

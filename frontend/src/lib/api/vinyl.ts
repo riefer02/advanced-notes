@@ -66,12 +66,6 @@ export interface VinylStatsResponse {
   total_artists: number
 }
 
-export interface VinylSearchResponse {
-  records: VinylRecord[]
-  query: string
-  total: number
-}
-
 export interface VinylExtractionResult {
   artist: string
   album_title: string
@@ -162,17 +156,6 @@ export async function fetchVinylStats(owner?: string): Promise<VinylStatsRespons
   })
 }
 
-export async function searchVinylRecords(
-  query: string,
-  limit?: number,
-  offset?: number,
-  owner?: string
-): Promise<VinylSearchResponse> {
-  return apiRequest<VinylSearchResponse>('GET', '/api/vinyl/search', {
-    params: { q: query, limit, offset, owner },
-  })
-}
-
 export async function uploadVinylImage(
   recordId: string,
   file: File,
@@ -182,26 +165,6 @@ export async function uploadVinylImage(
   formData.append('file', file)
   formData.append('image_type', imageType)
   return apiUpload<VinylImageUploadResponse>(`/api/vinyl/${recordId}/images`, formData)
-}
-
-export async function getVinylImageUrl(
-  recordId: string,
-  imageId: string,
-  owner?: string
-): Promise<{ url: string; expires_at: string }> {
-  return apiRequest<{ url: string; expires_at: string }>(
-    'GET',
-    `/api/vinyl/${recordId}/images/${imageId}/url`,
-    { params: owner ? { owner } : undefined }
-  )
-}
-
-export async function deleteVinylImage(recordId: string, imageId: string): Promise<void> {
-  await apiRequest<{ success: boolean }>('DELETE', `/api/vinyl/${recordId}/images/${imageId}`)
-}
-
-export async function extractVinylMetadata(recordId: string): Promise<VinylExtractionResult> {
-  return apiRequest<VinylExtractionResult>('POST', `/api/vinyl/${recordId}/extract`)
 }
 
 export async function extractVinylFromPhotos(files: File[]): Promise<VinylExtractionResult> {

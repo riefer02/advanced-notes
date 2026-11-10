@@ -381,7 +381,6 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-6-luna
 OPENAI_REASONING_EFFORT=none
 TRANSCRIBE_MODEL=gpt-transcribe
-CONFIDENCE_THRESHOLD=0.7
 FLASK_ENV=development
 
 # Frontend (.env)

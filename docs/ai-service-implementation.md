@@ -55,9 +55,7 @@ Implement an AI-powered categorization service using OpenAI GPT-6 Luna to automa
 ```python
 OPENAI_API_KEY: str        # Required
 OPENAI_MODEL: str          # Default: "gpt-6-luna"
-CONFIDENCE_THRESHOLD: float  # Default: 0.7
 NOTES_DIR: Path            # Default: backend/notes/
-DEFAULT_FOLDERS: list      # ["inbox", "archive"]
 ```
 
 #### Test Script (`backend/app/services/test_categorizer.py`)
@@ -133,7 +131,6 @@ chisos/
    echo "OPENAI_API_KEY=sk-proj-your-key-here" > .env
    echo "OPENAI_MODEL=gpt-6-luna" >> .env
    echo "OPENAI_REASONING_EFFORT=none" >> .env
-   echo "CONFIDENCE_THRESHOLD=0.7" >> .env
    ```
 
 2. **Run test script:**

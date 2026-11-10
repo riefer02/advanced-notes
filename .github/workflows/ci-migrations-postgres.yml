@@ -50,6 +50,12 @@ jobs:
         working-directory: backend
         run: uv run alembic upgrade head
 
+      - name: Verify Postgres downgrade and re-upgrade
+        working-directory: backend
+        run: |
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+
       # Report-only for now: the remaining drift (vector column types and
       # legacy index/constraint naming) needs a dedicated reconciliation pass.
       - name: Report schema drift (non-blocking)
