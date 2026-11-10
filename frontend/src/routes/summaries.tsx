@@ -92,14 +92,22 @@ function SummariesPage() {
 
   const handleDeleteDigest = async (digestId: string) => {
     if (!confirm('Delete this digest?')) return
-    await deleteDigestMutation.mutateAsync(digestId)
-    setSelectedDigest(null)
+    try {
+      await deleteDigestMutation.mutateAsync(digestId)
+      setSelectedDigest(null)
+    } catch {
+      alert('Failed to delete digest')
+    }
   }
 
   const handleDeleteAsk = async (askId: string) => {
     if (!confirm('Delete this Ask history item?')) return
-    await deleteAskMutation.mutateAsync(askId)
-    setSelectedAsk(null)
+    try {
+      await deleteAskMutation.mutateAsync(askId)
+      setSelectedAsk(null)
+    } catch {
+      alert('Failed to delete Ask history item')
+    }
   }
 
   const handleGenerateSummary = () => {

@@ -1,0 +1,10 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+# Liveness only. /api/health/ready is for the external uptime monitor, not for
+# Railway restarts (an email backlog should not restart a serving web app).
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

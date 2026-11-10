@@ -49,10 +49,14 @@ Do not start changing code until you can name which component is down.
 ### Total outage / bad deploy
 - **Signs:** monitor fails, `/api/health/ready` unreachable, Railway shows a failed deploy.
 - **Do:**
-  1. Roll back to the previous Railway deploy.
-  2. Check `migrate.py` output: did the advisory lock time out or did a migration fail?
-  3. Confirm `/api/health/ready` is `200` after rollback.
-  4. Re-deploy the fix only after the previous version is serving.
+  1. If migrations **did not** finish, roll back normally.
+  2. If migrations **succeeded** and the app is broken, do **not** use one-click
+     rollback: the previous release’s Alembic cannot resolve the new head.
+     Override the old start command to skip `python migrate.py`, or deploy a
+     code revert that keeps the new migration files.
+  3. Check `migrate.py` output: did the advisory lock time out or did a migration fail?
+  4. Confirm `/api/health/ready` is `200` after rollback.
+  5. Re-deploy the fix only after the previous version is serving.
 
 ### Database down or refusing connections
 - **Signs:** `/health/ready` → `503`, `components.database.status = "down"`; `/admin` fails to load because it needs the DB.

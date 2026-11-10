@@ -18,8 +18,11 @@ from app.database import Base, get_database_url
 # access to the values within the .ini file in use.
 config = context.config
 
-# Set the database URL from environment or default to SQLite
-config.set_main_option('sqlalchemy.url', get_database_url())
+# Set the database URL from environment or default to SQLite.
+# ConfigParser treats % as interpolation, so escape it (passwords may contain %).
+config.set_main_option(
+    "sqlalchemy.url", get_database_url().replace("%", "%%")
+)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -38,6 +41,10 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ANN001
     SQLAlchemy metadata, so autogenerate would otherwise propose dropping them.
     """
     if type_ == "table" and name.startswith("notes_fts"):
+        return False
+    # Postgres-only generated FTS column; it is intentionally absent from the
+    # ORM so SQLite's create_all cannot try to compile to_tsvector.
+    if type_ == "column" and name == "search_vector":
         return False
     return True
 
@@ -66,6 +73,7 @@ def run_migrations_offline() -> None:
         include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        transaction_per_migration=True,
     )
 
     with context.begin_transaction():
@@ -79,10 +87,24 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    database_url = get_database_url()
+    connect_args: dict = {}
+    if database_url.startswith("postgresql"):
+        # Bound the whole migration run so a lock wait cannot hang a deploy.
+        connect_args = {
+            "connect_timeout": 5,
+            "options": (
+                "-c statement_timeout=240000 "
+                "-c lock_timeout=15000 "
+                "-c idle_in_transaction_session_timeout=60000"
+            ),
+        }
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
 
     with connectable.connect() as connection:
@@ -90,6 +112,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             include_object=include_object,
+            transaction_per_migration=True,
         )
 
         with context.begin_transaction():

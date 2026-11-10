@@ -178,6 +178,31 @@ class TestFriendships:
         resp = client.post("/api/friends/request", headers=auth(ALICE), json={"user_id": BOB})
         assert resp.status_code == 409
 
+    def test_reverse_request_is_treated_as_the_same_pair(self, client):
+        client.get("/api/profile", headers=auth(ALICE))
+        client.get("/api/profile", headers=auth(BOB))
+
+        client.post("/api/friends/request", headers=auth(ALICE), json={"user_id": BOB})
+        resp = client.post("/api/friends/request", headers=auth(BOB), json={"user_id": ALICE})
+        assert resp.status_code == 409
+
+    def test_re_request_after_decline_reactivates(self, client):
+        client.get("/api/profile", headers=auth(ALICE))
+        client.get("/api/profile", headers=auth(BOB))
+
+        first = client.post(
+            "/api/friends/request", headers=auth(ALICE), json={"user_id": BOB}
+        ).get_json()
+        client.post(f"/api/friends/{first['id']}/decline", headers=auth(BOB))
+
+        again = client.post(
+            "/api/friends/request", headers=auth(ALICE), json={"user_id": BOB}
+        )
+        assert again.status_code == 201
+        payload = again.get_json()
+        assert payload["id"] == first["id"]
+        assert payload["status"] == "pending"
+
     def test_accept_friend_request(self, client):
         client.get("/api/profile", headers=auth(ALICE))
         client.get("/api/profile", headers=auth(BOB))
@@ -446,6 +471,22 @@ class TestShares:
             "shared_with_id": BOB, "resource_type": "vinyl_library",
         })
         assert resp.status_code == 409
+
+    def test_reshare_after_revoke_reactivates(self, client):
+        self._make_friends(client, ALICE, BOB)
+        first = client.post("/api/shares", headers=auth(ALICE), json={
+            "shared_with_id": BOB, "resource_type": "vinyl_library",
+        }).get_json()
+
+        client.delete(f"/api/shares/{first['id']}", headers=auth(ALICE))
+
+        again = client.post("/api/shares", headers=auth(ALICE), json={
+            "shared_with_id": BOB, "resource_type": "vinyl_library",
+        })
+        assert again.status_code == 201
+        payload = again.get_json()
+        assert payload["id"] == first["id"]
+        assert payload["status"] == "pending"
 
     def test_unfriending_revokes_shares(self, client):
         fid = self._make_friends(client, ALICE, BOB)
@@ -1183,3 +1224,27 @@ class TestProfileEnhancements:
         data = resp.get_json()
         # Default fallback when no email is available
         assert data["display_name"] == "User"
+
+
+def test_previous_release_can_insert_friendships_without_pair_key(app):
+    """pair_key is nullable + partially unique so a rollback cannot break writes."""
+    from app.database import Friendship
+
+    storage = app.extensions["services"].storage
+    with storage._session_scope() as session:
+        session.add(
+            Friendship(
+                id="old-1",
+                requester_id="old-a",
+                addressee_id="old-b",
+                status="pending",
+            )
+        )
+        session.add(
+            Friendship(
+                id="old-2",
+                requester_id="old-c",
+                addressee_id="old-d",
+                status="pending",
+            )
+        )

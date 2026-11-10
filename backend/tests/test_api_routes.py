@@ -206,6 +206,15 @@ def test_transcribe_uploads_audio_to_s3_and_links_clip(client, app, monkeypatch)
     assert uploaded["content_type"] == "audio/m4a"
     assert uploaded["storage_key"]
 
+    note_id = payload["categorization"]["note_id"]
+    transcripts = client.get(
+        f"/api/notes/{note_id}/transcripts", headers={"X-Test-User-Id": "user-a"}
+    )
+    assert transcripts.status_code == 200
+    stored = transcripts.get_json()["transcripts"]
+    assert len(stored) == 1
+    assert stored[0]["text"] == "hello"
+
 
 def test_transcribe_cleans_up_when_transcription_fails(client, app, monkeypatch):  # noqa: ANN001
     # Ensure we delete the uploaded object and mark the clip failed when transcription errors out.

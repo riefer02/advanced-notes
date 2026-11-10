@@ -279,34 +279,4 @@ CONFIDENCE:
 Return your analysis as structured JSON matching the CategorySuggestion schema."""
         
         return prompt
-    
-    def categorize_batch(
-        self,
-        transcriptions: list[str],
-        existing_folders: list[str]
-    ) -> list[CategorySuggestion]:
-        """
-        Categorize multiple transcriptions in batch.
-        
-        Note: Currently processes sequentially. Future optimization:
-        use async/await for parallel processing.
-        
-        Args:
-            transcriptions: List of transcriptions to categorize
-            existing_folders: List of existing folder paths
-        
-        Returns:
-            List of CategorySuggestion objects
-        """
-        results = []
-        for transcription in transcriptions:
-            try:
-                suggestion = self.categorize(transcription, existing_folders)
-                results.append(suggestion)
-            except Exception as e:
-                print(f"Failed to categorize transcription: {e}")
-                # Append None or error object
-                results.append(None)
-        
-        return results
 

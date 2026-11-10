@@ -15,7 +15,13 @@ import sys
 
 # Arbitrary constant shared by every Chisos migration runner.
 _ADVISORY_LOCK_KEY = 1128618323  # 0x43484953
-_LOCK_TIMEOUT_SECONDS = 60
+_LOCK_TIMEOUT_SECONDS = 300
+_MIGRATION_TIMEOUT_SECONDS = 300
+_PG_OPTIONS = (
+    "-c statement_timeout=240000 "
+    "-c lock_timeout=15000 "
+    "-c idle_in_transaction_session_timeout=60000"
+)
 
 
 def _safe_db_info() -> str:
@@ -95,21 +101,32 @@ def run_migrations():
 
     try:
         with _MigrationLock():
+            env = dict(os.environ)
+            env.setdefault("PGOPTIONS", _PG_OPTIONS)
             result = subprocess.run(
                 ["alembic", "upgrade", "head"],
                 check=True,
-                capture_output=True,
                 text=True,
+                timeout=_MIGRATION_TIMEOUT_SECONDS,
+                env=env,
             )
 
-        print(result.stdout)
+        print(result.stdout or "")
         print("✅ Migrations completed successfully!")
         return 0
 
+    except subprocess.TimeoutExpired:
+        print(
+            f"❌ Migration timed out after {_MIGRATION_TIMEOUT_SECONDS}s "
+            "(check lock waits or a long index build)"
+        )
+        return 1
     except subprocess.CalledProcessError as e:
         print("❌ Migration failed:")
-        print(e.stdout)
-        print(e.stderr)
+        if e.stdout:
+            print(e.stdout)
+        if e.stderr:
+            print(e.stderr)
         return 1
     except Exception as e:
         print(f"❌ Migration failed: {e}")

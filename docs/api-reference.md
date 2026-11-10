@@ -308,9 +308,55 @@ List saved snapshots, newest first.
 Replace the note with a saved snapshot. The current state is snapshotted first,
 so a restore is itself undoable. Returns the updated note.
 
+### GET `/notes/<note_id>/transcripts`
+
+List raw ASR transcripts stored for a note. Transcripts are separate from the
+note body; the note's legacy metadata columns remain for compatibility.
+
+```json
+{
+  "transcripts": [
+    {
+      "id": "uuid",
+      "note_id": "uuid",
+      "audio_clip_id": "uuid",
+      "text": "raw transcript",
+      "language": "en",
+      "model": "gpt-transcribe",
+      "duration_seconds": 12.4,
+      "confidence": 0.92,
+      "created_at": "2026-11-10T12:00:00Z"
+    }
+  ]
+}
+```
+
 ---
 
 ## Folders
+
+### POST `/folders/<path>/rename`
+
+Rename a folder and its entire subtree. `folder_path` stays in sync for
+backward compatibility; `folders` is the rename-capable entity.
+
+**Request Body:**
+```json
+{ "new_path": "projects" }
+```
+
+**Response:** `200 OK`
+```json
+{
+  "success": true,
+  "old_path": "work",
+  "new_path": "projects",
+  "renamed_notes": 2
+}
+```
+
+**Errors:** `400` cannot move into itself, `404` folder not found,
+`409` target already exists.
 
 ### GET `/folders`
 

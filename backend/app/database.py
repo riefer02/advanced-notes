@@ -23,6 +23,7 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     event,
+    text,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -52,6 +53,10 @@ class Note(Base):
     title = Column(Text, nullable=False)
     content = Column(Text, nullable=False)
     folder_path = Column(Text, nullable=False, index=True)
+    # Set by the storage layer; folder_path stays the compatibility cache.
+    folder_id = Column(
+        String(36), ForeignKey("folders.id", ondelete="SET NULL"), nullable=True
+    )
     
     # Tags - stored as JSON/JSONB
     tags = Column(Text, nullable=True)  # JSON string for SQLite, JSONB for PostgreSQL
@@ -118,6 +123,93 @@ class NoteRevision(Base):
         UniqueConstraint("note_id", "version", name="uq_note_revisions_note_version"),
         Index("idx_note_revisions_user_created", "user_id", "created_at"),
         Index("idx_note_revisions_note", "note_id", "version"),
+    )
+
+
+class Tag(Base):
+    """Normalized per-user tag. `name_norm` is the case-insensitive identity."""
+
+    __tablename__ = "tags"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False)
+    name = Column(String(100), nullable=False)
+    name_norm = Column(String(100), nullable=False)
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name_norm", name="uq_tags_user_name_norm"),
+        Index("idx_tags_user_name", "user_id", "name"),
+    )
+
+
+class NoteTag(Base):
+    """Join table between notes and normalized tags."""
+
+    __tablename__ = "note_tags"
+
+    note_id = Column(
+        String(36),
+        ForeignKey("notes.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    tag_id = Column(
+        String(36),
+        ForeignKey("tags.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id = Column(String(255), nullable=False)
+
+    __table_args__ = (
+        Index("idx_note_tags_user_tag", "user_id", "tag_id"),
+        Index("idx_note_tags_tag_note", "tag_id", "note_id"),
+    )
+
+
+class Folder(Base):
+    """Per-user folder entity. `notes.folder_path` remains the read cache."""
+
+    __tablename__ = "folders"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False)
+    path = Column(String(500), nullable=False)
+    name = Column(String(255), nullable=False)
+    parent_path = Column(String(500), nullable=True)
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "path", name="uq_folders_user_path"),
+        Index("idx_folders_user_path", "user_id", "path"),
+    )
+
+
+class Transcript(Base):
+    """Raw ASR output, kept separate from the note body."""
+
+    __tablename__ = "transcripts"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False)
+    note_id = Column(
+        String(36), ForeignKey("notes.id", ondelete="CASCADE"), nullable=True
+    )
+    audio_clip_id = Column(
+        String(36), ForeignKey("audio_clips.id", ondelete="SET NULL"), nullable=True
+    )
+    text = Column(Text, nullable=False)
+    language = Column(String(20), nullable=True)
+    model = Column(String(100), nullable=True)
+    duration_seconds = Column(Float, nullable=True)
+    confidence = Column(Float, nullable=True)
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_transcripts_user_note", "user_id", "note_id"),
+        Index("idx_transcripts_audio_clip", "audio_clip_id"),
     )
 
 
@@ -213,6 +305,12 @@ class NoteEmbedding(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "note_id",
+            "embedding_model",
+            name="uq_note_embeddings_user_note_model",
+        ),
         Index("idx_note_embeddings_user_note", "user_id", "note_id"),
         Index("idx_note_embeddings_user_model", "user_id", "embedding_model"),
         Index("idx_note_embeddings_user_updated", "user_id", "updated_at"),
@@ -402,6 +500,12 @@ class MealEmbedding(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "meal_entry_id",
+            "embedding_model",
+            name="uq_meal_embeddings_user_meal_model",
+        ),
         Index("idx_meal_embeddings_user_meal", "user_id", "meal_entry_id"),
         Index("idx_meal_embeddings_user_model", "user_id", "embedding_model"),
     )
@@ -462,10 +566,33 @@ class UsageQuota(Base):
     # Monthly limits
     transcription_minutes_limit = Column(Integer, nullable=False, server_default="100")
     ai_calls_limit = Column(Integer, nullable=False, server_default="500")
-
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
 
     __table_args__ = (Index("idx_usage_quotas_user_id", "user_id"),)
+
+
+class UsageCounter(Base):
+    """Monthly usage counter, one row per user/service/period.
+
+    Keeps quota checks O(1) instead of scanning every token_usage row for the
+    month. `token_usage` remains the immutable audit log.
+    """
+
+    __tablename__ = "usage_counters"
+
+    user_id = Column(String(255), primary_key=True)
+    period_start = Column(Date, primary_key=True)
+    service_type = Column(String(50), primary_key=True)
+    # Minutes for transcription; call count for AI services.
+    units = Column(Float, nullable=False, server_default="0")
+    estimated_cost_usd = Column(Float, nullable=False, server_default="0")
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_usage_counters_user_period", "user_id", "period_start"),
+    )
 
 
 class EmailOutbox(Base):
@@ -738,6 +865,12 @@ class VinylEmbedding(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "vinyl_record_id",
+            "embedding_model",
+            name="uq_vinyl_embeddings_user_record_model",
+        ),
         Index("idx_vinyl_embeddings_user_record", "user_id", "vinyl_record_id"),
         Index("idx_vinyl_embeddings_user_model", "user_id", "embedding_model"),
     )
@@ -784,6 +917,9 @@ class Friendship(Base):
     id = Column(String(36), primary_key=True)
     requester_id = Column(String(255), nullable=False)
     addressee_id = Column(String(255), nullable=False)
+    # Normalized unordered pair: "low|high". Nullable so the previous release
+    # can still insert during a rollback (NULLs are distinct in a unique index).
+    pair_key = Column(String(512), nullable=True)
     status = Column(String(20), nullable=False, server_default="pending")
 
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
@@ -800,6 +936,9 @@ class Friendship(Base):
             "addressee_id",
             unique=True,
         ),
+        Index("idx_friendships_pair_key", "pair_key", unique=True,
+              postgresql_where=text("pair_key IS NOT NULL"),
+              sqlite_where=text("pair_key IS NOT NULL")),
         Index("idx_friendships_addressee_status", "addressee_id", "status"),
     )
 
@@ -813,6 +952,11 @@ class ResourceShare(Base):
     owner_id = Column(String(255), nullable=False)
     shared_with_id = Column(String(255), nullable=False)
     resource_type = Column(String(50), nullable=False)
+    # NULL = the whole collection/calendar (backward compatible).
+    resource_id = Column(String(36), nullable=True)
+    # resource_id or "" for a collection-wide share; keeps uniqueness portable
+    # across SQLite and Postgres (NULLs are distinct in a unique index).
+    resource_key = Column(String(64), nullable=False, server_default="")
     permission = Column(String(20), nullable=False, server_default="view")
     status = Column(String(20), nullable=False, server_default="pending")
 
@@ -829,6 +973,7 @@ class ResourceShare(Base):
             "owner_id",
             "shared_with_id",
             "resource_type",
+            "resource_key",
             unique=True,
         ),
         Index("idx_resource_shares_recipient_status", "shared_with_id", "status"),
@@ -959,7 +1104,14 @@ def create_engine_for_url(database_url: str | None = None) -> Engine:
         }
     else:
         options.update(
-            connect_args={"connect_timeout": Config.DB_CONNECT_TIMEOUT_SECONDS},
+            connect_args={
+                "connect_timeout": Config.DB_CONNECT_TIMEOUT_SECONDS,
+                "options": (
+                    f"-c statement_timeout={Config.DB_STATEMENT_TIMEOUT_MS} "
+                    "-c idle_in_transaction_session_timeout="
+                    f"{Config.DB_IDLE_TRANSACTION_TIMEOUT_MS}"
+                ),
+            },
             pool_size=Config.DB_POOL_SIZE,
             max_overflow=Config.DB_MAX_OVERFLOW,
             pool_timeout=Config.DB_POOL_TIMEOUT_SECONDS,

@@ -6,6 +6,7 @@ from ..auth import require_auth
 from ..config import Config
 from ..services import s3_audio
 from ..services.container import get_services
+from ..services.folder_utils import normalize_folder_path
 from ..services.models import NoteMetadata
 from ..services.resilience import with_fallback
 from ..services.storage.notes import NOTE_VIEWS
@@ -82,8 +83,7 @@ def create_note():
         summary = str(summary_value).strip()[:1000] if summary_value else None
 
         raw_folder = str(data.get("folder_path") or "").strip()
-        folder_path = "/".join(part.strip() for part in raw_folder.split("/") if part.strip())
-        folder_path = folder_path[:500] or "inbox"
+        folder_path = normalize_folder_path(raw_folder)
 
         raw_tags = data.get("tags") or []
         if isinstance(raw_tags, str):
@@ -410,6 +410,29 @@ def restore_note_revision(note_id: str, version: int):
         return api_error_from_exception(e)
 
 
+@bp.get("/notes/<note_id>/transcripts")
+@require_auth
+def list_transcripts(note_id: str):
+    """List raw ASR transcripts stored for a note."""
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        note = svc.storage.get_note(user_id, note_id)
+        if not note:
+            return api_error("Note not found", 404)
+        return jsonify(
+            {
+                "transcripts": svc.storage.list_transcripts_for_note(
+                    user_id, note_id
+                )
+            }
+        )
+
+    except Exception as e:
+        return api_error_from_exception(e)
+
+
 # ============================================================================
 # FOLDER ENDPOINTS
 # ============================================================================
@@ -431,6 +454,40 @@ def get_folders():
         return api_error_from_exception(e)
 
 
+@bp.post("/folders/<path:folder_path>/rename")
+@require_auth
+def rename_folder(folder_path: str):
+    """Rename a folder subtree (user-scoped)."""
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        data = request.get_json(silent=True) or {}
+        new_path = str(data.get("new_path") or "").strip()
+        if not new_path:
+            return api_error("new_path is required", 400)
+
+        result = svc.storage.rename_folder(user_id, folder_path, new_path)
+        if result == -1:
+            return api_error("Folder not found", 404)
+        if result == -2:
+            return api_error("Target folder already exists", 409)
+        if result == -3:
+            return api_error("Cannot move a folder into itself", 400)
+
+        return jsonify(
+            {
+                "success": True,
+                "old_path": folder_path,
+                "new_path": new_path,
+                "renamed_notes": result,
+            }
+        )
+
+    except Exception as e:
+        return api_error_from_exception(e)
+
+
 @bp.get("/folders/<path:folder_path>/stats")
 @require_auth
 def get_folder_stats(folder_path: str):
@@ -440,6 +497,8 @@ def get_folder_stats(folder_path: str):
 
     try:
         stats = svc.storage.get_folder_stats(user_id, folder_path)
+        if stats is None:
+            return api_error("Folder not found", 404)
 
         return jsonify(stats.model_dump())
 

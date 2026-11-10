@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import desc, func, text
@@ -220,6 +220,37 @@ class OpsStorageMixin:
                 .scalar()
                 or 0
             )
+
+    def prune_ops_data(self, older_than_days: int = 30) -> dict:
+        """Delete old delivered emails, ops events, and email events.
+
+        Runs from the background worker, never the request path.
+        """
+        cutoff = datetime.utcnow() - timedelta(days=max(1, older_than_days))
+        with self._session_scope() as session:
+            emails = (
+                session.query(EmailOutboxORM)
+                .filter(
+                    EmailOutboxORM.status.in_(("sent", "failed")),
+                    EmailOutboxORM.created_at < cutoff,
+                )
+                .delete(synchronize_session=False)
+            )
+            events = (
+                session.query(OpsEventORM)
+                .filter(OpsEventORM.created_at < cutoff)
+                .delete(synchronize_session=False)
+            )
+            email_events = (
+                session.query(EmailEventORM)
+                .filter(EmailEventORM.created_at < cutoff)
+                .delete(synchronize_session=False)
+            )
+        return {
+            "emails": int(emails or 0),
+            "ops_events": int(events or 0),
+            "email_events": int(email_events or 0),
+        }
 
     @staticmethod
     def _ops_event_dict(row, *, include_traceback: bool) -> dict:  # noqa: ANN001

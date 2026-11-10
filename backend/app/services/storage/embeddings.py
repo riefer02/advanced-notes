@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from sqlalchemy import bindparam, cast, or_, text
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.exc import IntegrityError
 
 from ...database import MealEmbedding as MealEmbeddingORM
 from ...database import Note as NoteORM
@@ -30,34 +31,55 @@ class EmbeddingStorageMixin:
         embedding_value: str,
     ) -> None:
         now = datetime.utcnow()
-        with self._session_scope() as session:
-            existing = (
-                session.query(NoteEmbeddingORM)
-                .filter(
+
+        def _update_existing() -> None:
+            with self._session_scope() as session:
+                session.query(NoteEmbeddingORM).filter(
                     NoteEmbeddingORM.user_id == user_id,
                     NoteEmbeddingORM.note_id == note_id,
                     NoteEmbeddingORM.embedding_model == embedding_model,
+                ).update(
+                    {
+                        "content_hash": content_hash,
+                        "embedding": embedding_value,
+                        "updated_at": now,
+                    },
+                    synchronize_session=False,
                 )
-                .one_or_none()
-            )
-            if existing:
-                existing.content_hash = content_hash
-                existing.embedding = embedding_value
-                existing.updated_at = now
-                session.add(existing)
-                return
 
-            db_emb = NoteEmbeddingORM(
-                id=str(uuid4()),
-                user_id=user_id,
-                note_id=note_id,
-                embedding_model=embedding_model,
-                content_hash=content_hash,
-                embedding=embedding_value,
-                created_at=now,
-                updated_at=now,
-            )
-            session.add(db_emb)
+        try:
+            with self._session_scope() as session:
+                existing = (
+                    session.query(NoteEmbeddingORM)
+                    .filter(
+                        NoteEmbeddingORM.user_id == user_id,
+                        NoteEmbeddingORM.note_id == note_id,
+                        NoteEmbeddingORM.embedding_model == embedding_model,
+                    )
+                    .one_or_none()
+                )
+                if existing:
+                    existing.content_hash = content_hash
+                    existing.embedding = embedding_value
+                    existing.updated_at = now
+                    session.add(existing)
+                    return
+
+                session.add(
+                    NoteEmbeddingORM(
+                        id=str(uuid4()),
+                        user_id=user_id,
+                        note_id=note_id,
+                        embedding_model=embedding_model,
+                        content_hash=content_hash,
+                        embedding=embedding_value,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+        except IntegrityError:
+            # Another worker won the insert race; update its row instead.
+            _update_existing()
 
     def get_note_embedding(
         self, user_id: str, note_id: str, embedding_model: str
@@ -315,8 +337,9 @@ class EmbeddingStorageMixin:
             return 0.65 * s + 0.35 * f
 
         ranked_ids = sorted(note_ids, key=blended, reverse=True)
-        # Filter visibility before truncating so archived/trashed notes cannot
-        # consume the result slots.
+        # Cap the body fetch; visibility filtering can drop a few, so keep a
+        # small margin instead of materializing up to 400 full notes.
+        ranked_ids = ranked_ids[: max(limit * 3, limit)]
         notes = self.get_notes_by_ids(user_id, ranked_ids)
         note_by_id = {n.id: n for n in notes}
         ranked_ids = [nid for nid in ranked_ids if nid in note_by_id][:limit]
@@ -346,6 +369,24 @@ class EmbeddingStorageMixin:
     # Meal embeddings
     # -----------------------------------------------------------------------
 
+    def _update_embedding_row(
+        self,
+        model,
+        filters,
+        content_hash: str,
+        embedding_value: str,
+        now: datetime,
+    ) -> None:
+        with self._session_scope() as session:
+            session.query(model).filter(*filters).update(
+                {
+                    "content_hash": content_hash,
+                    "embedding": embedding_value,
+                    "updated_at": now,
+                },
+                synchronize_session=False,
+            )
+
     def upsert_meal_embedding(
         self,
         user_id: str,
@@ -355,34 +396,37 @@ class EmbeddingStorageMixin:
         embedding_value: str,
     ) -> None:
         now = datetime.utcnow()
-        with self._session_scope() as session:
-            existing = (
-                session.query(MealEmbeddingORM)
-                .filter(
-                    MealEmbeddingORM.user_id == user_id,
-                    MealEmbeddingORM.meal_entry_id == meal_entry_id,
-                    MealEmbeddingORM.embedding_model == embedding_model,
-                )
-                .one_or_none()
-            )
-            if existing:
-                existing.content_hash = content_hash
-                existing.embedding = embedding_value
-                existing.updated_at = now
-                session.add(existing)
-                return
+        filters = [
+            MealEmbeddingORM.user_id == user_id,
+            MealEmbeddingORM.meal_entry_id == meal_entry_id,
+            MealEmbeddingORM.embedding_model == embedding_model,
+        ]
+        try:
+            with self._session_scope() as session:
+                existing = session.query(MealEmbeddingORM).filter(*filters).one_or_none()
+                if existing:
+                    existing.content_hash = content_hash
+                    existing.embedding = embedding_value
+                    existing.updated_at = now
+                    session.add(existing)
+                    return
 
-            db_emb = MealEmbeddingORM(
-                id=str(uuid4()),
-                user_id=user_id,
-                meal_entry_id=meal_entry_id,
-                embedding_model=embedding_model,
-                content_hash=content_hash,
-                embedding=embedding_value,
-                created_at=now,
-                updated_at=now,
+                session.add(
+                    MealEmbeddingORM(
+                        id=str(uuid4()),
+                        user_id=user_id,
+                        meal_entry_id=meal_entry_id,
+                        embedding_model=embedding_model,
+                        content_hash=content_hash,
+                        embedding=embedding_value,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+        except IntegrityError:
+            self._update_embedding_row(
+                MealEmbeddingORM, filters, content_hash, embedding_value, now
             )
-            session.add(db_emb)
 
     # -----------------------------------------------------------------------
     # Vinyl embeddings
@@ -397,31 +441,34 @@ class EmbeddingStorageMixin:
         embedding_value: str,
     ) -> None:
         now = datetime.utcnow()
-        with self._session_scope() as session:
-            existing = (
-                session.query(VinylEmbeddingORM)
-                .filter(
-                    VinylEmbeddingORM.user_id == user_id,
-                    VinylEmbeddingORM.vinyl_record_id == vinyl_record_id,
-                    VinylEmbeddingORM.embedding_model == embedding_model,
-                )
-                .one_or_none()
-            )
-            if existing:
-                existing.content_hash = content_hash
-                existing.embedding = embedding_value
-                existing.updated_at = now
-                session.add(existing)
-                return
+        filters = [
+            VinylEmbeddingORM.user_id == user_id,
+            VinylEmbeddingORM.vinyl_record_id == vinyl_record_id,
+            VinylEmbeddingORM.embedding_model == embedding_model,
+        ]
+        try:
+            with self._session_scope() as session:
+                existing = session.query(VinylEmbeddingORM).filter(*filters).one_or_none()
+                if existing:
+                    existing.content_hash = content_hash
+                    existing.embedding = embedding_value
+                    existing.updated_at = now
+                    session.add(existing)
+                    return
 
-            db_emb = VinylEmbeddingORM(
-                id=str(uuid4()),
-                user_id=user_id,
-                vinyl_record_id=vinyl_record_id,
-                embedding_model=embedding_model,
-                content_hash=content_hash,
-                embedding=embedding_value,
-                created_at=now,
-                updated_at=now,
+                session.add(
+                    VinylEmbeddingORM(
+                        id=str(uuid4()),
+                        user_id=user_id,
+                        vinyl_record_id=vinyl_record_id,
+                        embedding_model=embedding_model,
+                        content_hash=content_hash,
+                        embedding=embedding_value,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+        except IntegrityError:
+            self._update_embedding_row(
+                VinylEmbeddingORM, filters, content_hash, embedding_value, now
             )
-            session.add(db_emb)

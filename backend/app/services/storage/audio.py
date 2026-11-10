@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import desc
@@ -172,31 +172,25 @@ class AudioStorageMixin:
             )
             return result > 0
 
-    def list_stale_pending_audio_clips(
+    def list_all_stale_pending_audio_clips(
         self,
-        user_id: str,
         *,
         older_than_minutes: int = 60,
-        limit: int = 100,
+        limit: int = 500,
     ) -> list[AudioClipDTO]:
-        older_than_minutes = max(1, int(older_than_minutes))
-        limit = max(1, min(int(limit), 1000))
-        cutoff = datetime.utcnow().timestamp() - (older_than_minutes * 60)
-        cutoff_dt = datetime.utcfromtimestamp(cutoff)
-
+        cutoff = datetime.utcnow() - timedelta(minutes=max(1, older_than_minutes))
         with self._session_scope() as session:
             rows = (
                 session.query(AudioClipORM)
                 .filter(
-                    AudioClipORM.user_id == user_id,
                     AudioClipORM.status == "pending",
-                    AudioClipORM.created_at < cutoff_dt,
+                    AudioClipORM.created_at < cutoff,
                 )
                 .order_by(AudioClipORM.created_at.asc())
-                .limit(limit)
+                .limit(max(1, min(int(limit), 2000)))
                 .all()
             )
-            return [_audio_clip_to_dto(r) for r in rows]
+            return [_audio_clip_to_dto(row) for row in rows]
 
     def delete_audio_clips(self, user_id: str, clip_ids: list[str]) -> int:
         if not clip_ids:

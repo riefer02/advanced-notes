@@ -1,1 +1,1 @@
-web: python migrate.py && gunicorn -w ${WEB_CONCURRENCY:-4} -b 0.0.0.0:$PORT --timeout 300 --graceful-timeout 30 --access-logfile - --max-requests 1000 --max-requests-jitter 100 wsgi:app
+web: python migrate.py && gunicorn -w ${WEB_CONCURRENCY:-4} -b 0.0.0.0:$PORT --timeout 420 --graceful-timeout 30 --access-logfile - --max-requests 1000 --max-requests-jitter 100 wsgi:app

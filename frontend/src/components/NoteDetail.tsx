@@ -67,7 +67,6 @@ export default function NoteDetail({
   const revisionsQuery = useNoteRevisions(current.id, showHistory)
   const audioUrl = audioQuery.data?.playback.url
   const isTrash = view === 'trash'
-  const isArchived = view === 'archived'
 
   useEffect(() => {
     setCurrent(note)
@@ -339,55 +338,57 @@ export default function NoteDetail({
             </div>
           </div>
 
-          {/* Revision history */}
-          <div className="border-t border-gray-200 pt-4">
-            <button
-              type="button"
-              onClick={() => setShowHistory((value) => !value)}
-              className="text-sm font-medium text-blue-700 hover:text-blue-900"
-            >
-              {showHistory ? 'Hide history' : 'History'}
-            </button>
-            {showHistory && (
-              <div className="mt-3 space-y-2">
-                {revisionsQuery.isLoading && (
-                  <p className="text-sm text-gray-600">Loading history…</p>
-                )}
-                {revisionsQuery.isError && (
-                  <p className="text-sm text-red-600">Could not load history.</p>
-                )}
-                {revisionsQuery.data && revisionsQuery.data.revisions.length === 0 && (
-                  <p className="text-sm text-gray-600">
-                    No earlier versions yet. Edits will appear here.
-                  </p>
-                )}
-                {revisionsQuery.data?.revisions.map((revision) => (
-                  <div key={revision.id} className="rounded-md border p-3 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium text-gray-900">
-                        v{revision.version} · {new Date(revision.created_at).toLocaleString()}
-                      </span>
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        disabled={restoreRevision.isPending}
-                        onClick={() => void handleRestoreRevision(revision.version)}
-                      >
-                        Restore
-                      </Button>
-                    </div>
-                    <p className="mt-1 truncate text-gray-600">
-                      {revision.title} · {revision.word_count} words · edited by{' '}
-                      {revision.edit_source}
+          {/* Revision history (read-only notes in Trash cannot restore) */}
+          {!isTrash && (
+            <div className="border-t border-gray-200 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowHistory((value) => !value)}
+                className="text-sm font-medium text-blue-700 hover:text-blue-900"
+              >
+                {showHistory ? 'Hide history' : 'History'}
+              </button>
+              {showHistory && (
+                <div className="mt-3 space-y-2">
+                  {revisionsQuery.isLoading && (
+                    <p className="text-sm text-gray-600">Loading history…</p>
+                  )}
+                  {revisionsQuery.isError && (
+                    <p className="text-sm text-red-600">Could not load history.</p>
+                  )}
+                  {revisionsQuery.data && revisionsQuery.data.revisions.length === 0 && (
+                    <p className="text-sm text-gray-600">
+                      No earlier versions yet. Edits will appear here.
                     </p>
-                  </div>
-                ))}
-                {restoreRevision.isError && (
-                  <p className="text-sm text-red-600">Could not restore that version.</p>
-                )}
-              </div>
-            )}
-          </div>
+                  )}
+                  {revisionsQuery.data?.revisions.map((revision) => (
+                    <div key={revision.id} className="rounded-md border p-3 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium text-gray-900">
+                          v{revision.version} · {new Date(revision.created_at).toLocaleString()}
+                        </span>
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          disabled={restoreRevision.isPending}
+                          onClick={() => void handleRestoreRevision(revision.version)}
+                        >
+                          Restore
+                        </Button>
+                      </div>
+                      <p className="mt-1 truncate text-gray-600">
+                        {revision.title} · {revision.word_count} words · edited by{' '}
+                        {revision.edit_source}
+                      </p>
+                    </div>
+                  ))}
+                  {restoreRevision.isError && (
+                    <p className="text-sm text-red-600">Could not restore that version.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Actions */}
           {(onRestore || onPurge || onDelete) && (
@@ -407,11 +408,6 @@ export default function NoteDetail({
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {isArchived && onArchive && (
-                    <Button onClick={() => onArchive(false)} className="w-full">
-                      Unarchive
-                    </Button>
-                  )}
                   {onDelete && (
                     <Button variant="destructive" onClick={onDelete} className="w-full">
                       <svg

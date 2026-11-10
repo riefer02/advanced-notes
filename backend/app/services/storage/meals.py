@@ -231,11 +231,6 @@ class MealStorageMixin:
 
             return [_meal_entry_to_dto(e, items_map.get(e.id, [])) for e in entries]
 
-    def list_meals_by_date(
-        self, user_id: str, date: str
-    ) -> list[MealEntryDTO]:
-        return self.list_meals_by_date_range(user_id, date, date, limit=50)
-
     def get_meals_calendar(
         self, user_id: str, year: int, month: int
     ) -> dict[str, list[MealCalendarEntry]]:

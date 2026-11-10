@@ -53,6 +53,9 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
     if (focusNoteId && focusedNote) {
       if (focusedNote.deleted_at) setView('trash')
       else if (focusedNote.archived_at) setView('archived')
+      setSelectedFolder(null)
+      setSelectedTag(null)
+      setSearchQuery('')
       setSelectedNote(focusedNote)
       onFocusHandled?.()
     }
@@ -84,6 +87,7 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
     setSelectedTag(null)
     setSearchQuery('')
     setShowFolders(false)
+    setSelectedNote(null)
   }
 
   // Keyboard shortcuts
@@ -406,6 +410,7 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
       >
         {selectedNote && (
           <NoteDetail
+            key={selectedNote.id}
             note={selectedNote}
             view={view}
             onDelete={view === 'trash' ? undefined : handleDeleteNote}

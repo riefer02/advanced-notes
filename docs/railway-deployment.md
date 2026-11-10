@@ -71,6 +71,8 @@
 | `OPENAI_REASONING_EFFORT` | `none`                          | "none" override for Luna/Terra/GPT-6 Sol |
 | `TRANSCRIBE_MODEL`     | `gpt-transcribe`                   | Model for speech-to-text                  |
 | `FLASK_ENV`            | `production`                       | Flask environment                         |
+| `APP_ENV`              | `production`                       | Preferred env label; enables prod guards  |
+| `CLERK_DOMAIN`         | `your-instance.clerk.accounts.dev` | JWT issuer/JWKS host (required)           |
 | `CONFIDENCE_THRESHOLD` | `0.7`                              | AI confidence threshold                   |
 | `FRONTEND_URL`         | `https://your-frontend-domain.com` | For CORS (your custom domain)             |
 | `DATABASE_URL`         | (auto-set)                         | PostgreSQL connection (reference from DB) |
@@ -96,8 +98,13 @@ curl -s https://api.openai.com/v1/models \
 | Variable       | Value                             | Description                                             |
 | -------------- | --------------------------------- | ------------------------------------------------------- |
 | `VITE_API_URL` | `https://your-backend-domain.com` | Backend API URL (your custom domain, no trailing slash) |
+| `VITE_CLERK_PUBLISHABLE_KEY` | `pk_live_...`        | Clerk publishable key (required at build time)          |
+| `VITE_SITE_URL` | `https://your-frontend-domain.com` | Canonical/sitemap host                                |
+| `VITE_ADMIN_EMAIL` | `you@example.com`              | Fallback address for the outage banner                  |
 
-**Note:** `VITE_API_URL` is baked into the build at compile time - redeploy frontend after changing it.
+**Note:** all `VITE_*` values are baked into the build. The build now fails if
+`VITE_API_URL` or `VITE_CLERK_PUBLISHABLE_KEY` is missing, instead of silently
+shipping `localhost` or a blank page. Redeploy the frontend after changing them.
 
 ---
 
@@ -130,14 +137,26 @@ curl -s https://api.openai.com/v1/models \
 
 ### Production (Railway)
 
-- **Type:** PostgreSQL
+- **Type:** PostgreSQL **with pgvector** (use the “Postgres with pgVector”
+  template or a custom image; the default template does not include it)
+- **pgvector:** >= 0.8.3 recommended (HNSW + iterative scans)
 - **Connection:** Via `DATABASE_URL` environment variable
-- **Search:** `tsvector` + `ts_rank` full-text search
+- **Search:** generated `search_vector` + GIN, `websearch_to_tsquery`, `ts_rank_cd`
 - **Required:** in `production`/`prod`/`staging` a missing `DATABASE_URL` is a
   startup error. This prevents an accidental boot on ephemeral SQLite.
-  `ALLOW_SQLITE=true` overrides it only for an intentional single-process setup.
+  `ALLOW_SQLITE=true` overrides it only for an intentional single-process setup
+  (keep `WEB_CONCURRENCY=1` in that case).
 - **Migrations:** Run once per deploy via `backend/migrate.py`, which takes a
-  PostgreSQL advisory lock so concurrent replicas cannot race the same revision.
+  PostgreSQL advisory lock (300s), a statement/lock timeout, and a 300s hard
+  timeout so a hung migration fails the deploy instead of hanging forever.
+- **Healthcheck:** `backend/railway.toml` uses `/api/health` (liveness). Point
+  the external uptime monitor at `/api/health/ready`.
+- **Before deploying:** take and verify a `pg_dump -Fc`. Phase 4 adds a stored
+  generated column (rewrites `notes`) and HNSW indexes.
+- **Rollback after a successful migration:** do **not** use one-click rollback
+  with the old start command; the old release’s Alembic cannot resolve the new
+  head. Either override its start command to skip `python migrate.py`, or deploy
+  a code revert that keeps the new migration files.
 
 The storage layer (`backend/app/services/storage/`) configures the SQLAlchemy
 engine, enabling SQLite+FTS5 locally and PostgreSQL `tsvector` search in

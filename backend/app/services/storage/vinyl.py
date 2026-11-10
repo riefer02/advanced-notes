@@ -464,32 +464,3 @@ class VinylStorageMixin:
                 "total_artists": artist_count,
             }
 
-    # -----------------------------------------------------------------------
-    # Multi-user queries (shared library)
-    # -----------------------------------------------------------------------
-
-    def list_vinyl_records_for_user(
-        self,
-        target_user_id: str,
-        *,
-        genre: str | None = None,
-        decade: int | None = None,
-        format: str | None = None,
-        search: str | None = None,
-        sort_by: str = "created_at",
-        limit: int = 50,
-        offset: int = 0,
-    ) -> list[VinylRecordDTO]:
-        return self.list_vinyl_records(
-            target_user_id,
-            genre=genre,
-            decade=decade,
-            format=format,
-            search=search,
-            sort_by=sort_by,
-            limit=limit,
-            offset=offset,
-        )
-
-    def get_vinyl_record_for_user(self, target_user_id: str, record_id: str) -> VinylRecordDTO | None:
-        return self.get_vinyl_record(target_user_id, record_id)

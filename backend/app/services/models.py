@@ -31,6 +31,7 @@ class Note(BaseModel):
     summary: str | None = None
     content: str
     folder_path: str
+    folder_id: str | None = None
     tags: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
@@ -537,6 +538,7 @@ class ResourceShareResponse(BaseModel):
     owner_id: str
     shared_with_id: str
     resource_type: str
+    resource_id: str | None = None
     permission: str
     status: str
     owner_profile: UserProfileResponse | None = None
@@ -552,4 +554,8 @@ class CreateShareRequest(BaseModel):
     """Request body for creating a resource share"""
     shared_with_id: str = Field(..., description="User ID to share with")
     resource_type: str = Field(..., description="vinyl_library or meal_calendar")
+    resource_id: str | None = Field(
+        default=None,
+        description="Specific resource id; omit for the whole collection/calendar",
+    )
     permission: str = Field(default="view", description="view or edit")

@@ -34,6 +34,9 @@ class EmailService:
         # NoteStorage provides the outbox; optional so the service can be
         # constructed in isolation for tests.
         self.storage = storage
+        # Avoid querying the same digest data every 15 seconds all day.
+        self._last_daily_digest_date = None
+        self._last_ops_digest_date = None
 
     def is_configured(self) -> bool:
         """Check if SES is properly configured."""
@@ -243,6 +246,9 @@ class EmailService:
         now = datetime.now(UTC)
         if now.hour < 9:
             return False
+        if self._last_daily_digest_date == now.date():
+            return False
+        self._last_daily_digest_date = now.date()
 
         since = (now - timedelta(hours=24)).replace(tzinfo=None)
         profiles = self.storage.list_user_profiles_since(since)
@@ -277,6 +283,9 @@ class EmailService:
         now = datetime.now(UTC)
         if now.hour < Config.OPS_DIGEST_HOUR_UTC:
             return False
+        if self._last_ops_digest_date == now.date():
+            return False
+        self._last_ops_digest_date = now.date()
 
         since = (now - timedelta(hours=24)).replace(tzinfo=None)
         errors = self.storage.count_ops_events_since(since, min_status=500)

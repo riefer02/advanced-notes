@@ -228,37 +228,6 @@ def require_audio_clips(f):
     return decorated
 
 
-def validate_uuid(value: str, name: str = "id") -> bool:
-    """Validate that a string is a valid UUID format."""
-    from uuid import UUID
-
-    try:
-        UUID(value)
-        return True
-    except ValueError as exc:
-        raise ValueError(f"Invalid {name} format: must be a valid UUID") from exc
-
-
-def _cleanup_stale_pending_audio_clips(user_id: str, svc) -> None:  # noqa: ANN001
-    """Opportunistically clean up old pending clips for the current user."""
-    try:
-        stale = svc.storage.list_stale_pending_audio_clips(
-            user_id,
-            older_than_minutes=60,
-            limit=100,
-        )
-    except Exception:
-        return
-
-    if not stale:
-        return
-
-    for clip in stale:
-        with suppress(Exception):
-            s3_audio.delete_object(storage_key=clip.storage_key)
-    with suppress(Exception):
-        svc.storage.delete_audio_clips(user_id, [c.id for c in stale])
-
 
 def require_quota(service_type: str):
     """Decorator that checks user quota before allowing the request."""
@@ -364,8 +333,6 @@ def _transcribe_audio_clip(
 
     if not data:
         raise _AudioTranscriptionError("No audio data provided", 400)
-
-    _cleanup_stale_pending_audio_clips(user_id, svc)
 
     audio_clip_id = str(uuid4())
     resolved_mime = content_type or "application/octet-stream"

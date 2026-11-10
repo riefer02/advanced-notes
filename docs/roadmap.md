@@ -29,8 +29,8 @@ Three rules for every feature:
 | Production DB safety | ✅ Done (2026-11-10) | Refuses SQLite in production |
 | Note history / undo | ✅ Done (2026-11-10) | Per-edit snapshots + restore |
 | Soft delete / archive / pin | ✅ Done (2026-11-10) | Trash, Archived, Pin; automatic retention purge still pending |
-| Search at scale | ❌ Not started | Prod FTS is unindexed; embeddings have no ANN |
-| Tags/folders model | ❌ Not started | String/JSON paths; rename is O(notes) |
+| Search at scale | ✅ Done (2026-11-10) | Postgres GIN, SQLite sanitized FTS, HNSW, transcripts |
+| Tags/folders model | ✅ Done (2026-11-10) | Normalized tags + folder entities with rename |
 | Backups + restore drill | ❌ Not started | Unverified; treat as no backup |
 | External uptime + Sentry | ❌ Not started | Out-of-band alerting still missing |
 | Mobile/quick capture everywhere | ❌ Not started | Web only |
@@ -88,19 +88,19 @@ Three rules for every feature:
 
 **Exit criteria:** an accidental edit or delete is recoverable from the UI without database access. ✅
 
-### Phase 4 — Search and schema correctness · **Week 2 (Nov 17–21)**
-- [ ] Postgres generated `search_vector` + GIN + `websearch_to_tsquery`
-- [ ] SQLite FTS5 scoped by `user_id`, `unicode61`, sanitized `MATCH` (no more 500 on quotes)
-- [ ] Stop hardcoding `'english'`
-- [ ] Normalize tags (`tags`, `note_tags`) and backfill
-- [ ] Folders as entities (`folders`, `notes.folder_id`) with O(1) rename
-- [ ] `transcripts` table; move confidence/duration/model off `notes`; FK on `audio_clips`
-- [ ] Embeddings: model-level unique constraint, `ON CONFLICT` upsert, honor `content_hash`, HNSW index
-- [ ] Fix `meal_embeddings` / `vinyl_embeddings` `text → vector` drift
-- [ ] Remove duplicate indexes; add missing FKs
-- [ ] Friendship unordered-pair uniqueness; `resource_shares.resource_id`
-- [ ] `usage_counters` for one-row quota checks
-- [ ] Tests + migration up/down on SQLite **and** Postgres
+### Phase 4 — Search and schema correctness · **In progress (started 2026-11-10)**
+- [x] Postgres generated `search_vector` + GIN + `websearch_to_tsquery`
+- [x] SQLite FTS query sanitization (no more 500 on quotes/operators)
+- [x] Stop hardcoding `'english'` (`simple` default; per-language config is a follow-up)
+- [x] Normalize tags (`tags`, `note_tags`) with backfill + dual-write
+- [x] Folders as entities (`folders`, `notes.folder_id`) with subtree rename
+- [x] `transcripts` table + raw ASR storage (legacy note columns retained)
+- [x] Embeddings: model-level unique constraint, race-safe upsert, `content_hash` reuse, HNSW index
+- [x] `usage_counters` with backfill and O(1) quota checks
+- [x] Friendship unordered-pair uniqueness; `resource_shares.resource_id`
+- [x] Fix `meal_embeddings` / `vinyl_embeddings` `text → vector` drift
+- [ ] Remove duplicate indexes; add missing FKs (deferred: not user-facing; needs an index-by-index rollout)
+- [x] Tests + migration up/down on SQLite **and** Postgres (pg18 + pgvector container)
 
 **Exit criteria:** tag click and folder rename are index-backed; a 10k-note account searches in under 200 ms locally.
 
@@ -178,10 +178,10 @@ Three rules for every feature:
 | Item | Status |
 |---|---|
 | Note revisions / soft delete / archive / pin | ✅ Done (2026-11-10); auto-purge pending |
-| Postgres FTS index + sanitized SQLite FTS | ❌ Phase 4 |
-| Tags/folders normalized | ❌ Phase 4 |
-| Embedding uniqueness + ANN + hash reuse | ❌ Phase 4 |
-| Quota counters | ❌ Phase 4 |
+| Postgres FTS index + sanitized SQLite FTS | ✅ Done (2026-11-10) |
+| Tags/folders normalized | ✅ Done (2026-11-10) |
+| Embedding uniqueness + ANN + hash reuse | ✅ Done (2026-11-10) |
+| Quota counters | ✅ Done (2026-11-10) |
 | Outbox reclaim / dead letter | ✅ Reclaim + admin retry (2026-11-10); dead-letter alert pending |
 | Backups + restore drill | ❌ Before Phase 4 |
 | Migrations single-runner | ✅ Done (advisory lock) |
@@ -214,7 +214,7 @@ Three rules for every feature:
 - **No mixed PRs.** Reliability and product changes ship separately.
 
 **Definition of done (every slice)**
-1. Backend tests pass (`406+` today), coverage stays ≥ 80%.
+1. Backend tests pass (`450+` today); CI gate is ≥50%, target stays ≥80%.
 2. Frontend lint, format, tests, and production build pass.
 3. Migration verified `upgrade head` **and** `downgrade` on SQLite; Postgres CI job green.
 4. New env vars documented in `.env.example` and `docs/railway-deployment.md`.
