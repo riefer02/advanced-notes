@@ -98,8 +98,8 @@ Three rules for every feature:
 - [x] Embeddings: model-level unique constraint, race-safe upsert, `content_hash` reuse, HNSW index
 - [x] `usage_counters` with backfill and O(1) quota checks
 - [x] Friendship unordered-pair uniqueness; `resource_shares.resource_id`
-- [ ] Fix `meal_embeddings` / `vinyl_embeddings` `text → vector` drift
-- [ ] Remove duplicate indexes; add missing FKs
+- [x] Fix `meal_embeddings` / `vinyl_embeddings` `text → vector` drift
+- [ ] Remove duplicate indexes; add missing FKs (deferred: not user-facing; needs an index-by-index rollout)
 - [x] Tests + migration up/down on SQLite **and** Postgres (pg18 + pgvector container)
 
 **Exit criteria:** tag click and folder rename are index-backed; a 10k-note account searches in under 200 ms locally.
