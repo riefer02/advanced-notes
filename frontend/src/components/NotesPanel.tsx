@@ -6,8 +6,20 @@ import TagCloud from './TagCloud'
 import SlideOver from './ui/SlideOver'
 import NoteDetail from './NoteDetail'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useNotes, useSearchNotes, useNotesByTag, useDeleteNote, useNote } from '../hooks/useNotes'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  useArchiveNote,
+  useDeleteNote,
+  useNote,
+  useNotes,
+  useNotesByTag,
+  usePinNote,
+  usePurgeNote,
+  useRestoreNote,
+  useSearchNotes,
+} from '../hooks/useNotes'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import type { NoteView } from '../lib/api'
 
 interface NotesPanelProps {
   focusNoteId?: string | null
@@ -19,6 +31,7 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [showFolders, setShowFolders] = useState(false)
+  const [view, setView] = useState<NoteView>('active')
 
   // Debounce so typing does not fire a request per keystroke.
   const debouncedSearch = useDebouncedValue(searchQuery, 300)
@@ -28,12 +41,18 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const deleteNoteMutation = useDeleteNote()
+  const pinMutation = usePinNote()
+  const archiveMutation = useArchiveNote()
+  const restoreMutation = useRestoreNote()
+  const purgeMutation = usePurgeNote()
 
   // A capture action (record/transcribe or manual save) can ask the panel to
   // open a specific note, including from a deep link.
   const { data: focusedNote } = useNote(focusNoteId ?? '')
   useEffect(() => {
     if (focusNoteId && focusedNote) {
+      if (focusedNote.deleted_at) setView('trash')
+      else if (focusedNote.archived_at) setView('archived')
       setSelectedNote(focusedNote)
       onFocusHandled?.()
     }
@@ -44,9 +63,10 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
     undefined,
     50,
     0,
-    !debouncedSearch && !selectedTag && !selectedFolder
+    !debouncedSearch && !selectedTag && !selectedFolder,
+    view
   )
-  const { data: folderNotes } = useNotes(selectedFolder ?? undefined, 50, 0, !!selectedFolder)
+  const { data: folderNotes } = useNotes(selectedFolder ?? undefined, 50, 0, !!selectedFolder, view)
   const { data: searchResults } = useSearchNotes(debouncedSearch)
   const { data: tagNotes } = useNotesByTag(selectedTag)
 
@@ -57,6 +77,14 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
       : selectedFolder
         ? folderNotes?.total || 0
         : allNotes?.total || 0
+
+  const changeView = (next: NoteView) => {
+    setView(next)
+    setSelectedFolder(null)
+    setSelectedTag(null)
+    setSearchQuery('')
+    setShowFolders(false)
+  }
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -78,15 +106,58 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
   const handleDeleteNote = async () => {
     if (!selectedNote) return
 
-    if (!confirm('Are you sure you want to delete this note?')) {
+    if (!confirm('Move this note to Trash? You can restore it later.')) {
       return
     }
 
     try {
       await deleteNoteMutation.mutateAsync(selectedNote.id)
-      setSelectedNote(null) // Close slide-over
-    } catch (err) {
-      alert('Failed to delete note')
+      setSelectedNote(null)
+    } catch {
+      alert('Failed to move note to trash')
+    }
+  }
+
+  const handlePinNote = async (pinned: boolean) => {
+    if (!selectedNote) return
+    try {
+      const updated = await pinMutation.mutateAsync({ noteId: selectedNote.id, pinned })
+      setSelectedNote(updated)
+    } catch {
+      alert('Failed to update pin')
+    }
+  }
+
+  const handleArchiveNote = async (archived: boolean) => {
+    if (!selectedNote) return
+    try {
+      await archiveMutation.mutateAsync({ noteId: selectedNote.id, archived })
+      setSelectedNote(null)
+    } catch {
+      alert('Failed to update archive')
+    }
+  }
+
+  const handleRestoreNote = async () => {
+    if (!selectedNote) return
+    try {
+      await restoreMutation.mutateAsync(selectedNote.id)
+      setSelectedNote(null)
+    } catch {
+      alert('Failed to restore note')
+    }
+  }
+
+  const handlePurgeNote = async () => {
+    if (!selectedNote) return
+    if (!confirm('Delete this note forever? This cannot be undone.')) {
+      return
+    }
+    try {
+      await purgeMutation.mutateAsync(selectedNote.id)
+      setSelectedNote(null)
+    } catch {
+      alert('Failed to permanently delete note')
     }
   }
 
@@ -103,32 +174,63 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
               </span>
             )}
           </div>
-          <p className="text-sm text-gray-600 mt-1">🏷️ Tag-first organization powered by AI</p>
+          <p className="text-sm text-gray-600 mt-1">
+            Capture, pin, archive, and restore — nothing is lost by accident.
+          </p>
+          <Tabs
+            value={view}
+            onValueChange={(value) => changeView(value as NoteView)}
+            className="mt-3"
+          >
+            <TabsList className="w-full">
+              <TabsTrigger value="active" className="flex-1">
+                Active
+              </TabsTrigger>
+              <TabsTrigger value="archived" className="flex-1">
+                Archived
+              </TabsTrigger>
+              <TabsTrigger value="trash" className="flex-1">
+                Trash
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
-        {/* Search Bar */}
-        <SearchBar
-          ref={searchInputRef}
-          value={searchQuery}
-          onChange={(query) => {
-            setSearchQuery(query)
-            // Clear tag and folder selections when searching
-            if (query) {
-              setSelectedTag(null)
-              setSelectedFolder(null)
-            }
-          }}
-          onClear={() => setSearchQuery('')}
-        />
+        {view === 'active' ? (
+          <>
+            {/* Search Bar */}
+            <SearchBar
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(query) => {
+                setSearchQuery(query)
+                // Clear tag and folder selections when searching
+                if (query) {
+                  setSelectedTag(null)
+                  setSelectedFolder(null)
+                }
+              }}
+              onClear={() => setSearchQuery('')}
+            />
 
-        {/* Tag Cloud - Primary Navigation */}
-        <TagCloud
-          selectedTag={selectedTag}
-          onSelectTag={(tag) => {
-            setSelectedTag(tag)
-            setSelectedFolder(null) // Clear folder selection when tag is selected
-          }}
-        />
+            {/* Tag Cloud - Primary Navigation */}
+            <TagCloud
+              selectedTag={selectedTag}
+              onSelectTag={(tag) => {
+                setSelectedTag(tag)
+                setSelectedFolder(null) // Clear folder selection when tag is selected
+              }}
+            />
+          </>
+        ) : (
+          <Alert variant={view === 'trash' ? 'warning' : 'info'}>
+            <AlertDescription className="text-sm">
+              {view === 'trash'
+                ? 'Deleted notes stay here until you restore them or delete them forever.'
+                : 'Archived notes are hidden from search, tags, and folders. Unarchive one to bring it back.'}
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Active Filter Context */}
         {(debouncedSearch || selectedTag || selectedFolder) && (
@@ -210,7 +312,13 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
 
         {/* Content Area */}
         <div className="space-y-4">
-          {debouncedSearch ? (
+          {view !== 'active' ? (
+            <NotesList
+              view={view}
+              onNoteSelect={setSelectedNote}
+              selectedNoteId={selectedNote?.id}
+            />
+          ) : debouncedSearch ? (
             /* Show search results when searching */
             <NotesList
               searchQuery={debouncedSearch}
@@ -299,7 +407,12 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
         {selectedNote && (
           <NoteDetail
             note={selectedNote}
-            onDelete={handleDeleteNote}
+            view={view}
+            onDelete={view === 'trash' ? undefined : handleDeleteNote}
+            onPin={handlePinNote}
+            onArchive={handleArchiveNote}
+            onRestore={handleRestoreNote}
+            onPurge={handlePurgeNote}
             onUpdated={(updated) => setSelectedNote(updated)}
           />
         )}

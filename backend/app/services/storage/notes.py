@@ -8,14 +8,36 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import Text, cast, desc, func, or_, text
+from sqlalchemy import Text, case, cast, desc, func, or_, text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from ...database import Note as NoteORM
 from ...database import NoteEmbedding as NoteEmbeddingORM
+from ...database import NoteRevision as NoteRevisionORM
 from ..models import FolderNode, FolderStats, NoteMetadata, SearchResult
 from ..models import Note as NoteDTO
+from ..models import NoteRevision as NoteRevisionDTO
 from .engine import _coerce_datetime, _deserialize_tags, _serialize_tags
+
+NOTE_VIEW_ACTIVE = "active"
+NOTE_VIEW_ARCHIVED = "archived"
+NOTE_VIEW_TRASH = "trash"
+NOTE_VIEWS = (NOTE_VIEW_ACTIVE, NOTE_VIEW_ARCHIVED, NOTE_VIEW_TRASH)
+
+
+def _visibility_clauses(view: str = NOTE_VIEW_ACTIVE) -> list:
+    """Filter clauses for the three user-facing note views."""
+    if view == NOTE_VIEW_TRASH:
+        return [NoteORM.deleted_at.isnot(None)]
+    if view == NOTE_VIEW_ARCHIVED:
+        return [
+            NoteORM.deleted_at.is_(None),
+            NoteORM.archived_at.isnot(None),
+        ]
+    return [
+        NoteORM.deleted_at.is_(None),
+        NoteORM.archived_at.is_(None),
+    ]
 
 
 def _mapping_to_note(row: Mapping[str, Any]) -> NoteDTO:
@@ -33,6 +55,12 @@ def _mapping_to_note(row: Mapping[str, Any]) -> NoteDTO:
         confidence=row.get("confidence"),
         transcription_duration=row.get("transcription_duration"),
         model_version=row.get("model_version"),
+        source=row.get("source") or "audio",
+        language=row.get("language"),
+        version=row.get("version") or 1,
+        pinned_at=_coerce_datetime(row.get("pinned_at")),
+        archived_at=_coerce_datetime(row.get("archived_at")),
+        deleted_at=_coerce_datetime(row.get("deleted_at")),
     )
 
 
@@ -51,6 +79,12 @@ def _note_to_dto(note: NoteORM) -> NoteDTO:
         confidence=note.confidence,
         transcription_duration=note.transcription_duration,
         model_version=note.model_version,
+        source=note.source or "audio",
+        language=note.language,
+        version=note.version or 1,
+        pinned_at=note.pinned_at,
+        archived_at=note.archived_at,
+        deleted_at=note.deleted_at,
     )
 
 
@@ -99,6 +133,9 @@ class NoteStorageMixin:
             confidence=metadata.confidence,
             transcription_duration=metadata.transcription_duration,
             model_version=metadata.model_version,
+            source=metadata.source or "audio",
+            language=metadata.language,
+            version=1,
         )
 
         with self._session_scope() as session:
@@ -107,6 +144,8 @@ class NoteStorageMixin:
         return note_id
 
     def get_note(self, user_id: str, note_id: str) -> NoteDTO | None:
+        # Direct access returns archived and trashed notes so the owner can
+        # open and restore them from the Archived/Trash views.
         with self._session_scope() as session:
             note = (
                 session.query(NoteORM)
@@ -114,6 +153,25 @@ class NoteStorageMixin:
                 .one_or_none()
             )
             return _note_to_dto(note) if note else None
+
+    def _snapshot_revision(self, session, note: NoteORM, *, edit_source: str = "user") -> None:
+        """Store the current note state before it is replaced."""
+        session.add(
+            NoteRevisionORM(
+                id=str(uuid4()),
+                note_id=note.id,
+                user_id=note.user_id,
+                version=max(1, note.version or 1),
+                title=note.title,
+                summary=note.summary,
+                content=note.content,
+                folder_path=note.folder_path,
+                tags=note.tags,
+                word_count=note.word_count or 0,
+                edit_source=edit_source,
+                created_at=datetime.utcnow(),
+            )
+        )
 
     def update_note(
         self,
@@ -125,19 +183,27 @@ class NoteStorageMixin:
         with self._session_scope() as session:
             note = (
                 session.query(NoteORM)
-                .filter(NoteORM.id == note_id, NoteORM.user_id == user_id)
+                .filter(
+                    NoteORM.id == note_id,
+                    NoteORM.user_id == user_id,
+                    NoteORM.deleted_at.is_(None),
+                )
                 .one_or_none()
             )
 
             if not note:
                 return False
 
-            updated = False
+            updated = content is not None or metadata is not None
+            if not updated:
+                return False
+
+            # A revision is the state being replaced, not the new state.
+            self._snapshot_revision(session, note)
 
             if content is not None:
                 note.content = content
                 note.word_count = len(content.split())
-                updated = True
 
             if metadata:
                 note.title = metadata.title or note.title
@@ -145,39 +211,205 @@ class NoteStorageMixin:
                     note.summary = metadata.summary
                 note.folder_path = metadata.folder_path or note.folder_path
                 note.tags = _serialize_tags(metadata.tags)
-                note.confidence = metadata.confidence if metadata.confidence is not None else note.confidence
+                note.confidence = (
+                    metadata.confidence
+                    if metadata.confidence is not None
+                    else note.confidence
+                )
                 note.transcription_duration = (
                     metadata.transcription_duration
                     if metadata.transcription_duration is not None
                     else note.transcription_duration
                 )
                 note.model_version = metadata.model_version or note.model_version
-                updated = True
+                if metadata.source:
+                    note.source = metadata.source
+                if metadata.language is not None:
+                    note.language = metadata.language
 
-            if updated:
-                note.updated_at = datetime.utcnow()
-                session.add(note)
-
-            return updated
+            note.version = max(1, note.version or 1) + 1
+            note.updated_at = datetime.utcnow()
+            session.add(note)
+            return True
 
     def delete_note(self, user_id: str, note_id: str) -> bool:
+        """Move a note to Trash. Audio and embeddings are kept for restore."""
         with self._session_scope() as session:
+            note = (
+                session.query(NoteORM)
+                .filter(
+                    NoteORM.id == note_id,
+                    NoteORM.user_id == user_id,
+                    NoteORM.deleted_at.is_(None),
+                )
+                .one_or_none()
+            )
+            if not note:
+                return False
+            note.deleted_at = datetime.utcnow()
+            note.updated_at = datetime.utcnow()
+            session.add(note)
+            return True
+
+    def restore_deleted_note(self, user_id: str, note_id: str) -> bool:
+        """Restore a trashed note to the active list."""
+        with self._session_scope() as session:
+            note = (
+                session.query(NoteORM)
+                .filter(
+                    NoteORM.id == note_id,
+                    NoteORM.user_id == user_id,
+                    NoteORM.deleted_at.isnot(None),
+                )
+                .one_or_none()
+            )
+            if not note:
+                return False
+            note.deleted_at = None
+            note.archived_at = None
+            note.updated_at = datetime.utcnow()
+            session.add(note)
+            return True
+
+    def purge_note(self, user_id: str, note_id: str) -> bool:
+        """Permanently delete a note, its vectors, and its revisions."""
+        with self._session_scope() as session:
+            note = (
+                session.query(NoteORM)
+                .filter(NoteORM.id == note_id, NoteORM.user_id == user_id)
+                .one_or_none()
+            )
+            if not note:
+                return False
             session.query(NoteEmbeddingORM).filter(
                 NoteEmbeddingORM.user_id == user_id,
                 NoteEmbeddingORM.note_id == note_id,
             ).delete(synchronize_session=False)
-            result = (
+            session.query(NoteRevisionORM).filter(
+                NoteRevisionORM.user_id == user_id,
+                NoteRevisionORM.note_id == note_id,
+            ).delete(synchronize_session=False)
+            session.delete(note)
+            return True
+
+    def set_note_pinned(self, user_id: str, note_id: str, pinned: bool) -> bool:
+        with self._session_scope() as session:
+            note = (
                 session.query(NoteORM)
-                .filter(NoteORM.id == note_id, NoteORM.user_id == user_id)
-                .delete(synchronize_session=False)
+                .filter(
+                    NoteORM.id == note_id,
+                    NoteORM.user_id == user_id,
+                    NoteORM.deleted_at.is_(None),
+                )
+                .one_or_none()
             )
-            return result > 0
+            if not note:
+                return False
+            note.pinned_at = datetime.utcnow() if pinned else None
+            session.add(note)
+            return True
+
+    def set_note_archived(self, user_id: str, note_id: str, archived: bool) -> bool:
+        with self._session_scope() as session:
+            note = (
+                session.query(NoteORM)
+                .filter(
+                    NoteORM.id == note_id,
+                    NoteORM.user_id == user_id,
+                    NoteORM.deleted_at.is_(None),
+                )
+                .one_or_none()
+            )
+            if not note:
+                return False
+            note.archived_at = datetime.utcnow() if archived else None
+            if archived:
+                note.pinned_at = None
+            note.updated_at = datetime.utcnow()
+            session.add(note)
+            return True
+
+    def list_note_revisions(
+        self,
+        user_id: str,
+        note_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[NoteRevisionDTO]:
+        with self._session_scope() as session:
+            rows = (
+                session.query(NoteRevisionORM)
+                .filter(
+                    NoteRevisionORM.user_id == user_id,
+                    NoteRevisionORM.note_id == note_id,
+                )
+                .order_by(desc(NoteRevisionORM.version))
+                .offset(max(offset, 0))
+                .limit(max(limit, 1))
+                .all()
+            )
+            return [
+                NoteRevisionDTO(
+                    id=row.id,
+                    note_id=row.note_id,
+                    user_id=row.user_id,
+                    version=row.version,
+                    title=row.title,
+                    summary=row.summary,
+                    content=row.content,
+                    folder_path=row.folder_path,
+                    tags=_deserialize_tags(row.tags),
+                    word_count=row.word_count or 0,
+                    edit_source=row.edit_source or "user",
+                    created_at=_coerce_datetime(row.created_at) or datetime.utcnow(),
+                )
+                for row in rows
+            ]
+
+    def restore_note_revision(self, user_id: str, note_id: str, version: int) -> bool:
+        with self._session_scope() as session:
+            note = (
+                session.query(NoteORM)
+                .filter(
+                    NoteORM.id == note_id,
+                    NoteORM.user_id == user_id,
+                    NoteORM.deleted_at.is_(None),
+                )
+                .one_or_none()
+            )
+            if not note:
+                return False
+
+            revision = (
+                session.query(NoteRevisionORM)
+                .filter(
+                    NoteRevisionORM.note_id == note_id,
+                    NoteRevisionORM.user_id == user_id,
+                    NoteRevisionORM.version == version,
+                )
+                .one_or_none()
+            )
+            if not revision:
+                return False
+
+            self._snapshot_revision(session, note, edit_source="restore")
+
+            note.title = revision.title
+            note.summary = revision.summary
+            note.content = revision.content
+            note.folder_path = revision.folder_path
+            note.tags = revision.tags
+            note.word_count = revision.word_count or len(revision.content.split())
+            note.version = max(1, note.version or 1) + 1
+            note.updated_at = datetime.utcnow()
+            session.add(note)
+            return True
 
     def get_recent_notes(self, user_id: str, limit: int = 10) -> list[NoteDTO]:
         with self._session_scope() as session:
             notes = (
                 session.query(NoteORM)
-                .filter(NoteORM.user_id == user_id)
+                .filter(NoteORM.user_id == user_id, *_visibility_clauses())
                 .order_by(desc(NoteORM.updated_at))
                 .limit(limit)
                 .all()
@@ -191,7 +423,10 @@ class NoteStorageMixin:
         limit: int = 50,
         offset: int = 0,
         order_by: str = "updated_at",
+        view: str = NOTE_VIEW_ACTIVE,
     ) -> list[NoteDTO]:
+        if view not in NOTE_VIEWS:
+            view = NOTE_VIEW_ACTIVE
         order_map = {
             "created_at": NoteORM.created_at,
             "updated_at": NoteORM.updated_at,
@@ -200,17 +435,25 @@ class NoteStorageMixin:
         order_column = order_map.get(order_by, NoteORM.updated_at)
 
         with self._session_scope() as session:
-            query = session.query(NoteORM).filter(NoteORM.user_id == user_id)
+            query = session.query(NoteORM).filter(
+                NoteORM.user_id == user_id, *_visibility_clauses(view)
+            )
 
             if folder:
                 query = query.filter(self._folder_filter_clause(folder))
 
-            notes = (
-                query.order_by(desc(order_column))
-                .offset(max(offset, 0))
-                .limit(max(limit, 1))
-                .all()
-            )
+            if view == NOTE_VIEW_ACTIVE:
+                # Pinned notes first, then most recently updated.
+                pinned_rank = case((NoteORM.pinned_at.is_(None), 1), else_=0)
+                query = query.order_by(
+                    pinned_rank,
+                    desc(NoteORM.pinned_at),
+                    desc(order_column),
+                )
+            else:
+                query = query.order_by(desc(order_column))
+
+            notes = query.offset(max(offset, 0)).limit(max(limit, 1)).all()
 
             return [_note_to_dto(note) for note in notes]
 
@@ -226,7 +469,7 @@ class NoteStorageMixin:
         with self._session_scope() as session:
             rows = (
                 session.query(NoteORM.folder_path, func.count(NoteORM.id))
-                .filter(NoteORM.user_id == user_id)
+                .filter(NoteORM.user_id == user_id, *_visibility_clauses())
                 .group_by(NoteORM.folder_path)
                 .order_by(NoteORM.folder_path)
                 .all()
@@ -237,7 +480,11 @@ class NoteStorageMixin:
         with self._session_scope() as session:
             rows = (
                 session.query(NoteORM.tags)
-                .filter(NoteORM.user_id == user_id, NoteORM.tags.isnot(None))
+                .filter(
+                    NoteORM.user_id == user_id,
+                    NoteORM.tags.isnot(None),
+                    *_visibility_clauses(),
+                )
                 .all()
             )
 
@@ -249,7 +496,9 @@ class NoteStorageMixin:
 
     def get_notes_by_tag(self, user_id: str, tag: str, limit: int = 50) -> list[NoteDTO]:
         with self._session_scope() as session:
-            query = session.query(NoteORM).filter(NoteORM.user_id == user_id)
+            query = session.query(NoteORM).filter(
+                NoteORM.user_id == user_id, *_visibility_clauses()
+            )
 
             if self.dialect == "postgresql":
                 contains = cast(NoteORM.tags, JSONB).op("@>")(json.dumps([tag]))
@@ -260,9 +509,18 @@ class NoteStorageMixin:
             notes = query.order_by(NoteORM.updated_at.desc()).limit(limit).all()
             return [_note_to_dto(note) for note in notes]
 
-    def get_note_count(self, user_id: str, folder: str | None = None) -> int:
+    def get_note_count(
+        self,
+        user_id: str,
+        folder: str | None = None,
+        view: str = NOTE_VIEW_ACTIVE,
+    ) -> int:
+        if view not in NOTE_VIEWS:
+            view = NOTE_VIEW_ACTIVE
         with self._session_scope() as session:
-            query = session.query(func.count(NoteORM.id)).filter(NoteORM.user_id == user_id)
+            query = session.query(func.count(NoteORM.id)).filter(
+                NoteORM.user_id == user_id, *_visibility_clauses(view)
+            )
             if folder:
                 query = query.filter(self._folder_filter_clause(folder))
             return int(query.scalar() or 0)
@@ -273,7 +531,11 @@ class NoteStorageMixin:
                 func.count(NoteORM.id),
                 func.sum(NoteORM.transcription_duration),
                 func.avg(NoteORM.confidence),
-            ).filter(NoteORM.user_id == user_id, self._folder_filter_clause(folder))
+            ).filter(
+                NoteORM.user_id == user_id,
+                self._folder_filter_clause(folder),
+                *_visibility_clauses(),
+            )
 
             count, total_duration, avg_confidence = base_query.one()
 
@@ -286,6 +548,7 @@ class NoteStorageMixin:
                     NoteORM.user_id == user_id,
                     NoteORM.tags.isnot(None),
                     self._folder_filter_clause(folder),
+                    *_visibility_clauses(),
                 )
                 .all()
             )
@@ -312,7 +575,11 @@ class NoteStorageMixin:
         with self._session_scope() as session:
             notes = (
                 session.query(NoteORM)
-                .filter(NoteORM.user_id == user_id, NoteORM.id.in_(note_ids))
+                .filter(
+                    NoteORM.user_id == user_id,
+                    NoteORM.id.in_(note_ids),
+                    *_visibility_clauses(),
+                )
                 .all()
             )
             dto_by_id = {n.id: _note_to_dto(n) for n in notes}
@@ -340,11 +607,20 @@ class NoteStorageMixin:
                 n.confidence,
                 n.transcription_duration,
                 n.model_version,
+                n.source,
+                n.language,
+                n.version,
+                n.pinned_at,
+                n.archived_at,
+                n.deleted_at,
                 {fts_table}.rank AS rank,
                 snippet({fts_table}, 2, '<mark>', '</mark>', '...', 50) AS snippet
             FROM {fts_table}
             JOIN notes n ON {fts_table}.note_id = n.id
-            WHERE n.user_id = :user_id AND {fts_table} MATCH :match_query
+            WHERE n.user_id = :user_id
+              AND n.deleted_at IS NULL
+              AND n.archived_at IS NULL
+              AND {fts_table} MATCH :match_query
             ORDER BY rank
             LIMIT :limit
             """
@@ -398,7 +674,7 @@ class NoteStorageMixin:
         with self._session_scope() as session:
             rows = (
                 session.query(NoteORM, rank_expr.label("rank"), snippet_expr.label("snippet"))
-                .filter(NoteORM.user_id == user_id)
+                .filter(NoteORM.user_id == user_id, *_visibility_clauses())
                 .filter(search_vector.op("@@")(ts_query))
                 .order_by(desc("rank"))
                 .limit(max(limit, 1))

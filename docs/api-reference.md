@@ -130,10 +130,13 @@ List notes with optional filtering.
 
 **Query Parameters:**
 - `folder` (optional): Filter by folder path (e.g., `blog-ideas/react`)
+- `view` (optional, default: `active`): `active`, `archived`, or `trash`
 - `limit` (optional, default: 50): Maximum results
 - `offset` (optional, default: 0): Pagination offset
 
 `total` is the true number of matching notes for the user, not the page size.
+Archived and trashed notes are excluded from `active`, search, tags, folders,
+and dashboard counts.
 
 **Response:** `200 OK`
 ```json
@@ -157,7 +160,8 @@ List notes with optional filtering.
   ],
   "total": 1,
   "limit": 50,
-  "offset": 0
+  "offset": 0,
+  "view": "active"
 }
 ```
 
@@ -179,6 +183,12 @@ Get a specific note by ID.
   "transcription_duration": 3.48,
   "model_version": "gpt-transcribe",
   "word_count": 125,
+  "source": "audio",
+  "language": null,
+  "version": 2,
+  "pinned_at": null,
+  "archived_at": null,
+  "deleted_at": null,
   "created_at": "2025-11-08T10:30:00Z",
   "updated_at": "2025-11-08T10:30:00Z"
 }
@@ -212,24 +222,91 @@ Update an existing note.
 **Errors:**
 - `400`: No data provided
 - `404`: Note not found
+- `409`: Note is in Trash (restore it before editing)
 - `500`: Update failed
+
+Every successful update snapshots the previous state into `note_revisions` and
+increments `version`.
 
 ### DELETE `/notes/<note_id>`
 
-Delete a note by ID.
-
-If audio clips are enabled, deleting a note also deletes associated audio clips and best-effort deletes the stored audio objects.
+Move a note to **Trash**. Audio, embeddings, revisions, and the note row are
+kept so it can be restored.
 
 **Response:** `200 OK`
 ```json
 {
   "success": true,
-  "message": "Note {note_id} deleted successfully"
+  "message": "Note {note_id} moved to trash",
+  "deleted": true
 }
 ```
 
 **Errors:**
 - `404`: Note not found
+
+### POST `/notes/<note_id>/restore`
+
+Restore a trashed note to the active list.
+
+**Response:** `200 OK` with the restored note.
+
+### DELETE `/notes/<note_id>/permanent`
+
+Permanently delete a **trashed** note: its row, revisions, embeddings, and
+(best-effort) audio objects.
+
+**Response:** `200 OK`
+```json
+{ "success": true, "message": "Note {note_id} permanently deleted" }
+```
+
+**Errors:**
+- `404`: Note not found
+- `409`: Note is not in Trash
+
+### POST `/notes/<note_id>/pin`
+
+Body: `{"pinned": true}` or `{"pinned": false}`. Pinned notes sort first in the
+Active list. Returns the updated note.
+
+### POST `/notes/<note_id>/archive`
+
+Body: `{"archived": true}` or `{"archived": false}`. Archived notes disappear
+from Active, search, tags, folders, and dashboard counts. Returns the updated
+note.
+
+### GET `/notes/<note_id>/revisions`
+
+List saved snapshots, newest first.
+
+```json
+{
+  "revisions": [
+    {
+      "id": "uuid",
+      "note_id": "uuid",
+      "version": 2,
+      "title": "Previous title",
+      "summary": null,
+      "content": "Previous content",
+      "folder_path": "inbox",
+      "tags": ["ideas"],
+      "word_count": 42,
+      "edit_source": "user",
+      "created_at": "2026-11-10T12:00:00Z"
+    }
+  ],
+  "current_version": 3,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+### POST `/notes/<note_id>/revisions/<version>/restore`
+
+Replace the note with a saved snapshot. The current state is snapshotted first,
+so a restore is itself undoable. Returns the updated note.
 
 ---
 

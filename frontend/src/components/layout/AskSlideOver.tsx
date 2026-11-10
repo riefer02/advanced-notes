@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { useQueryClient } from '@tanstack/react-query'
 
 import SlideOver from '../ui/SlideOver'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ import { askNotes, deleteNote, fetchNote } from '../../lib/api'
 import type { AskResponse, Note } from '../../lib/api'
 
 export function AskSlideOver({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const queryClient = useQueryClient()
   const [askQuery, setAskQuery] = useState('')
   const [isAsking, setIsAsking] = useState(false)
   const [askResult, setAskResult] = useState<AskResponse | null>(null)
@@ -50,12 +52,13 @@ export function AskSlideOver({ isOpen, onClose }: { isOpen: boolean; onClose: ()
 
   const handleDeleteSourceNote = async () => {
     if (!selectedSourceNote) return
-    if (!confirm('Are you sure you want to delete this note?')) return
+    if (!confirm('Move this note to Trash? You can restore it later.')) return
     try {
       await deleteNote(selectedSourceNote.id)
+      void queryClient.invalidateQueries()
       setSelectedSourceNote(null)
     } catch {
-      alert('Failed to delete note')
+      alert('Failed to move note to trash')
     }
   }
 
@@ -273,7 +276,17 @@ export function AskSlideOver({ isOpen, onClose }: { isOpen: boolean; onClose: ()
         {isLoadingSourceNote ? (
           <div className="py-10 text-sm text-gray-600">Loading note…</div>
         ) : selectedSourceNote ? (
-          <NoteDetail note={selectedSourceNote} onDelete={handleDeleteSourceNote} />
+          <NoteDetail
+            note={selectedSourceNote}
+            view={
+              selectedSourceNote.deleted_at
+                ? 'trash'
+                : selectedSourceNote.archived_at
+                  ? 'archived'
+                  : 'active'
+            }
+            onDelete={selectedSourceNote.deleted_at ? undefined : handleDeleteSourceNote}
+          />
         ) : null}
       </SlideOver>
     </>

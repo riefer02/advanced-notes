@@ -8,6 +8,7 @@ from ..services import s3_audio
 from ..services.container import get_services
 from ..services.models import NoteMetadata
 from ..services.resilience import with_fallback
+from ..services.storage.notes import NOTE_VIEWS
 from ._helpers import api_error, api_error_from_exception, parse_pagination
 
 logger = logging.getLogger(__name__)
@@ -24,10 +25,19 @@ def list_notes():
 
     try:
         folder = request.args.get("folder")
+        view = (request.args.get("view") or "active").strip().lower()
+        if view not in NOTE_VIEWS:
+            return api_error(f"view must be one of {sorted(NOTE_VIEWS)}", 400)
         limit, offset = parse_pagination(default_limit=50, max_limit=100)
 
-        notes = svc.storage.list_notes(user_id=user_id, folder=folder, limit=limit, offset=offset)
-        total = svc.storage.get_note_count(user_id=user_id, folder=folder)
+        notes = svc.storage.list_notes(
+            user_id=user_id,
+            folder=folder,
+            limit=limit,
+            offset=offset,
+            view=view,
+        )
+        total = svc.storage.get_note_count(user_id=user_id, folder=folder, view=view)
 
         return jsonify(
             {
@@ -35,6 +45,7 @@ def list_notes():
                 "total": total,
                 "limit": limit,
                 "offset": offset,
+                "view": view,
             }
         )
 
@@ -93,6 +104,8 @@ def create_note():
             confidence=1.0,  # human-authored, not an AI guess
             transcription_duration=None,
             model_version="manual",
+            source="manual",
+            language=(str(data.get("language") or "").strip()[:10] or None),
         )
 
         note_id = svc.storage.save_note(user_id, content, metadata)
@@ -157,6 +170,8 @@ def update_note(note_id: str):
         note = svc.storage.get_note(user_id, note_id)
         if not note:
             return api_error("Note not found", 404)
+        if note.deleted_at is not None:
+            return api_error("Restore this note from Trash before editing it", 409)
 
         content = data.get("content", note.content)
 
@@ -168,6 +183,8 @@ def update_note(note_id: str):
             confidence=note.confidence,
             transcription_duration=note.transcription_duration,
             model_version=note.model_version,
+            source=note.source,
+            language=note.language,
         )
 
         success = svc.storage.update_note(user_id, note_id, content, metadata)
@@ -202,11 +219,58 @@ def update_note(note_id: str):
 @bp.delete("/notes/<note_id>")
 @require_auth
 def delete_note(note_id: str):
-    """Delete a note by ID (user-scoped)."""
+    """Move a note to Trash (user-scoped). Audio and history are preserved."""
     user_id = g.user_id
     svc = get_services()
 
     try:
+        success = svc.storage.delete_note(user_id, note_id)
+        if not success:
+            return api_error("Note not found", 404)
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Note {note_id} moved to trash",
+                "deleted": True,
+            }
+        )
+
+    except Exception as e:
+        return api_error_from_exception(e)
+
+
+@bp.post("/notes/<note_id>/restore")
+@require_auth
+def restore_note(note_id: str):
+    """Restore a note from Trash back to the active list."""
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        if not svc.storage.restore_deleted_note(user_id, note_id):
+            return api_error("Note not found in trash", 404)
+        note = svc.storage.get_note(user_id, note_id)
+        return jsonify(note.model_dump() if note else {"success": True})
+
+    except Exception as e:
+        return api_error_from_exception(e)
+
+
+@bp.delete("/notes/<note_id>/permanent")
+@require_auth
+def purge_note(note_id: str):
+    """Permanently delete a trashed note, its audio, vectors, and revisions."""
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        note = svc.storage.get_note(user_id, note_id)
+        if not note:
+            return api_error("Note not found", 404)
+        if note.deleted_at is None:
+            return api_error("Move the note to Trash before deleting it permanently", 409)
+
         warning = None
         if Config.audio_clips_enabled():
             try:
@@ -216,11 +280,15 @@ def delete_note(note_id: str):
                         s3_audio.delete_object(storage_key=clip.storage_key)
                     except Exception as e:
                         logger.warning(
-                            "Failed to delete an audio object for note %s: %s", note_id, e
+                            "Failed to delete an audio object for note %s: %s",
+                            note_id,
+                            e,
                         )
                         warning = "Failed to delete one or more audio objects"
             except Exception as e:
-                logger.warning("Failed to list/delete audio clips for note %s: %s", note_id, e)
+                logger.warning(
+                    "Failed to list/delete audio clips for note %s: %s", note_id, e
+                )
                 warning = "Failed to list or delete note audio clips"
 
             try:
@@ -230,15 +298,113 @@ def delete_note(note_id: str):
                     e, message="Failed to delete note audio clips"
                 )
 
-        success = svc.storage.delete_note(user_id, note_id)
-
-        if not success:
+        if not svc.storage.purge_note(user_id, note_id):
             return api_error("Note not found", 404)
 
-        payload = {"success": True, "message": f"Note {note_id} deleted successfully"}
+        payload = {"success": True, "message": f"Note {note_id} permanently deleted"}
         if warning:
             payload["warning"] = warning
         return jsonify(payload)
+
+    except Exception as e:
+        return api_error_from_exception(e)
+
+
+@bp.post("/notes/<note_id>/pin")
+@require_auth
+def pin_note(note_id: str):
+    """Pin or unpin a note. Body: {"pinned": true|false}."""
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        data = request.get_json(silent=True) or {}
+        pinned = bool(data.get("pinned", True))
+        if not svc.storage.set_note_pinned(user_id, note_id, pinned):
+            return api_error("Note not found", 404)
+        note = svc.storage.get_note(user_id, note_id)
+        return jsonify(note.model_dump() if note else {"success": True})
+
+    except Exception as e:
+        return api_error_from_exception(e)
+
+
+@bp.post("/notes/<note_id>/archive")
+@require_auth
+def archive_note(note_id: str):
+    """Archive or unarchive a note. Body: {"archived": true|false}."""
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        data = request.get_json(silent=True) or {}
+        archived = bool(data.get("archived", True))
+        if not svc.storage.set_note_archived(user_id, note_id, archived):
+            return api_error("Note not found", 404)
+        note = svc.storage.get_note(user_id, note_id)
+        return jsonify(note.model_dump() if note else {"success": True})
+
+    except Exception as e:
+        return api_error_from_exception(e)
+
+
+@bp.get("/notes/<note_id>/revisions")
+@require_auth
+def list_note_revisions(note_id: str):
+    """List saved snapshots for a note, newest first."""
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        note = svc.storage.get_note(user_id, note_id)
+        if not note:
+            return api_error("Note not found", 404)
+        limit, offset = parse_pagination(default_limit=50, max_limit=100)
+        revisions = svc.storage.list_note_revisions(
+            user_id, note_id, limit=limit, offset=offset
+        )
+        return jsonify(
+            {
+                "revisions": [revision.model_dump() for revision in revisions],
+                "current_version": note.version,
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+
+    except Exception as e:
+        return api_error_from_exception(e)
+
+
+@bp.post("/notes/<note_id>/revisions/<int:version>/restore")
+@require_auth
+def restore_note_revision(note_id: str, version: int):
+    """Replace the note with a saved snapshot (the current state is snapshotted)."""
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        if not svc.storage.restore_note_revision(user_id, note_id, version):
+            return api_error("Note or revision not found", 404)
+        note = svc.storage.get_note(user_id, note_id)
+        if note is None:
+            return api_error("Note not found", 404)
+
+        with_fallback(
+            lambda: svc.embeddings.upsert_for_note(
+                storage=svc.storage,
+                user_id=user_id,
+                note_id=note.id,
+                title=note.title,
+                content=note.content,
+                tags=note.tags,
+                summary=note.summary,
+            ),
+            fallback=None,
+            service="embeddings",
+        )
+
+        return jsonify(note.model_dump())
 
     except Exception as e:
         return api_error_from_exception(e)

@@ -19,6 +19,8 @@ class NoteMetadata(BaseModel):
     confidence: float | None = Field(None, ge=0.0, le=1.0, description="AI categorization confidence")
     transcription_duration: float | None = Field(None, ge=0.0, description="Audio duration in seconds")
     model_version: str | None = Field(None, description="ASR model version")
+    source: str | None = Field(None, description="Provenance: audio, manual, or import")
+    language: str | None = Field(None, max_length=10, description="ISO language code")
 
 
 class Note(BaseModel):
@@ -36,11 +38,37 @@ class Note(BaseModel):
     confidence: float | None = Field(None, ge=0.0, le=1.0)
     transcription_duration: float | None = Field(None, ge=0.0)
     model_version: str | None = None
-    
+    source: str = "audio"
+    language: str | None = None
+    version: int = 1
+    pinned_at: datetime | None = None
+    archived_at: datetime | None = None
+    deleted_at: datetime | None = None
+
     class Config:
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
+
+
+class NoteRevision(BaseModel):
+    """A saved snapshot of a note before an edit."""
+
+    id: str
+    note_id: str
+    user_id: str
+    version: int
+    title: str
+    summary: str | None = None
+    content: str
+    folder_path: str
+    tags: list[str] = Field(default_factory=list)
+    word_count: int = 0
+    edit_source: str = "user"
+    created_at: datetime
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class Digest(BaseModel):

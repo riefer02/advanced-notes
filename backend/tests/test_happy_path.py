@@ -1239,7 +1239,7 @@ def test_get_note(client, storage):
 
 
 def test_delete_note(client, storage):
-    """DELETE /api/notes/<id> - delete note."""
+    """DELETE /api/notes/<id> - move to trash, then restore."""
     note_id = storage.save_note(
         user_id="user-a",
         content="To delete",
@@ -1250,8 +1250,27 @@ def test_delete_note(client, storage):
     assert resp.status_code == 200
     assert resp.get_json()["success"] is True
 
+    # The note still exists for its owner, but is no longer active.
     resp = client.get(f"/api/notes/{note_id}", headers={"X-Test-User-Id": "user-a"})
-    assert resp.status_code == 404
+    assert resp.status_code == 200
+    assert resp.get_json()["deleted_at"] is not None
+
+    active = client.get("/api/notes", headers={"X-Test-User-Id": "user-a"}).get_json()
+    assert active["total"] == 0
+
+    trash = client.get(
+        "/api/notes?view=trash", headers={"X-Test-User-Id": "user-a"}
+    ).get_json()
+    assert trash["total"] == 1
+
+    resp = client.post(
+        f"/api/notes/{note_id}/restore", headers={"X-Test-User-Id": "user-a"}
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["deleted_at"] is None
+
+    active = client.get("/api/notes", headers={"X-Test-User-Id": "user-a"}).get_json()
+    assert active["total"] == 1
 
 
 # ============================================================================

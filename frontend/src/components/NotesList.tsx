@@ -1,5 +1,5 @@
 import { useNotes, useSearchNotes, useNotesByTag } from '../hooks/useNotes'
-import type { Note } from '../lib/api'
+import type { Note, NoteView } from '../lib/api'
 
 // Define NoteItemData locally but export for usage if needed (though Note is usually enough)
 export type NoteItemData = Note & {
@@ -11,6 +11,7 @@ interface NotesListProps {
   folder?: string
   searchQuery?: string
   tag?: string | null
+  view?: NoteView
   onTagClick?: (tag: string) => void
   onNoteSelect: (note: NoteItemData) => void
   selectedNoteId?: string | null
@@ -20,6 +21,7 @@ export default function NotesList({
   folder,
   searchQuery,
   tag,
+  view = 'active',
   onTagClick,
   onNoteSelect,
   selectedNoteId,
@@ -28,7 +30,7 @@ export default function NotesList({
   const isSearchMode = !!searchQuery?.trim()
   const isTagMode = !!tag && !isSearchMode
 
-  const notesQuery = useNotes(folder, 50, 0, !isSearchMode && !isTagMode)
+  const notesQuery = useNotes(folder, 50, 0, !isSearchMode && !isTagMode, view)
   const searchQueryHook = useSearchNotes(searchQuery || '')
   const tagQueryHook = useNotesByTag(tag || null, 50, isTagMode)
   const { data: notesData, isLoading: notesLoading, error: notesError } = notesQuery
@@ -99,16 +101,24 @@ export default function NotesList({
             ? 'No results found'
             : isTagMode
               ? 'No notes with this tag yet'
-              : 'No notes yet'}
+              : view === 'trash'
+                ? 'Trash is empty'
+                : view === 'archived'
+                  ? 'No archived notes'
+                  : 'No notes yet'}
         </h3>
         <p className="mt-2 text-sm text-gray-600 max-w-sm mx-auto">
           {isSearchMode
             ? 'Try adjusting your search terms or browse all notes'
             : isTagMode
               ? 'Create notes with this tag by recording audio or writing a note'
-              : 'Record a voice note or write one yourself — both are organized with AI-powered tagging'}
+              : view === 'trash'
+                ? 'Notes you delete appear here and can be restored or purged.'
+                : view === 'archived'
+                  ? 'Archive a note to keep it out of the active list without deleting it.'
+                  : 'Record a voice note or write one yourself — both are organized with AI-powered tagging'}
         </p>
-        {!isSearchMode && !isTagMode && (
+        {!isSearchMode && !isTagMode && view === 'active' && (
           <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
             <p className="text-xs text-gray-500">
               Use the <span className="font-semibold text-gray-700">Record / Upload</span> or{' '}
@@ -176,6 +186,16 @@ function NoteItem({ note, isSelected, onClick, onTagClick }: NoteItemProps) {
             >
               {note.title}
             </h4>
+            {note.pinned_at && (
+              <svg
+                className="h-3.5 w-3.5 shrink-0 text-amber-500"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+                aria-label="Pinned"
+              >
+                <path d="M14.5 2.5 21.5 9.5l-2.1 2.1-1.4-.4-3.6 3.6.4 3.2-2.1 2.1-3.9-3.9-5.3 5.3-1.4-1.4 5.3-5.3-3.9-3.9L6 8.8l3.2.4 3.6-3.6-.4-1.4 2.1-2.1z" />
+              </svg>
+            )}
             {hasSnippet && note.rank && (
               <span className="shrink-0 text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full font-medium">
                 {Math.round(note.rank * 100)}%

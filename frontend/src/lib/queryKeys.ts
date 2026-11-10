@@ -1,12 +1,15 @@
+import type { NoteView } from './api/notes'
+
 export const queryKeys = {
   notes: {
     all: ['notes'] as const,
-    list: (folder?: string, limit?: number, offset?: number) =>
-      ['notes', folder, limit, offset] as const,
+    list: (folder?: string, limit?: number, offset?: number, view: NoteView = 'active') =>
+      ['notes', view, folder, limit, offset] as const,
     detail: (noteId: string) => ['note', noteId] as const,
     // Detail and search live in their own roots, so mutations must target
     // these prefixes explicitly (invalidating ['notes'] alone misses them).
     detailPrefix: ['note'] as const,
+    revisions: (noteId: string) => ['note', noteId, 'revisions'] as const,
     audio: (noteId: string) => ['noteAudio', noteId] as const,
     audioPrefix: ['noteAudio'] as const,
     search: (query: string) => ['search', query] as const,

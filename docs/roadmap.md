@@ -27,8 +27,8 @@ Three rules for every feature:
 | Admin communication | ✅ Core done (2026-11-10) | Durable reports, ops events, readiness, daily digest, `/admin` |
 | Migration reproducibility | ✅ Done (2026-11-10) | Clean SQLite up/down in CI |
 | Production DB safety | ✅ Done (2026-11-10) | Refuses SQLite in production |
-| Note history / undo | ❌ Not started | **Biggest remaining data-safety gap** |
-| Soft delete / archive / pin | ❌ Not started | Delete is still permanent |
+| Note history / undo | ✅ Done (2026-11-10) | Per-edit snapshots + restore |
+| Soft delete / archive / pin | ✅ Done (2026-11-10) | Trash, Archived, Pin; automatic retention purge still pending |
 | Search at scale | ❌ Not started | Prod FTS is unindexed; embeddings have no ANN |
 | Tags/folders model | ❌ Not started | String/JSON paths; rename is O(notes) |
 | Backups + restore drill | ❌ Not started | Unverified; treat as no backup |
@@ -74,17 +74,19 @@ Three rules for every feature:
 - [ ] Bounce suppression list + admin-address bounce alert — *Week 2*
 - [ ] Railway deploy-failure notifications enabled + documented — *Week 1*
 
-### Phase 3 — Data safety · **Week 1 (Nov 11–14)**
-- [ ] `notes.source` (`audio|manual|import`) and `notes.language`
-- [ ] `note_revisions` snapshot-on-update (title, content, summary, folder, tags, editor)
-- [ ] Restore a revision (`POST /api/notes/<id>/revisions/<version>/restore`)
-- [ ] History UI in `NoteDetail`
-- [ ] Soft delete (`deleted_at`) filtered from every read path; purge job after retention window
-- [ ] Archive + pin (`archived_at`, `pinned_at`) and list filters
+### Phase 3 — Data safety · **Done 2026-11-10**
+- [x] `notes.source` (`audio|manual|import`) and `notes.language`
+- [x] `note_revisions` snapshot-on-update (title, content, summary, folder, tags, editor)
+- [x] Restore a revision (`POST /api/notes/<id>/revisions/<version>/restore`)
+- [x] History UI in `NoteDetail`
+- [x] Soft delete (`deleted_at`) filtered from every read path; Trash view + restore
+- [x] Archive + pin (`archived_at`, `pinned_at`) and Active/Archived/Trash filters
+- [x] Permanent delete from Trash (audio + vectors + revisions) with confirmation
+- [x] Tests: revision created on update, restore round-trip, soft-deleted note invisible everywhere, purge works
 - [ ] Autosave + unsaved-change guard in `NoteDetail`
-- [ ] Tests: revision created on update, restore round-trip, soft-deleted note invisible everywhere, purge works
+- [ ] Automatic purge after a retention window (daily job)
 
-**Exit criteria:** an accidental edit or delete is recoverable from the UI without database access.
+**Exit criteria:** an accidental edit or delete is recoverable from the UI without database access. ✅
 
 ### Phase 4 — Search and schema correctness · **Week 2 (Nov 17–21)**
 - [ ] Postgres generated `search_vector` + GIN + `websearch_to_tsquery`
@@ -168,14 +170,14 @@ Three rules for every feature:
 | Clean migrations | ✅ Done |
 | Request timeouts fit worker timeout | ✅ Done |
 | Admin learns about errors via durable record + digest | ✅ Done |
-| Note edits/deletes recoverable | ❌ Phase 3 |
+| Note edits/deletes recoverable | ✅ Done (2026-11-10) |
 | Out-of-band outage alerting (external monitor) | ❌ Week 1 config |
 | Sentry-style exception capture | ❌ Week 1 |
 
 ### P1
 | Item | Status |
 |---|---|
-| Note revisions / soft delete / archive / pin | ❌ Phase 3 |
+| Note revisions / soft delete / archive / pin | ✅ Done (2026-11-10); auto-purge pending |
 | Postgres FTS index + sanitized SQLite FTS | ❌ Phase 4 |
 | Tags/folders normalized | ❌ Phase 4 |
 | Embedding uniqueness + ANN + hash reuse | ❌ Phase 4 |

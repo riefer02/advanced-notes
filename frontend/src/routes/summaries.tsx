@@ -349,7 +349,16 @@ function SummariesPage() {
         {isLoadingSourceNote ? (
           <div className="py-10 text-sm text-gray-600">Loading note…</div>
         ) : selectedSourceNote ? (
-          <NoteDetail note={selectedSourceNote} />
+          <NoteDetail
+            note={selectedSourceNote}
+            view={
+              selectedSourceNote.deleted_at
+                ? 'trash'
+                : selectedSourceNote.archived_at
+                  ? 'archived'
+                  : 'active'
+            }
+          />
         ) : null}
       </SlideOver>
     </div>

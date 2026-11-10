@@ -215,7 +215,11 @@ class EmbeddingStorageMixin:
             return None
 
         with self._session_scope() as session:
-            query = session.query(NoteORM.id).filter(NoteORM.user_id == user_id)
+            query = session.query(NoteORM.id).filter(
+                NoteORM.user_id == user_id,
+                NoteORM.deleted_at.is_(None),
+                NoteORM.archived_at.is_(None),
+            )
 
             if start_dt is not None:
                 query = query.filter(NoteORM.created_at >= start_dt)
@@ -310,9 +314,12 @@ class EmbeddingStorageMixin:
             f = fts_scores.get(nid, 0.0)
             return 0.65 * s + 0.35 * f
 
-        ranked_ids = sorted(note_ids, key=blended, reverse=True)[:limit]
+        ranked_ids = sorted(note_ids, key=blended, reverse=True)
+        # Filter visibility before truncating so archived/trashed notes cannot
+        # consume the result slots.
         notes = self.get_notes_by_ids(user_id, ranked_ids)
         note_by_id = {n.id: n for n in notes}
+        ranked_ids = [nid for nid in ranked_ids if nid in note_by_id][:limit]
 
         fts_snippets = {r.note.id: r.snippet for r in fts_results}
 

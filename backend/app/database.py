@@ -20,6 +20,7 @@ from sqlalchemy import (
     String,
     Text,
     Time,
+    UniqueConstraint,
     create_engine,
     event,
 )
@@ -65,13 +66,58 @@ class Note(Base):
     confidence = Column(Float, nullable=True)
     transcription_duration = Column(Float, nullable=True)
     model_version = Column(String(50), nullable=True)
-    
+
+    # Provenance and lifecycle
+    source = Column(String(20), nullable=False, server_default="audio")  # audio|manual|import
+    language = Column(String(10), nullable=True)
+    version = Column(Integer, nullable=False, server_default="1")
+    pinned_at = Column(TIMESTAMP, nullable=True)
+    archived_at = Column(TIMESTAMP, nullable=True)
+    deleted_at = Column(TIMESTAMP, nullable=True)
+
     # Indexes
     __table_args__ = (
         Index('idx_notes_user_id', 'user_id'),
         Index('idx_notes_user_folder', 'user_id', 'folder_path'),
         Index('idx_notes_user_created', 'user_id', 'created_at'),
         Index('idx_notes_user_updated', 'user_id', 'updated_at'),
+        Index(
+            'idx_notes_user_visibility',
+            'user_id',
+            'deleted_at',
+            'archived_at',
+            'updated_at',
+        ),
+        Index('idx_notes_user_pinned', 'user_id', 'pinned_at'),
+    )
+
+
+class NoteRevision(Base):
+    """Immutable snapshot of a note before an edit."""
+
+    __tablename__ = "note_revisions"
+
+    id = Column(String(36), primary_key=True)
+    note_id = Column(
+        String(36),
+        ForeignKey("notes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = Column(String(255), nullable=False)
+    version = Column(Integer, nullable=False)
+    title = Column(Text, nullable=False)
+    summary = Column(Text, nullable=True)
+    content = Column(Text, nullable=False)
+    folder_path = Column(Text, nullable=False)
+    tags = Column(Text, nullable=True)
+    word_count = Column(Integer, nullable=False, server_default="0")
+    edit_source = Column(String(20), nullable=False, server_default="user")
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("note_id", "version", name="uq_note_revisions_note_version"),
+        Index("idx_note_revisions_user_created", "user_id", "created_at"),
+        Index("idx_note_revisions_note", "note_id", "version"),
     )
 
 

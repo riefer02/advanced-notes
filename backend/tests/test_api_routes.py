@@ -434,8 +434,8 @@ def test_audio_clip_complete_requires_uploaded_object(client, app, monkeypatch):
     assert resp.get_json()["clip"]["status"] == "ready"
 
 
-def test_delete_note_cascades_to_audio_clips(client, app, monkeypatch):  # noqa: ANN001
-    # Deleting a note should delete its audio clips and best-effort delete stored objects.
+def test_delete_note_is_soft_and_purge_removes_audio(client, app, monkeypatch):  # noqa: ANN001
+    # Soft delete keeps audio + history; permanent delete removes both.
     from app.services import s3_audio as _s3_audio
 
     monkeypatch.setattr(
@@ -484,15 +484,34 @@ def test_delete_note_cascades_to_audio_clips(client, app, monkeypatch):  # noqa:
     )
     assert resp.status_code == 200
 
-    # Delete the note -> should cascade delete the clip + S3 object
+    # Soft delete -> note moves to trash, audio is preserved
     resp = client.delete(
         f"/api/notes/{note_id}",
         headers={"X-Test-User-Id": "user-a"},
     )
     assert resp.status_code == 200
+    assert deleted == []
+
+    trash = client.get(
+        "/api/notes?view=trash", headers={"X-Test-User-Id": "user-a"}
+    ).get_json()
+    assert trash["total"] == 1
+    assert trash["notes"][0]["id"] == note_id
+
+    resp = client.get(
+        f"/api/audio-clips/{clip_id}/playback",
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 200
+
+    # Permanent delete -> audio object and clip are removed
+    resp = client.delete(
+        f"/api/notes/{note_id}/permanent",
+        headers={"X-Test-User-Id": "user-a"},
+    )
+    assert resp.status_code == 200
     assert deleted == [f"user-a/{clip_id}.m4a"]
 
-    # Clip should now be gone
     resp = client.get(
         f"/api/audio-clips/{clip_id}/playback",
         headers={"X-Test-User-Id": "user-a"},

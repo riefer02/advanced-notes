@@ -252,20 +252,35 @@ Essential patterns for React hooks:
         print(f"   Top tags: {', '.join(stats.most_common_tags)}")
     print()
     
-    # Test 9: Delete note
-    print("Test 9: Deleting Notes")
+    # Test 9: Soft delete + permanent purge
+    print("Test 9: Soft Delete and Purge")
     print("-" * 60)
-    
+
     success = storage.delete_note(TEST_USER_ID, note2_id)
     if success:
-        print(f"✅ Deleted note: {note2_id[:8]}...")
-        
-        # Verify deletion
-        deleted = storage.get_note(TEST_USER_ID, note2_id)
-        if deleted is None:
-            print("✅ Verified: Note no longer exists")
+        print(f"✅ Moved note to trash: {note2_id[:8]}...")
+
+        trashed = storage.get_note(TEST_USER_ID, note2_id)
+        if trashed is not None and trashed.deleted_at is not None:
+            print("✅ Verified: Note is in trash and recoverable")
         else:
-            print("❌ Error: Note still exists after deletion")
+            print("❌ Error: Note was not soft-deleted")
+
+        if storage.restore_deleted_note(TEST_USER_ID, note2_id):
+            print("✅ Restored note from trash")
+        else:
+            print("❌ Failed to restore note")
+
+        if storage.delete_note(TEST_USER_ID, note2_id) and storage.purge_note(
+            TEST_USER_ID, note2_id
+        ):
+            print("✅ Purged note permanently")
+            if storage.get_note(TEST_USER_ID, note2_id) is None:
+                print("✅ Verified: Note no longer exists after purge")
+            else:
+                print("❌ Error: Note still exists after purge")
+        else:
+            print("❌ Failed to purge note")
     else:
         print("❌ Failed to delete note")
     print()

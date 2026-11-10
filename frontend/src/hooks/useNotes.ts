@@ -42,12 +42,18 @@ export function useFolderTree() {
 }
 
 /**
- * Fetch notes (optionally filtered by folder)
+ * Fetch notes (optionally filtered by folder and lifecycle view)
  */
-export function useNotes(folder?: string, limit = 50, offset = 0, enabled = true) {
+export function useNotes(
+  folder?: string,
+  limit = 50,
+  offset = 0,
+  enabled = true,
+  view: api.NoteView = 'active'
+) {
   return useQuery({
-    queryKey: queryKeys.notes.list(folder, limit, offset),
-    queryFn: () => api.fetchNotes(folder, limit, offset),
+    queryKey: queryKeys.notes.list(folder, limit, offset, view),
+    queryFn: () => api.fetchNotes(folder, limit, offset, view),
     enabled,
     staleTime: 10000, // Consider stale after 10 seconds
   })
@@ -74,6 +80,18 @@ export function useNoteAudio(noteId: string, enabled = true) {
     enabled: !!noteId && enabled,
     retry: false,
     staleTime: 5 * 60 * 1000,
+  })
+}
+
+/**
+ * Fetch a note's saved revisions (newest first).
+ */
+export function useNoteRevisions(noteId: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.notes.revisions(noteId),
+    queryFn: () => api.fetchNoteRevisions(noteId),
+    enabled: !!noteId && enabled,
+    staleTime: 10000,
   })
 }
 
@@ -175,9 +193,67 @@ export function useDeleteNote() {
   return useMutation({
     mutationFn: (noteId: string) => api.deleteNote(noteId),
     onSuccess: (_result, noteId) => {
-      // Drop the deleted note's caches entirely so it cannot be reopened.
+      // Soft delete: keep the caches so the note can be opened from Trash.
+      queryClient.invalidateQueries({ queryKey: queryKeys.notes.detail(noteId) })
+      invalidateNoteQueries(queryClient)
+    },
+  })
+}
+
+export function usePinNote() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ noteId, pinned }: { noteId: string; pinned: boolean }) =>
+      api.pinNote(noteId, pinned),
+    onSuccess: (note) => {
+      queryClient.setQueryData(queryKeys.notes.detail(note.id), note)
+      invalidateNoteQueries(queryClient)
+    },
+  })
+}
+
+export function useArchiveNote() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ noteId, archived }: { noteId: string; archived: boolean }) =>
+      api.archiveNote(noteId, archived),
+    onSuccess: (note) => {
+      queryClient.setQueryData(queryKeys.notes.detail(note.id), note)
+      invalidateNoteQueries(queryClient)
+    },
+  })
+}
+
+export function useRestoreNote() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (noteId: string) => api.restoreNote(noteId),
+    onSuccess: (note) => {
+      queryClient.setQueryData(queryKeys.notes.detail(note.id), note)
+      invalidateNoteQueries(queryClient)
+    },
+  })
+}
+
+export function usePurgeNote() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (noteId: string) => api.purgeNote(noteId),
+    onSuccess: (_result, noteId) => {
       queryClient.removeQueries({ queryKey: queryKeys.notes.detail(noteId) })
       queryClient.removeQueries({ queryKey: queryKeys.notes.audio(noteId) })
+      invalidateNoteQueries(queryClient)
+    },
+  })
+}
+
+export function useRestoreNoteRevision() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ noteId, version }: { noteId: string; version: number }) =>
+      api.restoreNoteRevision(noteId, version),
+    onSuccess: (note) => {
+      queryClient.setQueryData(queryKeys.notes.detail(note.id), note)
       invalidateNoteQueries(queryClient)
     },
   })

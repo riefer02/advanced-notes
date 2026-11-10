@@ -49,6 +49,8 @@ export interface TranscriptionResponse {
   todos: ExtractedTodo[]
 }
 
+export type NoteView = 'active' | 'archived' | 'trash'
+
 export interface Note {
   id: string
   title: string
@@ -63,6 +65,31 @@ export interface Note {
   word_count: number
   created_at: string
   updated_at: string
+  source?: string
+  language?: string | null
+  version?: number
+  pinned_at?: string | null
+  archived_at?: string | null
+  deleted_at?: string | null
+}
+
+export interface NoteRevision {
+  id: string
+  note_id: string
+  version: number
+  title: string
+  summary: string | null
+  content: string
+  folder_path: string
+  tags: string[]
+  word_count: number
+  edit_source: string
+  created_at: string
+}
+
+export interface NoteRevisionsResponse {
+  revisions: NoteRevision[]
+  current_version: number
 }
 
 export interface FolderNode {
@@ -87,6 +114,7 @@ export interface NotesResponse {
   total: number
   limit: number
   offset: number
+  view?: NoteView
 }
 
 export interface SearchResponse {
@@ -187,9 +215,14 @@ export async function fetchFolders(): Promise<FolderNode> {
   return data.folders
 }
 
-export async function fetchNotes(folder?: string, limit = 50, offset = 0): Promise<NotesResponse> {
+export async function fetchNotes(
+  folder?: string,
+  limit = 50,
+  offset = 0,
+  view: NoteView = 'active'
+): Promise<NotesResponse> {
   return apiRequest<NotesResponse>('GET', '/api/notes', {
-    params: { folder, limit, offset },
+    params: { folder, limit, offset, view },
   })
 }
 
@@ -243,6 +276,32 @@ export async function updateNote(noteId: string, input: UpdateNoteInput): Promis
 
 export async function deleteNote(noteId: string): Promise<void> {
   await apiRequest<{ success: boolean }>('DELETE', `/api/notes/${noteId}`)
+}
+
+export async function restoreNote(noteId: string): Promise<Note> {
+  return apiRequest<Note>('POST', `/api/notes/${noteId}/restore`)
+}
+
+export async function purgeNote(noteId: string): Promise<void> {
+  await apiRequest<{ success: boolean }>('DELETE', `/api/notes/${noteId}/permanent`)
+}
+
+export async function pinNote(noteId: string, pinned: boolean): Promise<Note> {
+  return apiRequest<Note>('POST', `/api/notes/${noteId}/pin`, { body: { pinned } })
+}
+
+export async function archiveNote(noteId: string, archived: boolean): Promise<Note> {
+  return apiRequest<Note>('POST', `/api/notes/${noteId}/archive`, {
+    body: { archived },
+  })
+}
+
+export async function fetchNoteRevisions(noteId: string): Promise<NoteRevisionsResponse> {
+  return apiRequest<NoteRevisionsResponse>('GET', `/api/notes/${noteId}/revisions`)
+}
+
+export async function restoreNoteRevision(noteId: string, version: number): Promise<Note> {
+  return apiRequest<Note>('POST', `/api/notes/${noteId}/revisions/${version}/restore`)
 }
 
 export async function searchNotes(query: string): Promise<SearchResult[]> {
