@@ -29,9 +29,17 @@ lerna-debug.log*
 .env
 .env.local
 .env.production
+.env.*
+!backend/.env.example
+!frontend/.env.example
 frontend/.env
 frontend/.env.local
 backend/.env
+
+# Database dumps / backups
+*.dump
+*.sql.gz
+*.dump.gz
 
 # Database files (SQLite - database-only storage)
 backend/.notes.db

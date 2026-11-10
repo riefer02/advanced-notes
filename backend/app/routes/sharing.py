@@ -21,7 +21,7 @@ bp = Blueprint("sharing", __name__)
 # ============================================================================
 
 _USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9_.]{1,28}[a-z0-9]$")
-_AVATAR_MAX_BYTES = 1 * 1024 * 1024  # 1 MB
+_AVATAR_MAX_BYTES = Config.MAX_AVATAR_BYTES
 _AVATAR_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp"}
 
 _USERNAME_SUFFIX_CHARS = string.ascii_lowercase + string.digits

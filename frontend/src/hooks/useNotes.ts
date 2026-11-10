@@ -262,13 +262,6 @@ export function useRestoreNoteRevision() {
 /**
  * Ask notes mutation
  */
-export function useAskNotes() {
-  return useMutation({
-    mutationFn: (args: { query: string; maxResults?: number; debug?: boolean }) =>
-      api.askNotes(args.query, args.maxResults ?? 12, args.debug ?? false),
-  })
-}
-
 export function useDigests(limit = 50, offset = 0) {
   return useQuery({
     queryKey: queryKeys.digests(limit, offset),

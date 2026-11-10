@@ -10,10 +10,6 @@ import { DesktopSidebar, MobileDrawer } from './Navigation'
 import { AppHeader } from './AppHeader'
 import { AskSlideOver } from './AskSlideOver'
 
-// Re-export for backward compatibility
-export { NAV_ITEMS } from './nav-items'
-export type { NavItem } from './nav-items'
-
 interface AppShellContextValue {
   openAsk: () => void
 }

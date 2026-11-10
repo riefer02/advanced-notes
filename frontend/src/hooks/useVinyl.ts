@@ -6,8 +6,6 @@ import {
   updateVinylRecord,
   deleteVinylRecord,
   fetchVinylStats,
-  searchVinylRecords,
-  extractVinylMetadata,
   extractVinylFromPhotos,
   type VinylRecord,
 } from '../lib/api'
@@ -64,14 +62,6 @@ export function useVinylStats(owner?: string) {
   })
 }
 
-export function useVinylSearch(query: string, owner?: string) {
-  return useQuery({
-    queryKey: queryKeys.vinyl.search(query, owner),
-    queryFn: () => searchVinylRecords(query, undefined, undefined, owner),
-    enabled: query.length >= 2,
-  })
-}
-
 // ============================================================================
 // Mutation Hooks
 // ============================================================================
@@ -121,12 +111,6 @@ export function useDeleteVinylRecord() {
   return useMutation({
     mutationFn: (recordId: string) => deleteVinylRecord(recordId),
     onSuccess: (_data, recordId) => invalidateDeletedVinylQueries(queryClient, recordId),
-  })
-}
-
-export function useExtractVinylMetadata() {
-  return useMutation({
-    mutationFn: (recordId: string) => extractVinylMetadata(recordId),
   })
 }
 

@@ -1,9 +1,7 @@
 import { useMutation, useQuery, useQueryClient, QueryClient } from '@tanstack/react-query'
 import {
   fetchTodos,
-  fetchTodo,
   createTodo,
-  updateTodo,
   deleteTodo,
   acceptTodo,
   completeTodo,
@@ -52,14 +50,6 @@ export function useTodos(params?: TodosParams) {
   })
 }
 
-export function useTodo(todoId: string) {
-  return useQuery({
-    queryKey: queryKeys.todos.detail(todoId),
-    queryFn: () => fetchTodo(todoId),
-    enabled: !!todoId,
-  })
-}
-
 export function useTodosForNote(noteId: string) {
   return useQuery({
     queryKey: queryKeys.todos.forNote(noteId),
@@ -77,21 +67,6 @@ export function useCreateTodo() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.todos.all })
     },
-  })
-}
-
-export function useUpdateTodo() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({
-      todoId,
-      data,
-    }: {
-      todoId: string
-      data: { title?: string; description?: string }
-    }) => updateTodo(todoId, data),
-    onSuccess: (updatedTodo: Todo) => invalidateTodoQueries(queryClient, updatedTodo),
   })
 }
 

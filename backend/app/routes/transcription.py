@@ -10,7 +10,7 @@ from ..services.ai_categorizer import CategoryAction, CategorySuggestion
 from ..services.container import get_services
 from ..services.folder_utils import extract_folder_paths
 from ..services.models import NoteMetadata
-from ..services.resilience import require_external, with_fallback
+from ..services.resilience import RequestBudget, require_external, with_fallback
 from ._helpers import (
     _AudioTranscriptionError,
     _maybe_send_cost_alert,
@@ -102,6 +102,7 @@ def transcribe():
     """Transcribe audio and automatically categorize/save to database (user-scoped)."""
     user_id = g.user_id
     svc = get_services()
+    budget = RequestBudget(Config.TRANSCRIPTION_REQUEST_BUDGET_SECONDS)
 
     try:
         text, meta, audio_clip_id, audio_storage_key = _transcribe_audio_clip(
@@ -113,14 +114,24 @@ def transcribe():
         return api_error_from_exception(e)
 
     try:
-        folder_tree = svc.storage.get_folder_tree(user_id)
-
-        existing_folders = extract_folder_paths(folder_tree)
-        cat_result = with_fallback(
-            lambda: svc.categorizer.categorize(text, existing_folders, return_usage=True),
-            fallback=None,
-            service="categorizer",
-        )
+        if budget.remaining() > 20:
+            folder_tree = svc.storage.get_folder_tree(user_id)
+            existing_folders = extract_folder_paths(folder_tree)
+            cat_result = with_fallback(
+                lambda: svc.categorizer.categorize(
+                    text, existing_folders, return_usage=True
+                ),
+                fallback=None,
+                service="categorizer",
+            )
+        else:
+            # Out of budget: still save the note with a safe fallback category.
+            logger.warning(
+                "Skipping categorization; request budget exhausted "
+                "(%.1fs remaining)",
+                budget.remaining(),
+            )
+            cat_result = None
 
         if cat_result is None:
             categorization_result = _fallback_category()
@@ -181,19 +192,25 @@ def transcribe():
             logger.exception("Failed to store transcript for note %s", note_id)
 
         # Embeddings are an enhancement: never fail a saved note over them.
-        with_fallback(
-            lambda: svc.embeddings.upsert_for_note(
-                storage=svc.storage,
-                user_id=user_id,
-                note_id=note_id,
-                title=note_metadata.title,
-                content=text,
-                tags=note_metadata.tags,
-                summary=note_metadata.summary,
-            ),
-            fallback=None,
-            service="embeddings",
-        )
+        if budget.remaining() > 15:
+            with_fallback(
+                lambda: svc.embeddings.upsert_for_note(
+                    storage=svc.storage,
+                    user_id=user_id,
+                    note_id=note_id,
+                    title=note_metadata.title,
+                    content=text,
+                    tags=note_metadata.tags,
+                    summary=note_metadata.summary,
+                ),
+                fallback=None,
+                service="embeddings",
+            )
+        else:
+            logger.warning(
+                "Skipping embeddings; request budget exhausted (%.1fs remaining)",
+                budget.remaining(),
+            )
 
         created_todos = []
         try:

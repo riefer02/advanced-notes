@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   fetchFriends,
   fetchFriendRequests,
-  fetchSentRequests,
   sendFriendRequest,
   acceptFriendRequest,
   declineFriendRequest,
@@ -25,13 +24,6 @@ export function useFriendRequests() {
   })
 }
 
-export function useSentRequests() {
-  return useQuery({
-    queryKey: queryKeys.friends.sent,
-    queryFn: fetchSentRequests,
-  })
-}
-
 export function useUserSearch(query: string) {
   return useQuery({
     queryKey: queryKeys.userSearch(query),
@@ -46,7 +38,6 @@ export function useSendFriendRequest() {
   return useMutation({
     mutationFn: (userId: string) => sendFriendRequest(userId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.friends.sent })
       queryClient.invalidateQueries({ queryKey: queryKeys.friends.all })
     },
   })

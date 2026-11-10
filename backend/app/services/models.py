@@ -189,45 +189,10 @@ FolderNode.model_rebuild()
 # ============================================================================
 
 
-class CreateTodoRequest(BaseModel):
-    """Request body for creating a new todo."""
-    title: str = Field(..., min_length=1, max_length=500, description="Todo title")
-    description: str | None = Field(None, max_length=2000, description="Optional description")
-    note_id: str | None = Field(None, description="Associated note ID")
 
 
-class UpdateTodoRequest(BaseModel):
-    """Request body for updating an existing todo."""
-    title: str | None = Field(None, min_length=1, max_length=500, description="New title")
-    description: str | None = Field(None, max_length=2000, description="New description")
 
 
-class UpdateNoteRequest(BaseModel):
-    """Request body for updating an existing note."""
-    content: str | None = Field(None, min_length=1, description="Note content")
-    title: str | None = Field(None, min_length=1, max_length=500, description="Note title")
-    folder_path: str | None = Field(None, description="Folder path")
-    tags: list[str] | None = Field(None, description="List of tags")
-
-
-class UpdateSettingsRequest(BaseModel):
-    """Request body for updating user settings."""
-    auto_accept_todos: bool | None = Field(None, description="Auto-accept extracted todos")
-
-
-class AskRequest(BaseModel):
-    """Request body for asking questions about notes."""
-    query: str = Field(..., min_length=1, max_length=2000, description="The question to ask")
-    max_results: int = Field(default=12, ge=1, le=50, description="Maximum results to return")
-    debug: bool = Field(default=False, description="Include debug info in response")
-
-
-class AudioClipUploadRequest(BaseModel):
-    """Request body for creating a pending audio clip upload."""
-    mime_type: str = Field(..., min_length=1, description="MIME type of the audio")
-    bytes: int = Field(..., ge=1, description="Size in bytes")
-    note_id: str | None = Field(None, description="Associated note ID")
-    duration_ms: int | None = Field(None, ge=0, description="Duration in milliseconds")
 
 
 # ============================================================================
@@ -286,24 +251,7 @@ class MealEntryMetadata(BaseModel):
     model_version: str | None = None
 
 
-class UpdateMealEntryRequest(BaseModel):
-    """Request body for updating an existing meal entry"""
-    meal_type: str | None = Field(None, description="New meal type")
-    meal_date: str | None = Field(None, description="New date in ISO format")
-    meal_time: str | None = Field(None, description="New time in HH:MM format")
-    transcription: str | None = Field(None, description="Updated transcription")
 
-
-class CreateMealItemRequest(BaseModel):
-    """Request body for adding a food item to a meal"""
-    name: str = Field(..., min_length=1, max_length=255, description="Food item name")
-    portion: str | None = Field(None, max_length=100, description="Portion/quantity")
-
-
-class UpdateMealItemRequest(BaseModel):
-    """Request body for updating a food item"""
-    name: str | None = Field(None, min_length=1, max_length=255, description="New name")
-    portion: str | None = Field(None, max_length=100, description="New portion")
 
 
 # ============================================================================
@@ -311,44 +259,7 @@ class UpdateMealItemRequest(BaseModel):
 # ============================================================================
 
 
-class UsageSummaryResponse(BaseModel):
-    """API response for current usage summary"""
-    user_id: str
-    period_start: datetime
-    period_end: datetime
-    transcription_minutes_used: float
-    transcription_minutes_limit: int
-    ai_calls_used: int
-    ai_calls_limit: int
-    estimated_cost_usd: float
-    tier: str
 
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
-
-
-class QuotaExceededError(BaseModel):
-    """Error response when quota is exceeded"""
-    error: str = "Monthly quota exceeded"
-    quota: dict = Field(description="Quota details including service, used, limit, unit, and resets_at")
-
-
-class UsageRecordResponse(BaseModel):
-    """API response for a single usage record"""
-    id: str
-    user_id: str
-    service_type: str
-    model: str
-    prompt_tokens: int | None = None
-    completion_tokens: int | None = None
-    total_tokens: int | None = None
-    audio_duration_seconds: float | None = None
-    endpoint: str | None = None
-    estimated_cost_usd: float | None = None
-    created_at: datetime
-
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 # ============================================================================
@@ -369,13 +280,6 @@ class FeedbackResponse(BaseModel):
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}
 
-
-class CreateFeedbackRequest(BaseModel):
-    """Request body for submitting feedback"""
-    feedback_type: str = Field(..., description="bug, feature, or general")
-    title: str = Field(..., min_length=1, max_length=255, description="Feedback title")
-    description: str | None = Field(None, max_length=5000, description="Detailed description")
-    rating: int | None = Field(None, ge=1, le=5, description="Optional 1-5 rating")
 
 
 # ============================================================================
@@ -441,45 +345,7 @@ class VinylRecord(BaseModel):
         json_encoders = {datetime: lambda v: v.isoformat()}
 
 
-class CreateVinylRecordRequest(BaseModel):
-    """Request body for creating a vinyl record"""
-    artist: str = Field(..., min_length=1, max_length=500, description="Artist name")
-    album_title: str = Field(..., min_length=1, max_length=500, description="Album title")
-    release_year: int | None = Field(None, description="Release year")
-    genre: list[str] = Field(default_factory=list, description="Genre tags")
-    label: str | None = Field(None, description="Record label name")
-    catalog_number: str | None = Field(None, description="Catalog number")
-    format: str | None = Field(None, description="LP, 7\", 10\", 12\"")
-    pressing_country: str | None = Field(None, description="Country of pressing")
-    color: str | None = Field(None, description="Vinyl color")
-    condition: str | None = Field(None, description="Condition grade")
-    notes: str | None = Field(None, description="Freeform notes")
 
-
-class UpdateVinylRecordRequest(BaseModel):
-    """Request body for updating a vinyl record"""
-    artist: str | None = Field(None, min_length=1, max_length=500)
-    album_title: str | None = Field(None, min_length=1, max_length=500)
-    release_year: int | None = None
-    genre: list[str] | None = None
-    label: str | None = None
-    catalog_number: str | None = None
-    format: str | None = None
-    pressing_country: str | None = None
-    color: str | None = None
-    condition: str | None = None
-    notes: str | None = None
-    extraction_status: str | None = None
-    extraction_confidence: float | None = Field(None, ge=0.0, le=1.0)
-    cover_image_id: str | None = None
-    tracks: list[dict] | None = Field(None, description="Full tracklist replacement")
-
-
-class VinylImageUploadRequest(BaseModel):
-    """Request body for creating a pending vinyl image upload"""
-    image_type: str = Field(..., description="front_cover, back_cover, label, inner_sleeve, other")
-    mime_type: str = Field(..., min_length=1, description="MIME type of the image")
-    bytes: int = Field(..., ge=1, description="Size in bytes")
 
 
 # ============================================================================
@@ -505,13 +371,6 @@ class UserProfileResponse(BaseModel):
         json_encoders = {datetime: lambda v: v.isoformat()}
 
 
-class UpdateProfileRequest(BaseModel):
-    """Request body for updating user profile"""
-    display_name: str | None = Field(None, min_length=1, max_length=255)
-    username: str | None = Field(None, min_length=3, max_length=30, pattern=r"^[a-z0-9][a-z0-9_.]{1,28}[a-z0-9]$")
-    bio: str | None = Field(None, max_length=1000)
-    discoverable: bool | None = None
-
 
 class FriendshipResponse(BaseModel):
     """Friendship with enriched profile data"""
@@ -526,10 +385,6 @@ class FriendshipResponse(BaseModel):
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}
 
-
-class SendFriendRequestBody(BaseModel):
-    """Request body for sending a friend request"""
-    user_id: str = Field(..., description="User ID to send friend request to")
 
 
 class ResourceShareResponse(BaseModel):
@@ -550,12 +405,3 @@ class ResourceShareResponse(BaseModel):
         json_encoders = {datetime: lambda v: v.isoformat()}
 
 
-class CreateShareRequest(BaseModel):
-    """Request body for creating a resource share"""
-    shared_with_id: str = Field(..., description="User ID to share with")
-    resource_type: str = Field(..., description="vinyl_library or meal_calendar")
-    resource_id: str | None = Field(
-        default=None,
-        description="Specific resource id; omit for the whole collection/calendar",
-    )
-    permission: str = Field(default="view", description="view or edit")

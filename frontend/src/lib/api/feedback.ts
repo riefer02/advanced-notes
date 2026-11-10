@@ -38,10 +38,3 @@ export async function submitFeedback(data: {
 }): Promise<Feedback> {
   return apiRequest<Feedback>('POST', '/api/feedback', { body: data })
 }
-
-export async function fetchFeedback(params?: {
-  limit?: number
-  offset?: number
-}): Promise<FeedbackListResponse> {
-  return apiRequest<FeedbackListResponse>('GET', '/api/feedback', { params })
-}

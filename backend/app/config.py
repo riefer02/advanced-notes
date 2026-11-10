@@ -6,44 +6,11 @@ Loads environment variables and provides centralized config access.
 
 import os
 import warnings
-from pathlib import Path
 
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
-
-
-# ============================================================================
-# CONSTANTS - Magic numbers extracted for clarity
-# ============================================================================
-
-
-class SearchConfig:
-    """Configuration constants for search operations."""
-    MAX_SEMANTIC_CANDIDATES = 200
-    MAX_FTS_CANDIDATES = 200
-    MAX_ASK_RESULTS = 50
-    DEFAULT_ASK_RESULTS = 12
-    STALE_CLIP_MINUTES = 60
-    STALE_CLIP_BATCH_SIZE = 100
-
-
-class PaginationConfig:
-    """Configuration constants for pagination."""
-    DEFAULT_LIMIT = 50
-    MAX_LIMIT = 100
-    TODO_DEFAULT_LIMIT = 100
-    TODO_MAX_LIMIT = 200
-
-
-class ContentConfig:
-    """Configuration constants for content processing."""
-    MAX_TITLE_LENGTH = 500
-    MAX_DESCRIPTION_LENGTH = 2000
-    MAX_QUERY_LENGTH = 2000
-    CONTENT_EXCERPT_LENGTH = 2000
-    SNIPPET_LENGTH = 220
 
 
 # OpenAI models this app has used that are already scheduled for shutdown.
@@ -79,7 +46,12 @@ class Config:
     # hung provider cannot pin sync gunicorn workers indefinitely.
     OPENAI_TIMEOUT_SECONDS: float = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30"))
     OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS: float = float(
-        os.getenv("OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS", "90")
+        os.getenv("OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS", "120")
+    )
+    # Total budget for the capture pipeline (S3 + ASR + optional enrichment).
+    # Must stay below Gunicorn's --timeout (420s).
+    TRANSCRIPTION_REQUEST_BUDGET_SECONDS: float = float(
+        os.getenv("TRANSCRIPTION_REQUEST_BUDGET_SECONDS", "360")
     )
     # A retry must fit inside the request budget: 2 attempts at 30s is 60s
     # per call, and /ask makes up to three calls. Keep gunicorn's timeout
@@ -111,7 +83,6 @@ class Config:
 
     # Flask settings
     FLASK_ENV: str = os.getenv("FLASK_ENV", "development")
-    DEBUG: bool = FLASK_ENV == "development"
     # Generic environment name (preferred for non-Flask deployments).
     # Use APP_ENV; fall back to FLASK_ENV. Do not use the generic `ENV` shell
     # variable: containers often set it to a profile path like /etc/profile.
@@ -132,15 +103,6 @@ class Config:
     # gpt-transcribe replaces the gpt-4o-*-transcribe family, which shuts down
     # on 2027-02-26. It has no dated snapshot, so the alias is the only option.
     TRANSCRIBE_MODEL: str = os.getenv("TRANSCRIBE_MODEL", "gpt-transcribe")
-
-    # Storage settings (database-only, no file system storage)
-    BASE_DIR: Path = Path(__file__).parent.parent  # backend/
-    DB_PATH: Path = BASE_DIR / ".notes.db"
-
-    # Categorization settings
-    CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.7"))
-    DEFAULT_FOLDERS: list = ["inbox", "archive"]
-    MAX_NOTES_PER_FOLDER: int = 50
 
     # Object storage (S3) settings for audio clips
     S3_BUCKET: str | None = os.getenv("S3_BUCKET")

@@ -73,7 +73,6 @@
 | `FLASK_ENV`            | `production`                       | Flask environment                         |
 | `APP_ENV`              | `production`                       | Preferred env label; enables prod guards  |
 | `CLERK_DOMAIN`         | `your-instance.clerk.accounts.dev` | JWT issuer/JWKS host (required)           |
-| `CONFIDENCE_THRESHOLD` | `0.7`                              | AI confidence threshold                   |
 | `FRONTEND_URL`         | `https://your-frontend-domain.com` | For CORS (your custom domain)             |
 | `DATABASE_URL`         | (auto-set)                         | PostgreSQL connection (reference from DB) |
 | `ADMIN_EMAILS`         | `you@example.com`                  | Admin alert recipients (comma-separated)  |

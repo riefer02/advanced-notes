@@ -43,12 +43,10 @@ export const queryKeys = {
     detail: (recordId: string | null, owner?: string) => ['vinyl', recordId, owner] as const,
     stats: (owner?: string) => ['vinylStats', owner] as const,
     statsPrefix: ['vinylStats'] as const,
-    search: (query: string, owner?: string) => ['vinylSearch', query, owner] as const,
   },
   friends: {
     all: ['friends'] as const,
     requests: ['friendRequests'] as const,
-    sent: ['sentRequests'] as const,
   },
   shares: {
     all: ['shares'] as const,

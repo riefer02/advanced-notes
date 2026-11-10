@@ -29,7 +29,6 @@ OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 # Categorization Settings
 # Confidence threshold for auto-categorization (0.0-1.0)
 # Below this threshold, suggestions require manual confirmation
-CONFIDENCE_THRESHOLD=0.7
 ```
 
 ---
@@ -80,7 +79,6 @@ OPENAI_MODEL=gpt-6-luna
 OPENAI_REASONING_EFFORT=none
 TRANSCRIBE_MODEL=gpt-transcribe
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-CONFIDENCE_THRESHOLD=0.7
 ```
 
 ---
@@ -241,7 +239,6 @@ echo "OPENAI_API_KEY=sk-proj-your-key-here" > .env
 echo "OPENAI_MODEL=gpt-6-luna" >> .env
 echo "OPENAI_REASONING_EFFORT=none" >> .env
 echo "TRANSCRIBE_MODEL=gpt-transcribe" >> .env
-echo "CONFIDENCE_THRESHOLD=0.7" >> .env
 ```
 
 ### Error: "You exceeded your current quota"
@@ -293,7 +290,6 @@ Use their environment variable UI to add:
 - `OPENAI_MODEL`
 - `OPENAI_REASONING_EFFORT`
 - `TRANSCRIBE_MODEL`
-- `CONFIDENCE_THRESHOLD`
 
 ### Security Hardening
 

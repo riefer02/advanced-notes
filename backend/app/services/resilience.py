@@ -34,6 +34,25 @@ class ExternalServiceError(Exception):
         super().__init__(self.message)
 
 
+class RequestBudget:
+    """A monotonic deadline shared by sequential calls in one request.
+
+    External calls each have their own timeout, but a chain of them can still
+    exceed the platform's request timeout. Callers check `remaining()` before
+    starting optional enrichment work.
+    """
+
+    def __init__(self, seconds: float):
+        self.seconds = max(0.0, float(seconds))
+        self.deadline = time.monotonic() + self.seconds
+
+    def remaining(self) -> float:
+        return max(0.0, self.deadline - time.monotonic())
+
+    def expired(self) -> bool:
+        return self.remaining() <= 0.0
+
+
 def retry_with_backoff(
     fn: Callable[[], T],
     *,

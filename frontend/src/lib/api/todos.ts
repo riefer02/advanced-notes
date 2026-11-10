@@ -41,26 +41,12 @@ export async function fetchTodos(params?: {
   return apiRequest<TodosResponse>('GET', '/api/todos', { params })
 }
 
-export async function fetchTodo(todoId: string): Promise<Todo> {
-  return apiRequest<Todo>('GET', `/api/todos/${todoId}`)
-}
-
 export async function createTodo(data: {
   title: string
   description?: string
   note_id?: string
 }): Promise<Todo> {
   return apiRequest<Todo>('POST', '/api/todos', { body: data })
-}
-
-export async function updateTodo(
-  todoId: string,
-  data: {
-    title?: string
-    description?: string
-  }
-): Promise<Todo> {
-  return apiRequest<Todo>('PUT', `/api/todos/${todoId}`, { body: data })
 }
 
 export async function deleteTodo(todoId: string): Promise<void> {

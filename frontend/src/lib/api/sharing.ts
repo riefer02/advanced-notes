@@ -53,10 +53,6 @@ export interface FriendRequestsResponse {
   requests: Friendship[]
 }
 
-export interface SentRequestsResponse {
-  sent: Friendship[]
-}
-
 export interface SharesResponse {
   owned: ResourceShare[]
   received: ResourceShare[]
@@ -121,10 +117,6 @@ export async function fetchFriends(): Promise<FriendsListResponse> {
 
 export async function fetchFriendRequests(): Promise<FriendRequestsResponse> {
   return apiRequest<FriendRequestsResponse>('GET', '/api/friends/requests')
-}
-
-export async function fetchSentRequests(): Promise<SentRequestsResponse> {
-  return apiRequest<SentRequestsResponse>('GET', '/api/friends/sent')
 }
 
 export async function sendFriendRequest(userId: string): Promise<Friendship> {

@@ -17,7 +17,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
-import { NAV_ITEMS } from './layout/AppShell'
+import { NAV_ITEMS } from './layout/nav-items'
 
 interface CommandPaletteProps {
   isOpen: boolean

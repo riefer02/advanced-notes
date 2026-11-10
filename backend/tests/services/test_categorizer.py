@@ -32,7 +32,6 @@ def test_categorization():
     
     print("✅ OpenAI API Key found")
     print(f"📊 Model: {config.OPENAI_MODEL}")
-    print(f"🎯 Confidence threshold: {config.CONFIDENCE_THRESHOLD}\n")
     
     # Initialize service
     try:
@@ -88,10 +87,10 @@ def test_categorization():
             print(f"   Reasoning: {result.reasoning}")
             
             # Check confidence
-            if result.confidence >= config.CONFIDENCE_THRESHOLD:
-                print(f"   ✅ High confidence (>= {config.CONFIDENCE_THRESHOLD})")
+            if result.confidence >= 0.7:
+                print(f"   ✅ High confidence (>= {0.7})")
             else:
-                print(f"   ⚠️  Low confidence (< {config.CONFIDENCE_THRESHOLD}) - may need manual review")
+                print(f"   ⚠️  Low confidence (< {0.7}) - may need manual review")
             
         except Exception as e:
             print(f"❌ Categorization failed: {e}")
