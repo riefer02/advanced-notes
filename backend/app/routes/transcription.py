@@ -153,6 +153,7 @@ def transcribe():
             confidence=categorization_result.confidence,
             transcription_duration=meta.get("duration"),
             model_version=meta.get("model"),
+            language=meta.get("language"),
         )
 
         note_id = svc.storage.save_note(user_id=user_id, content=text, metadata=note_metadata)
@@ -163,6 +164,22 @@ def transcribe():
             note_id=note_id,
             duration_ms=None,
         )
+
+        # Raw transcript is stored separately from the note body so a future
+        # contract migration can drop the denormalized note columns safely.
+        try:
+            svc.storage.create_transcript(
+                user_id=user_id,
+                note_id=note_id,
+                audio_clip_id=audio_clip_id,
+                text=text,
+                language=meta.get("language"),
+                model=meta.get("model"),
+                duration_seconds=meta.get("duration"),
+                confidence=categorization_result.confidence,
+            )
+        except Exception:  # noqa: BLE001 - the note is already saved
+            logger.exception("Failed to store transcript for note %s", note_id)
 
         # Embeddings are an enhancement: never fail a saved note over them.
         with_fallback(

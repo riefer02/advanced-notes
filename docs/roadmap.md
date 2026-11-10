@@ -29,8 +29,8 @@ Three rules for every feature:
 | Production DB safety | ✅ Done (2026-11-10) | Refuses SQLite in production |
 | Note history / undo | ✅ Done (2026-11-10) | Per-edit snapshots + restore |
 | Soft delete / archive / pin | ✅ Done (2026-11-10) | Trash, Archived, Pin; automatic retention purge still pending |
-| Search at scale | 🟡 In progress | Postgres GIN + SQLite sanitized FTS shipped; folder/transcript work pending |
-| Tags/folders model | 🟡 In progress | Tags normalized + dual-written; folders still path strings |
+| Search at scale | ✅ Done (2026-11-10) | Postgres GIN, SQLite sanitized FTS, HNSW, transcripts |
+| Tags/folders model | ✅ Done (2026-11-10) | Normalized tags + folder entities with rename |
 | Backups + restore drill | ❌ Not started | Unverified; treat as no backup |
 | External uptime + Sentry | ❌ Not started | Out-of-band alerting still missing |
 | Mobile/quick capture everywhere | ❌ Not started | Web only |
@@ -93,14 +93,14 @@ Three rules for every feature:
 - [x] SQLite FTS query sanitization (no more 500 on quotes/operators)
 - [x] Stop hardcoding `'english'` (`simple` default; per-language config is a follow-up)
 - [x] Normalize tags (`tags`, `note_tags`) with backfill + dual-write
+- [x] Folders as entities (`folders`, `notes.folder_id`) with subtree rename
+- [x] `transcripts` table + raw ASR storage (legacy note columns retained)
 - [x] Embeddings: model-level unique constraint, race-safe upsert, `content_hash` reuse, HNSW index
 - [x] `usage_counters` with backfill and O(1) quota checks
 - [x] Friendship unordered-pair uniqueness; `resource_shares.resource_id`
-- [ ] Folders as entities (`folders`, `notes.folder_id`) with rename
-- [ ] `transcripts` table; move confidence/duration/model off `notes`
 - [ ] Fix `meal_embeddings` / `vinyl_embeddings` `text → vector` drift
 - [ ] Remove duplicate indexes; add missing FKs
-- [ ] Tests + migration up/down on SQLite **and** Postgres
+- [x] Tests + migration up/down on SQLite **and** Postgres (pg18 + pgvector container)
 
 **Exit criteria:** tag click and folder rename are index-backed; a 10k-note account searches in under 200 ms locally.
 
@@ -179,7 +179,7 @@ Three rules for every feature:
 |---|---|
 | Note revisions / soft delete / archive / pin | ✅ Done (2026-11-10); auto-purge pending |
 | Postgres FTS index + sanitized SQLite FTS | ✅ Done (2026-11-10) |
-| Tags/folders normalized | 🟡 Tags done (2026-11-10); folders pending |
+| Tags/folders normalized | ✅ Done (2026-11-10) |
 | Embedding uniqueness + ANN + hash reuse | ✅ Done (2026-11-10) |
 | Quota counters | ✅ Done (2026-11-10) |
 | Outbox reclaim / dead letter | ✅ Reclaim + admin retry (2026-11-10); dead-letter alert pending |

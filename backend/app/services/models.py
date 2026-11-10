@@ -31,6 +31,7 @@ class Note(BaseModel):
     summary: str | None = None
     content: str
     folder_path: str
+    folder_id: str | None = None
     tags: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)

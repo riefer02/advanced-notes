@@ -52,6 +52,10 @@ class Note(Base):
     title = Column(Text, nullable=False)
     content = Column(Text, nullable=False)
     folder_path = Column(Text, nullable=False, index=True)
+    # Set by the storage layer; folder_path stays the compatibility cache.
+    folder_id = Column(
+        String(36), ForeignKey("folders.id", ondelete="SET NULL"), nullable=True
+    )
     
     # Tags - stored as JSON/JSONB
     tags = Column(Text, nullable=True)  # JSON string for SQLite, JSONB for PostgreSQL
@@ -158,6 +162,53 @@ class NoteTag(Base):
     __table_args__ = (
         Index("idx_note_tags_user_tag", "user_id", "tag_id"),
         Index("idx_note_tags_tag_note", "tag_id", "note_id"),
+    )
+
+
+class Folder(Base):
+    """Per-user folder entity. `notes.folder_path` remains the read cache."""
+
+    __tablename__ = "folders"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False)
+    path = Column(String(500), nullable=False)
+    name = Column(String(255), nullable=False)
+    parent_path = Column(String(500), nullable=True)
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    updated_at = Column(
+        TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "path", name="uq_folders_user_path"),
+        Index("idx_folders_user_path", "user_id", "path"),
+    )
+
+
+class Transcript(Base):
+    """Raw ASR output, kept separate from the note body."""
+
+    __tablename__ = "transcripts"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False)
+    note_id = Column(
+        String(36), ForeignKey("notes.id", ondelete="CASCADE"), nullable=True
+    )
+    audio_clip_id = Column(
+        String(36), ForeignKey("audio_clips.id", ondelete="SET NULL"), nullable=True
+    )
+    text = Column(Text, nullable=False)
+    language = Column(String(20), nullable=True)
+    model = Column(String(100), nullable=True)
+    duration_seconds = Column(Float, nullable=True)
+    confidence = Column(Float, nullable=True)
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_transcripts_user_note", "user_id", "note_id"),
+        Index("idx_transcripts_audio_clip", "audio_clip_id"),
     )
 
 
