@@ -28,7 +28,7 @@ _SEARCH_EXPRESSION = (
     "setweight(to_tsvector('simple', coalesce(title, '')), 'A') || "
     "setweight(to_tsvector('simple', coalesce(summary, '')), 'B') || "
     "setweight(to_tsvector('simple', coalesce(content, '')), 'C') || "
-    "setweight(to_tsvector('simple', coalesce(tags, '')), 'D')"
+    "setweight(to_tsvector('simple', coalesce(tags::text, '')), 'D')"
 )
 
 
