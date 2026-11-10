@@ -996,12 +996,11 @@ def _normalize_database_url(url: str) -> str:
 def _is_production_env() -> bool:
     """Return True for deployment environments that must not use SQLite.
 
-    Checks APP_ENV/ENV (preferred) as well as FLASK_ENV so a Railway service
-    with only one of them set cannot silently boot on an ephemeral file.
+    Uses APP_ENV/FLASK_ENV (not the generic ENV shell variable, which containers
+    often set to a profile path).
     """
     env = (
         os.getenv("APP_ENV")
-        or os.getenv("ENV")
         or os.getenv("FLASK_ENV")
         or ""
     ).strip().lower()

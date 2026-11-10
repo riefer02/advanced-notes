@@ -113,8 +113,9 @@ class Config:
     FLASK_ENV: str = os.getenv("FLASK_ENV", "development")
     DEBUG: bool = FLASK_ENV == "development"
     # Generic environment name (preferred for non-Flask deployments).
-    # Use APP_ENV (recommended) or ENV; falls back to FLASK_ENV.
-    APP_ENV: str | None = os.getenv("APP_ENV") or os.getenv("ENV")
+    # Use APP_ENV; fall back to FLASK_ENV. Do not use the generic `ENV` shell
+    # variable: containers often set it to a profile path like /etc/profile.
+    APP_ENV: str | None = os.getenv("APP_ENV") or os.getenv("FLASK_ENV")
 
     # OpenAI settings (used for both transcription and GPT categorization)
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
@@ -269,7 +270,7 @@ class Config:
 
         Priority:
           1) S3_KEY_PREFIX (explicit override)
-          2) APP_ENV / ENV (generic)
+          2) APP_ENV (generic)
           3) FLASK_ENV (fallback)
         """
 
