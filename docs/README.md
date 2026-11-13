@@ -24,10 +24,7 @@ Complete documentation for the Chisos advanced notes project.
 
 ### Development Guides
 - **[Contributing Guide](./contributing.md)** - Conventions, commands, code organization, debugging, and CI details
-- **Cursor Rules** (`.cursor/rules/`)
-  - [Project Overview](../.cursor/rules/project-overview.md)
-  - [Coding Standards](../.cursor/rules/coding-standards.md)
-  - [Development Workflow](../.cursor/rules/development-workflow.md)
+- **[Agent Instructions](../AGENTS.md)** - Stack, auth, storage patterns, and verification checklist for AI agents
 
 ---
 
@@ -37,13 +34,13 @@ Complete documentation for the Chisos advanced notes project.
 
 1. Read [Main README](../README.md) for project overview
 2. Follow [Environment Setup](./environment-setup.md) to configure API keys
-3. Review [Coding Standards](../.cursor/rules/coding-standards.md)
-4. Check [Development Workflow](../.cursor/rules/development-workflow.md) for daily development
+3. Review [Agent Instructions](../AGENTS.md) for conventions and patterns
+4. Check [Development Workflow](./contributing.md) for daily development
 
 ### For Contributors
 
-- **Coding Standards**: See [coding-standards.md](../.cursor/rules/coding-standards.md)
-- **Git Workflow**: Documented in [development-workflow.md](../.cursor/rules/development-workflow.md)
+- **Coding Standards**: See [Agent Instructions](../AGENTS.md)
+- **Git Workflow**: Documented in [contributing.md](./contributing.md)
 - **Architecture**: See [semantic-organization-spec.md](./semantic-organization-spec.md)
 
 ### For Operators
@@ -106,23 +103,11 @@ docs/
 **Topics**: Endpoints, request/response formats, error handling, testing  
 **Est. Time**: 20 minutes
 
-### Project Overview (Cursor Rule)
-**Purpose**: High-level project context for AI assistants  
+### Agent Instructions
+**Purpose**: Conventions and guardrails for AI coding agents  
 **Audience**: AI/Developers  
-**Topics**: Tech stack, directory structure, model information  
-**Est. Time**: 15 minutes
-
-### Coding Standards (Cursor Rule)
-**Purpose**: Code quality guidelines and patterns  
-**Audience**: Developers  
-**Topics**: Python/Flask patterns, TypeScript/React patterns, Git commits  
-**Est. Time**: 20 minutes
-
-### Development Workflow (Cursor Rule)
-**Purpose**: Daily development practices and procedures  
-**Audience**: Developers  
-**Topics**: Setup, debugging, testing, troubleshooting  
-**Est. Time**: 25 minutes
+**Topics**: Stack, database isolation, authentication, verification checklist  
+**Est. Time**: 10 minutes
 
 ---
 
@@ -140,7 +125,7 @@ docs/
 When adding new features:
 - [ ] Update relevant technical specs
 - [ ] Add environment variables to setup guide
-- [ ] Update coding standards if new patterns introduced
+- [ ] Update coding standards in `AGENTS.md` if new patterns introduced
 - [ ] Add troubleshooting section if complex
 - [ ] Update this index with new documents
 
@@ -162,8 +147,8 @@ Found an error or want to improve documentation?
 
 - **Technical Questions**: See [semantic-organization-spec.md](./semantic-organization-spec.md)
 - **Setup Issues**: Check [environment-setup.md](./environment-setup.md) troubleshooting
-- **Development Help**: Review [development-workflow.md](../.cursor/rules/development-workflow.md)
-- **Code Questions**: See [coding-standards.md](../.cursor/rules/coding-standards.md)
+- **Development Help**: Review [contributing.md](./contributing.md)
+- **Code Questions**: See [Agent Instructions](../AGENTS.md)
 
 ---
 

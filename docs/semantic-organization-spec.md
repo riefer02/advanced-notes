@@ -173,10 +173,8 @@ chisos/
 │   ├── environment-setup.md      # OpenAI API key setup
 │   └── semantic-organization-spec.md  # This file
 │
-└── .cursor/rules/
-    ├── project-overview.md       # Tech stack overview
-    ├── coding-standards.md       # Code style guide
-    └── development-workflow.md   # Dev procedures
+├── AGENTS.md                     # Agent instructions (stack, conventions)
+└── ...
 ```
 
 ---
@@ -429,9 +427,7 @@ VITE_API_URL=http://localhost:5001
 
 - **[API Reference](./api-reference.md)** - Complete REST API documentation
 - **[Environment Setup](./environment-setup.md)** - OpenAI API key configuration
-- **[Project Overview](../.cursor/rules/project-overview.md)** - Tech stack and architecture
-- **[Coding Standards](../.cursor/rules/coding-standards.md)** - Code style guidelines
-- **[Development Workflow](../.cursor/rules/development-workflow.md)** - Dev procedures
+- **[Agent Instructions](../AGENTS.md)** - Stack, conventions, and verification checklist
 
 ---
 
