@@ -1,16 +1,18 @@
 # Chisos Backend
 
-Flask API server with OpenAI gpt-transcribe for speech-to-text and advanced notes management.
+Flask API for audio transcription, AI organization, and the notes app (notes, todos, meals, vinyl, sharing, admin).
+
+See the [project README](../README.md) for the full stack and [docs/](../docs/README.md) for guides.
 
 ## Features
 
-- **Transcription**: OpenAI gpt-transcribe API
-- **AI Categorization**: GPT-6 Luna with structured outputs
-- **Note Quality**: Generated titles/summaries, editable notes, source-audio playback
-- **Authentication**: Clerk JWT verification with user isolation
-- **Storage**: SQLite (dev) / PostgreSQL (prod) with full-text search
+- **Transcription**: OpenAI `gpt-transcribe`
+- **AI Categorization**: GPT-6 Luna with structured outputs, plus meal and vinyl extraction
+- **Note Quality**: Generated titles/summaries, editable notes, revisions, source-audio playback
+- **Authentication**: Clerk JWT verification with per-user isolation
+- **Storage**: SQLite (dev) / PostgreSQL (prod) with FTS and vector search
 - **Migrations**: Alembic for database schema management
-- **11 REST API Endpoints**: Complete CRUD for notes, folders, tags, search (all user-scoped)
+- **Background work**: Durable email outbox, usage quotas, ops events and digests
 
 ## Setup
 
@@ -18,22 +20,31 @@ Flask API server with OpenAI gpt-transcribe for speech-to-text and advanced note
 # Install dependencies
 uv sync
 
-# Create .env file with required variables
+# Create .env with the required variables
 cat > .env << EOF
 OPENAI_API_KEY=sk-your-key-here
+# Optional overrides
 OPENAI_MODEL=gpt-6-luna
 OPENAI_REASONING_EFFORT=none
 TRANSCRIBE_MODEL=gpt-transcribe
-CLERK_DOMAIN=your-app.clerk.accounts.dev  # Clerk Dashboard > API Keys > "Issuer" (without https://)
-CLERK_SECRET_KEY=sk_test_your_secret_key  # Clerk Dashboard > API Keys > "Secret keys"
+# Required in production: Clerk issuer domain (no https://)
+CLERK_DOMAIN=your-app.clerk.accounts.dev
+# Required in production: frontend origin allowed by CORS
+FRONTEND_URL=https://your-frontend.example.com
+# Omit for local SQLite (backend/.notes.db)
+# DATABASE_URL=postgresql://user:pass@host:5432/dbname
 EOF
 
 # Run database migrations
 uv run alembic upgrade head
 
-# Start development server
+# Start the development server
 ./run.sh
 ```
+
+Optional integrations (S3 audio/images, SES notifications) are documented in
+[docs/environment-setup.md](../docs/environment-setup.md) and
+[docs/audio-clips-s3.md](../docs/audio-clips-s3.md).
 
 ## Service Container (Dependency Injection)
 
@@ -43,25 +54,25 @@ Routes do not construct global singletons. Instead, the app initializes a `Servi
 - `backend/app/__init__.py`: attaches `app.extensions["services"] = create_services()`
 - `backend/app/routes/`: each blueprint calls `svc = get_services()` per-request
 
-This pattern keeps route code thin and makes route tests able to inject fakes by overriding `app.extensions["services"]`.
+This keeps route code thin and lets route tests inject fakes by overriding `app.extensions["services"]`.
 
-## API Endpoints
+## API
 
-All endpoints (except `/api/health`) require authentication via `Authorization: Bearer <token>` header.
+All endpoints (except `/api/health`) require `Authorization: Bearer <token>` and are scoped to the authenticated user.
 
-- `POST /api/transcribe` - Transcribe audio + categorize + save (user-scoped)
-- `GET /api/notes` - List user's notes
-- `GET /api/notes/<id>` - Get specific note (user-scoped)
-- `PUT /api/notes/<id>` - Update note (user-scoped)
-- `DELETE /api/notes/<id>` - Delete note (user-scoped)
-- `GET /api/folders` - Get user's folder hierarchy
-- `GET /api/folders/<path>/stats` - Folder statistics (user-scoped)
-- `GET /api/tags` - List user's tags
-- `GET /api/tags/<tag>/notes` - Get notes by tag (user-scoped)
-- `GET /api/search?q=` - Full-text search (user-scoped)
-- `GET /api/health` - Health check (public)
+Route modules under `backend/app/routes/` cover:
 
-Server runs on **http://localhost:5001**
+- **Notes**: transcribe, create/edit/delete, revisions, search, folders, tags
+- **Todos**: suggested and accepted action items
+- **Meals**: transcriptions, entries, calendar
+- **Vinyl**: records, tracks, images
+- **Sharing**: profiles, friends, resource shares
+- **Admin & ops**: dashboard, reports, feedback, health/readiness
+- **System**: settings, usage, webhooks
+
+See [docs/api-reference.md](../docs/api-reference.md) for request/response details.
+
+Server runs on **http://localhost:5001**.
 
 ## Database Migrations
 
@@ -86,9 +97,7 @@ cd backend
 uv run python -m pytest tests/
 ```
 
-## Deployment Benefits
+## Deployment
 
-- ✅ No GPU required (API-based transcription)
-- ✅ No model downloads (no HuggingFace cache)
-- ✅ Lightweight (only ~30 packages)
-- ✅ Platform-agnostic (works on any OS)
+Railway uses `backend/Procfile` (`python migrate.py && gunicorn ...`) and `backend/railway.toml`.
+See [docs/railway-deployment.md](../docs/railway-deployment.md).

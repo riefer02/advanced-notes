@@ -1,10 +1,11 @@
 # Chisos
 
-**Production-ready advanced notes application** with audio transcription using:
+**Production-ready audio-first notes application**:
 
-- **Frontend**: Vite + React + TypeScript + Tailwind CSS
-- **Backend**: Flask + OpenAI gpt-transcribe (API-based)
-- **Python tooling**: `uv` (fast package manager from Astral)
+- **Frontend**: Vite + React + TypeScript + Tailwind CSS + TanStack Query/Router
+- **Backend**: Flask + OpenAI (`gpt-transcribe` transcription, GPT-6 Luna categorization)
+- **Data**: SQLite with FTS5 (dev) / PostgreSQL with FTS + vector search (prod)
+- **Auth**: Clerk JWT with per-user isolation
 - **Deployment-friendly**: No GPU required, pure API calls
 
 ---
@@ -13,9 +14,10 @@
 
 **Complete documentation**: See [`docs/`](./docs/) folder
 
-- **[Environment Setup](./docs/environment-setup.md)** - OpenAI API keys, configuration
+- **[Environment Setup](./docs/environment-setup.md)** - API keys, configuration
+- **[API Reference](./docs/api-reference.md)** - Complete endpoint documentation
 - **[Audio clips (S3)](./docs/audio-clips-s3.md)** - Optional audio storage + upload/playback flow
-- **[Technical Specification](./docs/semantic-organization-spec.md)** - AI categorization architecture  
+- **[Roadmap & Status](./docs/roadmap.md)** - What is done and what is next
 - **[Documentation Index](./docs/README.md)** - Full documentation catalog
 
 ## 🚀 Quick Start
@@ -56,10 +58,10 @@ Open a **new terminal**:
 cd frontend
 
 # Install Node dependencies
-npm install
+pnpm install
 
 # Start Vite dev server on http://localhost:5173
-npm run dev
+pnpm run dev
 ```
 
 Visit **http://localhost:5173** and record or upload audio (MP3, WAV, WebM, M4A, etc.) to see the transcription.
@@ -121,16 +123,16 @@ chisos/
    - Structured JSON outputs for reliability
 
 3. **Storage** (`app/services/storage/`):
-   - **SQLite** database with FTS5 full-text search
-   - Database-only storage (no file system)
+   - **SQLite** for local dev, **PostgreSQL** in production
+   - Full-text search and vector embeddings for semantic retrieval
    - CRUD operations, folder hierarchy, tag management
    - Split into per-feature mixins (`notes.py`, `todos.py`, `meals.py`, `vinyl.py`, `sharing.py`, …)
 
 4. **REST API** (`app/routes/`):
-   - Endpoints for transcription, notes, folders, tags, search, and **Ask Notes**
+   - Endpoints for transcription, notes, todos, meals, vinyl, sharing, admin, and **Ask Notes**
    - Returns JSON responses with comprehensive metadata
 
-5. **CORS**: Enabled via `flask-cors` so Vite dev server (`:5173`) can call Flask (`:5001`)
+5. **CORS**: Enabled via `flask-cors` so the Vite dev server (`:5173`) can call Flask (`:5001`); production origins come from `FRONTEND_URL`
 
 ### Frontend (`frontend/`)
 
@@ -220,19 +222,19 @@ uv run flask run --host 0.0.0.0 --port 5001
 cd frontend
 
 # Install dependencies
-npm install
+pnpm install
 
 # Dev server (http://localhost:5173)
-npm run dev
+pnpm run dev
 
 # Production build
-npm run build
+pnpm run build
 
 # Preview production build
-npm run preview
+pnpm run preview
 
 # Lint
-npm run lint
+pnpm run lint
 ```
 
 ### Both (Optional Makefile)
@@ -246,13 +248,12 @@ make dev
 
 ## ☁️ Deployment Notes
 
-- **No GPU required**: Pure API-based transcription
-- **No model downloads**: Everything runs via OpenAI API
-- **Lightweight**: Only ~30 Python packages (vs 166 with local models)
-- **Platform-agnostic**: Works on any OS with Python 3.11+
-- **Easy scaling**: API handles all compute, just scale your Flask app
+- **Backend**: Railway via `backend/Procfile` — runs `migrate.py` then Gunicorn
+- **Frontend**: static `dist/` build served with the included `frontend/Caddyfile`
+- **Database**: PostgreSQL in production, SQLite for local development
+- **No GPU required**: pure API-based transcription, no model downloads
 
-Check API usage via the `meta.model` field in responses.
+See [Railway Deployment](./docs/railway-deployment.md) for the full setup.
 
 ---
 
@@ -290,9 +291,10 @@ Check API usage via the `meta.model` field in responses.
 **CORS errors**
 - Ensure backend is running on `:5001`
 - Check `frontend/.env.local` has `VITE_API_URL=http://localhost:5001`
+- In production, set `FRONTEND_URL` so the backend allows the deployed origin
 
 **Build errors**
-- Delete `node_modules/` and run `npm install` again
+- Delete `node_modules/` and run `pnpm install` again
 - Verify Node version: `node -v` (should be 20.19+ or 22.12+)
 
 **Audio recording/upload fails**
@@ -306,27 +308,21 @@ Check API usage via the `meta.model` field in responses.
 
 ### Backend
 
-- **CORS**: Restrict origins in production (edit `app/__init__.py`)
-- **File size limits**: Use the caps in `app/config.py` (`MAX_AUDIO_BYTES`, `MAX_IMAGE_BYTES`, `MAX_AVATAR_BYTES`) and read with a bounded `file.read(limit + 1)`
-- **Rate limiting**: Use `flask-limiter`
-- **Authentication**: Add API keys or OAuth
-- **Streaming**: Stream a completed upload with `stream=True` (SSE transcript events), or use the Realtime API with `gpt-live-transcribe` for live mic audio
-- **Deployment**: Use Gunicorn/uWSGI instead of Flask dev server
-  ```bash
-  uv add gunicorn
-  uv run gunicorn -w 4 -b 0.0.0.0:5001 wsgi:app
-  ```
+- **CORS**: Allowed origins are localhost plus `FRONTEND_URL` (see `app/__init__.py`)
+- **File size limits**: Enforced by `MAX_AUDIO_BYTES`, `MAX_IMAGE_BYTES`, and `MAX_AVATAR_BYTES` in `app/config.py`
+- **Rate limiting**: Sliding-window budgets in `app/services/rate_limit.py` plus usage quotas
+- **Authentication**: Clerk JWTs enforced by `@require_auth`; all queries are user-scoped
+- **Deployment**: Gunicorn via `backend/Procfile` (migrations run first)
 
 ### Frontend
 
 - **Build for production**:
   ```bash
-  npm run build
+  pnpm run build
   # Output in frontend/dist/
   ```
-- **Environment variables**: Set `VITE_API_URL` to production backend URL
-- **Static hosting**: Deploy `dist/` to Vercel, Netlify, or Cloudflare Pages
-- **API proxy**: Configure Vite proxy in production or use Nginx
+- **Environment variables**: Set `VITE_API_URL` and `VITE_CLERK_PUBLISHABLE_KEY`
+- **Static hosting**: Serve `dist/` behind the `frontend/Caddyfile`
 
 ### Transcription
 
@@ -359,29 +355,32 @@ Check API usage via the `meta.model` field in responses.
 - ✅ Vite frontend with Tailwind for recording/uploading audio
 - ✅ OpenAI API transcription (gpt-transcribe)
 - ✅ AI-powered categorization (GPT-6 Luna)
-- ✅ Generated note titles and summaries
+- ✅ Generated note titles and summaries, with revisions and restore
 - ✅ Editable notes with source-audio playback
-- ✅ Transcription language and keyword hints
-- ✅ SQLite database storage with FTS5 search
-- ✅ 11 REST API endpoints for full CRUD
+- ✅ Typed notes, todos, meals, and vinyl library
+- ✅ Clerk authentication with per-user data isolation
+- ✅ Sharing: friends, shared vinyl libraries, collaborative meal calendars
+- ✅ SQLite (dev) / PostgreSQL (prod) with FTS and vector search
+- ✅ REST API covering notes, folders, tags, search, todos, meals, vinyl, sharing, and admin
 - ✅ Split-pane layout with folder navigation
-- ✅ TanStack Query for state management
+- ✅ TanStack Query + TanStack Router
 - ✅ Keyboard navigation and accessibility
-- ✅ CORS configured for local dev
+- ✅ CORS configured for local and deployed origins
 - ✅ Deployment-ready (no GPU required)
 
 ---
 
 ## 🚧 Future Enhancements
 
+Tracked with exit criteria in the [roadmap](./docs/roadmap.md):
+
+- [ ] Backups and a tested restore drill
+- [ ] External uptime monitoring and error reporting (Sentry)
 - [ ] Realtime transcription with WebSocket (`gpt-live-transcribe`)
 - [ ] Speaker diarization (deferred: no non-deprecated OpenAI model as of Oct 2026)
 - [ ] Bulk operations (move, delete, export)
-- [ ] Export as Markdown/PDF
-- [ ] User authentication & multi-user support
-- [ ] PostgreSQL for production
-- [ ] Docker Compose setup
-- [ ] CI/CD pipeline (GitHub Actions)
+- [ ] One-click export as Markdown/JSON/PDF
+- [ ] Mobile/quick capture everywhere
 - [ ] Real-time collaboration
 
 ---

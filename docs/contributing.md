@@ -366,8 +366,8 @@ Frontend (`frontend/.env.local`):
 
 See `docs/` for detailed guides:
 - `audio-clips-s3.md` - S3 storage patterns, upload flows, and best practices for adding new S3-backed features
-- `ai-service-implementation.md` - Adding AI/OpenAI-powered services
 - `authentication-flow-explained.md` / `clerk-authentication-setup.md` - Auth patterns
 - `deployment-lessons.md` / `railway-deployment.md` - Production deployment
-- `semantic-organization-spec.md` - Embeddings and semantic search
+- `roadmap.md` - Current status; `archive/semantic-organization-spec.md` - original semantic search spec (historical)
 - `sharing-architecture.md` - Sharing system, profiles, usernames, avatars, friendships
+- `archive/` - Historical implementation, router, and migration snapshots

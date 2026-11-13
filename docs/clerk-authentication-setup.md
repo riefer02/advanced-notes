@@ -32,7 +32,7 @@ VITE_API_URL=http://localhost:5001
 
 Already installed:
 ```bash
-npm install @clerk/clerk-react
+pnpm add @clerk/clerk-react
 ```
 
 ### 3. Routes Structure
@@ -245,7 +245,7 @@ In Clerk Dashboard → **Paths**:
 2. **Start Frontend**:
    ```bash
    cd frontend
-   npm run dev
+   pnpm run dev
    ```
 
 3. **Test Routes**:

@@ -488,6 +488,6 @@ print(f"Creating temp file with extension: {extension}")
 
 - [Authentication Flow](./authentication-flow-explained.md) - How JWT tokens work
 - [API Reference](./api-reference.md) - Complete API documentation
-- [Semantic Organization](./semantic-organization-spec.md) - AI categorization details
+- [Semantic Organization](./archive/semantic-organization-spec.md) - Original AI categorization spec (historical)
 - [Railway Deployment](./railway-deployment.md) - Production deployment guide
 

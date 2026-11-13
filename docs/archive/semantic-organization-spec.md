@@ -425,9 +425,9 @@ VITE_API_URL=http://localhost:5001
 
 ## 📖 **Documentation**
 
-- **[API Reference](./api-reference.md)** - Complete REST API documentation
-- **[Environment Setup](./environment-setup.md)** - OpenAI API key configuration
-- **[Agent Instructions](../AGENTS.md)** - Stack, conventions, and verification checklist
+- **[API Reference](../api-reference.md)** - Complete REST API documentation
+- **[Environment Setup](../environment-setup.md)** - OpenAI API key configuration
+- **[Agent Instructions](../../AGENTS.md)** - Stack, conventions, and verification checklist
 
 ---
 

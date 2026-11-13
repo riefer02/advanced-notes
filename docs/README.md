@@ -7,24 +7,31 @@ Complete documentation for the Chisos advanced notes project.
 ## 📚 Table of Contents
 
 ### Getting Started
-- **[Environment Setup](./environment-setup.md)** - OpenAI API keys, environment variables, cost estimates
+- **[Environment Setup](./environment-setup.md)** - API keys, environment variables, cost estimates
 - **[Main README](../README.md)** - Project overview, quick start, installation
+- **[Agent Instructions](../AGENTS.md)** - Stack, auth, storage patterns, and verification checklist
 
-### Deployment
-- **[Railway Deployment Guide](./railway-deployment.md)** - Production deployment on Railway (architecture, environment variables, monitoring)
-- **[Deployment Lessons](./deployment-lessons.md)** - Critical learnings from production deployments (migrations, environment variables)
-
-### Operations & Planning
-- **[Improvement Roadmap](./roadmap.md)** - What is done, what is next, and when (honest status + exit criteria)
-- **[Incident Runbook](./incident-runbook.md)** - Five-minute triage and recovery playbook for the administrator
-
-### Technical Specifications
-- **[Semantic Organization Spec](./semantic-organization-spec.md)** - AI-powered note categorization architecture
+### Architecture & Features
 - **[REST API Reference](./api-reference.md)** - Complete API endpoint documentation
+- **[Roadmap & Status](./roadmap.md)** - What is done, what is next, and when
+- **[Sharing Architecture](./sharing-architecture.md)** - Profiles, friendships, and resource sharing
+- **[Audio Recording System](./audio-recording-system.md)** - Browser recording, transcription, and playback
+- **[S3 Storage Patterns](./audio-clips-s3.md)** - Audio clips, avatars, and vinyl images in S3
+- **[Authentication Flow](./authentication-flow-explained.md)** - How Clerk JWTs reach the backend
+- **[Clerk Setup](./clerk-authentication-setup.md)** - Initial Clerk configuration
+- **[SES Notifications](./ses-notifications.md)** - Admin email notifications and SNS webhooks
 
-### Development Guides
+### Development
 - **[Contributing Guide](./contributing.md)** - Conventions, commands, code organization, debugging, and CI details
-- **[Agent Instructions](../AGENTS.md)** - Stack, auth, storage patterns, and verification checklist for AI agents
+- **[Glossary](../GLOSSARY.md)** - Project-specific terms (notes, folders, tags, sharing, services)
+
+### Deployment & Operations
+- **[Railway Deployment Guide](./railway-deployment.md)** - Production deployment (architecture, environment variables, monitoring)
+- **[Deployment Lessons](./deployment-lessons.md)** - Critical learnings (migrations, environment variables)
+- **[Incident Runbook](./incident-runbook.md)** - Five-minute triage and recovery playbook
+
+### Archive
+- **[Archived Docs](./archive/README.md)** - Historical implementation and migration snapshots, kept for context only
 
 ---
 
@@ -35,20 +42,20 @@ Complete documentation for the Chisos advanced notes project.
 1. Read [Main README](../README.md) for project overview
 2. Follow [Environment Setup](./environment-setup.md) to configure API keys
 3. Review [Agent Instructions](../AGENTS.md) for conventions and patterns
-4. Check [Development Workflow](./contributing.md) for daily development
+4. Check [Contributing Guide](./contributing.md) for daily development
 
 ### For Contributors
 
 - **Coding Standards**: See [Agent Instructions](../AGENTS.md)
 - **Git Workflow**: Documented in [contributing.md](./contributing.md)
-- **Architecture**: See [semantic-organization-spec.md](./semantic-organization-spec.md)
+- **Architecture**: See [roadmap.md](./roadmap.md) and [api-reference.md](./api-reference.md)
 
 ### For Operators
 
 - **Environment Setup**: [environment-setup.md](./environment-setup.md)
 - **Incident Response**: [incident-runbook.md](./incident-runbook.md)
 - **Roadmap & Status**: [roadmap.md](./roadmap.md)
-- **API Configuration**: See environment setup guide
+- **Deployment**: [railway-deployment.md](./railway-deployment.md)
 - **Troubleshooting**: Available in each guide
 
 ---
@@ -67,10 +74,12 @@ Complete documentation for the Chisos advanced notes project.
 
 ```
 docs/
-├── README.md                        # This file (index)
-├── environment-setup.md             # Environment variables, API keys
-├── semantic-organization-spec.md    # Technical specification
-└── [future-docs].md                 # Additional documentation
+├── README.md                    # This file (index)
+├── environment-setup.md         # Environment variables, API keys
+├── api-reference.md             # REST API reference
+├── roadmap.md                   # Current status and next work
+├── ...                          # Feature, deployment, and ops guides
+└── archive/                     # Historical snapshots (not current)
 ```
 
 ### Writing Style
@@ -83,34 +92,6 @@ docs/
 
 ---
 
-## 🔍 Document Summaries
-
-### Environment Setup
-**Purpose**: Configure OpenAI API keys and environment variables  
-**Audience**: Developers, DevOps  
-**Topics**: API key generation, costs, security, troubleshooting  
-**Est. Time**: 10 minutes
-
-### Semantic Organization Spec
-**Purpose**: Technical architecture for AI-powered note organization  
-**Audience**: Engineers, Architects  
-**Topics**: System design, AI categorization, storage layer, UI components  
-**Est. Time**: 30 minutes
-
-### REST API Reference
-**Purpose**: Complete documentation of all backend API endpoints  
-**Audience**: Frontend Developers, API Consumers  
-**Topics**: Endpoints, request/response formats, error handling, testing  
-**Est. Time**: 20 minutes
-
-### Agent Instructions
-**Purpose**: Conventions and guardrails for AI coding agents  
-**Audience**: AI/Developers  
-**Topics**: Stack, database isolation, authentication, verification checklist  
-**Est. Time**: 10 minutes
-
----
-
 ## 📅 Maintenance
 
 ### Keeping Documentation Up-to-Date
@@ -118,7 +99,7 @@ docs/
 - **Review quarterly** - Check for outdated information
 - **Update with code changes** - Keep docs in sync with implementation
 - **Version appropriately** - Note breaking changes
-- **Archive old docs** - Move deprecated docs to `docs/archive/`
+- **Archive old docs** - Move superseded snapshots to `docs/archive/` and note them there
 
 ### Documentation Checklist
 
@@ -138,20 +119,20 @@ Found an error or want to improve documentation?
 1. Create a branch: `git checkout -b docs/improve-setup-guide`
 2. Make your changes in `docs/` folder
 3. Update this index if adding new docs
-4. Commit with clear message: `docs: Clarify OpenAI API key setup`
+4. Commit with clear message: `docs: Clarify API key setup`
 5. Submit pull request
 
 ---
 
 ## 📞 Getting Help
 
-- **Technical Questions**: See [semantic-organization-spec.md](./semantic-organization-spec.md)
+- **Status & Direction**: See [roadmap.md](./roadmap.md)
+- **API Questions**: See [api-reference.md](./api-reference.md)
 - **Setup Issues**: Check [environment-setup.md](./environment-setup.md) troubleshooting
 - **Development Help**: Review [contributing.md](./contributing.md)
 - **Code Questions**: See [Agent Instructions](../AGENTS.md)
 
 ---
 
-**Last Updated**: November 10, 2025  
+**Last Updated**: November 13, 2026
 **Maintained By**: Development Team
-
