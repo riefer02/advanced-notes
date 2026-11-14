@@ -1,8 +1,10 @@
 import { Link } from '@tanstack/react-router'
+import { Check, Trash2 } from 'lucide-react'
 import type { Todo } from '../lib/api'
 import { useCompleteTodo, useDeleteTodo, useAcceptTodo } from '../hooks/useTodos'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface TodoItemProps {
   todo: Todo
@@ -34,85 +36,91 @@ export default function TodoItem({ todo, showNoteLink = true }: TodoItemProps) {
 
   return (
     <div
-      className={`flex items-start gap-3 p-4 bg-white rounded-lg border ${
+      className={`group flex items-start gap-2.5 rounded-xl border px-3 py-2.5 transition-colors duration-150 ${
         isSuggested
-          ? 'border-amber-200 bg-amber-50'
+          ? 'border-warning/25 bg-warning-soft/50'
           : isCompleted
-            ? 'border-gray-200 bg-gray-50'
-            : 'border-gray-200'
+            ? 'border-line bg-surface-muted/40'
+            : 'border-line bg-surface hover:border-line-strong'
       }`}
     >
-      {/* Checkbox */}
       <button
         onClick={handleComplete}
         disabled={completeTodo.isPending || acceptTodo.isPending || isCompleted}
-        className={`shrink-0 w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center transition-colors ${
+        aria-label={isCompleted ? 'Completed' : 'Mark complete'}
+        className={`focus-visible:ring-ring relative mt-0.5 grid size-4.5 shrink-0 place-items-center rounded-full border transition-all after:absolute after:-inset-1 after:content-[''] focus-visible:ring-2 focus-visible:outline-none ${
           isCompleted
-            ? 'bg-green-500 border-green-500 text-white cursor-default'
+            ? 'border-positive bg-positive text-background cursor-default'
             : isSuggested
-              ? 'border-amber-400 hover:border-amber-500 hover:bg-amber-50'
-              : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'
+              ? 'border-warning/50 hover:border-warning hover:bg-warning-soft/60'
+              : 'border-line-strong hover:border-brand hover:bg-brand-soft'
         }`}
       >
-        {isCompleted && (
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
-        )}
+        {isCompleted && <Check className="size-3" strokeWidth={3} />}
       </button>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <p className={`text-sm ${isCompleted ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+      <div className="min-w-0 flex-1">
+        <p
+          className={`text-[13px] leading-5 ${
+            isCompleted ? 'text-ink-subtle line-through' : 'text-ink'
+          }`}
+        >
           {todo.title}
         </p>
-        {todo.description && <p className="text-xs text-gray-500 mt-1">{todo.description}</p>}
-        <div className="flex items-center gap-2 mt-2 text-xs">
-          {isSuggested && <Badge variant="warning">Suggested</Badge>}
+        {todo.description && (
+          <p className="text-ink-subtle mt-0.5 line-clamp-1 text-[11px] leading-4">
+            {todo.description}
+          </p>
+        )}
+        <div className="text-ink-subtle mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+          {isSuggested && (
+            <Badge variant="warning" className="h-4 px-1.5 text-[10px] leading-none">
+              Suggested
+            </Badge>
+          )}
           {showNoteLink && todo.note_id ? (
             <Link
               to="/notes"
               search={{ note: todo.note_id }}
-              className="text-blue-600 hover:underline"
+              className="text-brand hover:text-brand/80 font-medium transition-colors"
             >
-              View source note
+              Source note
             </Link>
           ) : !todo.note_id ? (
-            <span className="text-gray-400">Manual</span>
+            <span>Manual</span>
           ) : null}
           {todo.confidence !== null && (
-            <span className="text-gray-400">{Math.round(todo.confidence * 100)}% confidence</span>
+            <>
+              <span aria-hidden className="bg-line-strong size-0.5 rounded-full" />
+              <span className="tabular-nums">{Math.round(todo.confidence * 100)}% confidence</span>
+            </>
           )}
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="shrink-0">
+      <div className="flex shrink-0 items-center gap-1">
         {isSuggested && (
           <Button
-            size="sm"
-            className="mr-2"
+            size="xs"
             onClick={() => acceptTodo.mutate(todo.id)}
             disabled={acceptTodo.isPending}
           >
             Accept
           </Button>
         )}
-        <button
-          onClick={handleDelete}
-          disabled={deleteTodo.isPending}
-          className="text-gray-400 hover:text-red-500 transition-colors p-1 disabled:opacity-50"
-          title="Delete todo"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-            />
-          </svg>
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handleDelete}
+              disabled={deleteTodo.isPending}
+              className="text-ink-subtle hover:bg-destructive/10 hover:text-destructive focus-visible:ring-ring grid size-7 place-items-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:transition-opacity [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+              aria-label="Delete todo"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Delete todo</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   )

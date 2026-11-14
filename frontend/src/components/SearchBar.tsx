@@ -34,7 +34,7 @@ const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
         <div className="relative">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
             <svg
-              className={`h-5 w-5 transition-colors ${value ? 'text-blue-600' : 'text-gray-400'}`}
+              className={`h-5 w-5 transition-colors ${value ? 'text-brand' : 'text-ink-subtle'}`}
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -55,17 +55,17 @@ const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder="Search notes... (press / to focus)"
-            className={`block w-full rounded-lg border bg-white py-2.5 pl-10 pr-10 text-sm placeholder-gray-500 transition-colors focus:outline-hidden focus:ring-2 ${
+            className={`block w-full rounded-lg border bg-surface py-2.5 pl-10 pr-10 text-sm placeholder:text-ink-subtle transition-colors focus:outline-hidden focus:ring-2 ${
               value
-                ? 'border-blue-300 focus:border-blue-500 focus:ring-blue-200'
-                : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
+                ? 'border-brand/30 focus:border-brand focus:ring-ring/40'
+                : 'border-line-strong focus:border-brand focus:ring-ring/40'
             }`}
             aria-label="Search notes by content, title, or tags"
           />
           {value && (
             <button
               onClick={onClear}
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-red-600 transition-colors"
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-ink-subtle hover:text-destructive transition-colors"
               aria-label="Clear search"
               title="Clear search (or press Esc)"
             >
@@ -82,7 +82,7 @@ const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
         </div>
         {value && (
           <div className="mt-2 flex items-center gap-2">
-            <div className="flex items-center gap-1 text-xs text-blue-600">
+            <div className="flex items-center gap-1 text-xs text-brand">
               <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fillRule="evenodd"
@@ -92,10 +92,10 @@ const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
               </svg>
               <span>Searching across all notes</span>
             </div>
-            <span className="text-gray-300">•</span>
-            <p className="text-xs text-gray-500">
+            <span className="text-line-strong">•</span>
+            <p className="text-xs text-ink-subtle">
               Press{' '}
-              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-sm">
+              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-ink bg-surface-muted border border-line rounded-sm">
                 Esc
               </kbd>{' '}
               to clear

@@ -4,6 +4,7 @@ import { useVinylRecords, useVinylStats } from '../hooks/useVinyl'
 import type { VinylRecord } from '../lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PageHeader } from '@/components/ui/page-header'
 import {
   Select,
   SelectContent,
@@ -57,39 +58,37 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord, owner }: Vin
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Vinyl Collection</h2>
-          {stats && (
-            <p className="text-sm text-gray-500 mt-0.5">
-              {stats.total_records} records, {stats.total_artists} artists
-            </p>
-          )}
-        </div>
-        {!isSharedView && (
-          <div className="flex items-center gap-2">
-            <Link
-              to="/friends"
-              search={{ tab: 'shares' }}
-              className="inline-flex items-center justify-center font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:ring-blue-500 px-4 py-2 text-sm rounded-lg"
-            >
-              Share
-            </Link>
-            <Button onClick={onAddRecord}>
-              <svg
-                className="w-4 h-4 mr-1.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              Add Record
-            </Button>
-          </div>
-        )}
-      </div>
+      <PageHeader
+        title="Vinyl Collection"
+        description={
+          stats
+            ? `${stats.total_records} records · ${stats.total_artists} artists`
+            : 'Your records, catalogued.'
+        }
+        actions={
+          !isSharedView && (
+            <>
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/friends" search={{ tab: 'shares' }}>
+                  Share
+                </Link>
+              </Button>
+              <Button size="sm" onClick={onAddRecord}>
+                <svg
+                  className="size-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Add record
+              </Button>
+            </>
+          )
+        }
+      />
 
       {/* Search + Filters */}
       <div className="space-y-3">
@@ -98,6 +97,7 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord, owner }: Vin
           placeholder="Search artist, album, label..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          aria-label="Search vinyl collection"
         />
 
         <div className="flex flex-wrap gap-2">
@@ -181,7 +181,7 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord, owner }: Vin
                 setDecade(undefined)
                 setFormat(undefined)
               }}
-              className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700"
+              className="text-ink-subtle hover:text-ink px-2 py-1.5 text-xs transition-colors"
             >
               Clear filters
             </button>
@@ -190,23 +190,25 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord, owner }: Vin
       </div>
 
       {/* Loading */}
-      {isLoading && <div className="text-center py-12 text-gray-500">Loading collection...</div>}
+      {isLoading && (
+        <div className="text-ink-subtle py-12 text-center text-sm">Loading collection…</div>
+      )}
 
       {/* Error */}
       {error && (
-        <div className="text-center py-12 text-red-500">
+        <div className="text-destructive py-12 text-center text-sm">
           Failed to load collection: {error.message}
         </div>
       )}
 
       {/* Empty State */}
       {!isLoading && !error && records.length === 0 && (
-        <div className="text-center py-16">
+        <div className="py-16 text-center">
           <div className="text-4xl mb-3">{hasFilters ? '🔍' : '💿'}</div>
-          <p className="text-gray-600 font-medium">
+          <p className="text-ink text-sm font-medium">
             {hasFilters ? 'No records match your filters' : 'No records yet'}
           </p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-ink-subtle mt-1 text-[13px]">
             {hasFilters
               ? 'Try adjusting your search or filters'
               : 'Add your first vinyl record to get started'}
@@ -221,7 +223,7 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord, owner }: Vin
 
       {/* Album Grid */}
       {records.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {records.map((record) => (
             <RecordCard key={record.id} record={record} onClick={() => onSelectRecord(record.id)} />
           ))}
@@ -243,30 +245,40 @@ function RecordCard({ record, onClick }: { record: VinylRecord; onClick: () => v
     <button
       type="button"
       onClick={onClick}
-      className="text-left group rounded-lg overflow-hidden border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all bg-white"
+      className="group border-line bg-surface hover:border-line-strong hover:shadow-lift focus-visible:ring-ring overflow-hidden rounded-xl border text-left transition-[border-color,box-shadow,transform] duration-150 focus-visible:ring-2 focus-visible:outline-none hover:-translate-y-0.5"
     >
       {/* Cover image or placeholder */}
-      <div className="aspect-square bg-linear-to-br from-gray-100 to-gray-200 flex items-center justify-center group-hover:from-blue-50 group-hover:to-blue-100 transition-colors overflow-hidden">
+      <div className="bg-surface-sunken relative flex aspect-square items-center justify-center overflow-hidden">
         {record.cover_image_url ? (
           <img
             src={record.cover_image_url}
             alt={`${record.album_title} cover`}
-            className="w-full h-full object-cover"
+            className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
           />
         ) : (
-          <span className="text-3xl font-bold text-gray-400 group-hover:text-blue-400 transition-colors">
-            {initials}
+          <span className="text-line-strong text-2xl font-semibold tracking-tight">{initials}</span>
+        )}
+        {record.condition && (
+          <span className="bg-surface/90 text-ink-muted absolute top-1.5 right-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium backdrop-blur-sm">
+            {record.condition}
           </span>
         )}
       </div>
 
       {/* Info */}
-      <div className="p-3">
-        <p className="text-sm font-medium text-gray-900 truncate">{record.album_title}</p>
-        <p className="text-xs text-gray-500 truncate">{record.artist}</p>
-        {record.release_year && (
-          <p className="text-xs text-gray-400 mt-0.5">{record.release_year}</p>
-        )}
+      <div className="px-2.5 py-2">
+        <p className="text-ink truncate text-[13px] leading-5 font-medium tracking-[-0.01em]">
+          {record.album_title}
+        </p>
+        <p className="text-ink-subtle mt-0.5 flex items-center gap-1.5 truncate text-[11px] leading-4">
+          <span className="truncate">{record.artist}</span>
+          {record.release_year && (
+            <>
+              <span aria-hidden className="bg-line-strong size-0.5 shrink-0 rounded-full" />
+              <span className="tabular-nums">{record.release_year}</span>
+            </>
+          )}
+        </p>
       </div>
     </button>
   )

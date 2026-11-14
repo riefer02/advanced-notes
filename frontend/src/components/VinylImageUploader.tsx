@@ -81,7 +81,7 @@ export default function VinylImageUploader({
         onClick={() => !isDisabled && fileInputRef.current?.click()}
         className={`
           relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
-          ${isDragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
+          ${isDragOver ? 'border-brand bg-brand-soft' : 'border-line-strong hover:border-line-strong'}
           ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
         `}
       >
@@ -98,7 +98,7 @@ export default function VinylImageUploader({
         {isCompressing ? (
           <>
             <svg
-              className="mx-auto h-10 w-10 text-blue-500 animate-spin"
+              className="mx-auto h-10 w-10 text-brand animate-spin"
               fill="none"
               viewBox="0 0 24 24"
             >
@@ -116,12 +116,12 @@ export default function VinylImageUploader({
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
               />
             </svg>
-            <p className="mt-2 text-sm font-medium text-blue-600">Compressing photos...</p>
+            <p className="mt-2 text-sm font-medium text-brand">Compressing photos...</p>
           </>
         ) : (
           <>
             <svg
-              className="mx-auto h-10 w-10 text-gray-400"
+              className="mx-auto h-10 w-10 text-ink-subtle"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -139,13 +139,13 @@ export default function VinylImageUploader({
               />
             </svg>
 
-            <p className="mt-2 text-sm font-medium text-gray-700">
+            <p className="mt-2 text-sm font-medium text-ink">
               {isDragOver ? 'Drop photos here' : 'Drag photos here or tap to upload'}
             </p>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-ink-subtle">
               Front cover, back cover, center label, inner sleeve
             </p>
-            <p className="mt-0.5 text-xs text-gray-400">
+            <p className="mt-0.5 text-xs text-ink-subtle">
               {images.length}/6 photos &middot; JPG, PNG, WebP
             </p>
           </>
@@ -158,7 +158,7 @@ export default function VinylImageUploader({
           {images.map((img, i) => (
             <div
               key={i}
-              className="relative group aspect-square rounded-lg overflow-hidden bg-gray-100"
+              className="relative group aspect-square rounded-lg overflow-hidden bg-surface-muted"
             >
               <img
                 src={img.preview}
@@ -172,7 +172,7 @@ export default function VinylImageUploader({
                     e.stopPropagation()
                     removeImage(i)
                   }}
-                  className="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute top-1 right-1 w-6 h-6 bg-scrim text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   &times;
                 </button>

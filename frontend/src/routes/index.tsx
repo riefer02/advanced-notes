@@ -23,13 +23,13 @@ function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50">
+    <div className="from-brand-soft/70 via-background to-domain-vinyl/10 min-h-screen bg-linear-to-br">
       {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-xs sticky top-0 z-10">
+      <header className="border-line bg-surface/80 sticky top-0 z-10 border-b backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex h-14 items-center justify-between">
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
+              <h1 className="from-brand to-domain-vinyl flex items-center gap-2 bg-linear-to-r bg-clip-text text-2xl font-bold tracking-[-0.02em] text-transparent">
                 Chisos
               </h1>
             </div>
@@ -49,24 +49,21 @@ function LandingPage() {
         {/* Hero Section */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="text-center space-y-8">
-            <h2 className="text-5xl md:text-6xl font-bold text-gray-900 leading-tight">
+            <h2 className="text-ink text-5xl leading-tight font-bold tracking-[-0.03em] md:text-6xl">
               Your Life,
-              <span className="block bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="from-brand to-domain-vinyl block bg-linear-to-r bg-clip-text text-transparent">
                 Intelligently Organized
               </span>
             </h2>
 
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <p className="text-ink-muted mx-auto max-w-2xl text-xl leading-relaxed">
               Voice notes, meal tracking, task management, and a vinyl collection — all powered by
               AI. Speak it, snap it, or type it. Chisos handles the rest.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-8">
               <Link to="/sign-up/$">
-                <Button
-                  size="lg"
-                  className="text-lg px-8 py-4 h-auto bg-linear-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl"
-                >
+                <Button size="lg" className="h-auto px-8 py-4 text-lg shadow-lg hover:shadow-xl">
                   Get Started Free
                 </Button>
               </Link>
@@ -80,11 +77,13 @@ function LandingPage() {
         </section>
 
         {/* Core Features */}
-        <section className="bg-white py-20">
+        <section className="bg-surface border-line border-y py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
-              <h3 className="text-3xl font-bold text-gray-900">Everything in one place</h3>
-              <p className="text-gray-600 mt-3 max-w-xl mx-auto">
+              <h3 className="text-ink text-3xl font-bold tracking-[-0.025em]">
+                Everything in one place
+              </h3>
+              <p className="text-ink-muted mx-auto mt-3 max-w-xl">
                 Six tools that work together to keep your life organized — no app-switching
                 required.
               </p>
@@ -230,39 +229,39 @@ function LandingPage() {
         <section className="py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
-              <h3 className="text-3xl font-bold text-gray-900">Simple to use</h3>
-              <p className="text-gray-600 mt-3">Three steps to an organized life.</p>
+              <h3 className="text-ink text-3xl font-bold tracking-[-0.025em]">Simple to use</h3>
+              <p className="text-ink-muted mt-3">Three steps to an organized life.</p>
             </div>
 
             <div className="grid md:grid-cols-3 gap-12 max-w-4xl mx-auto">
               <div className="text-center">
-                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+                <div className="bg-brand-soft text-brand mx-auto mb-4 flex size-12 items-center justify-center rounded-full text-xl font-bold">
                   1
                 </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Capture</h4>
-                <p className="text-gray-600 text-sm">
+                <h4 className="text-ink mb-2 font-semibold">Capture</h4>
+                <p className="text-ink-muted text-sm">
                   Record a voice note, snap a photo of your vinyl, or speak your meal. Works on
                   desktop and mobile.
                 </p>
               </div>
 
               <div className="text-center">
-                <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+                <div className="bg-domain-vinyl/10 text-domain-vinyl mx-auto mb-4 flex size-12 items-center justify-center rounded-full text-xl font-bold">
                   2
                 </div>
-                <h4 className="font-semibold text-gray-900 mb-2">AI Organizes</h4>
-                <p className="text-gray-600 text-sm">
+                <h4 className="text-ink mb-2 font-semibold">AI Organizes</h4>
+                <p className="text-ink-muted text-sm">
                   Chisos transcribes, categorizes, extracts tasks, and files everything
                   automatically. No manual sorting.
                 </p>
               </div>
 
               <div className="text-center">
-                <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+                <div className="bg-positive-soft text-positive mx-auto mb-4 flex size-12 items-center justify-center rounded-full text-xl font-bold">
                   3
                 </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Find Anything</h4>
-                <p className="text-gray-600 text-sm">
+                <h4 className="text-ink mb-2 font-semibold">Find Anything</h4>
+                <p className="text-ink-muted text-sm">
                   Ask questions in plain English, browse summaries, or search across everything
                   you've captured.
                 </p>
@@ -272,14 +271,16 @@ function LandingPage() {
         </section>
 
         {/* CTA */}
-        <section className="bg-linear-to-r from-blue-600 to-purple-600 py-16">
+        <section className="brand-gradient py-16">
           <div className="max-w-3xl mx-auto px-4 text-center">
-            <h3 className="text-3xl font-bold text-white mb-4">Ready to get organized?</h3>
-            <p className="text-blue-100 mb-8">Free to start. No credit card required.</p>
+            <h3 className="mb-4 text-3xl font-bold tracking-[-0.025em] text-white">
+              Ready to get organized?
+            </h3>
+            <p className="mb-8 text-white/90">Free to start. No credit card required.</p>
             <Link to="/sign-up/$">
               <Button
                 size="lg"
-                className="text-lg px-8 py-4 h-auto bg-white text-blue-600 hover:bg-white/90 shadow-lg hover:shadow-xl"
+                className="text-brand-solid h-auto bg-white px-8 py-4 text-lg shadow-lg hover:bg-white/90 hover:shadow-xl"
               >
                 Get Started Free
               </Button>
@@ -288,8 +289,8 @@ function LandingPage() {
         </section>
 
         {/* Footer */}
-        <footer className="bg-gray-50 border-t py-8">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-gray-500">
+        <footer className="bg-surface-muted border-line border-t py-8">
+          <div className="text-ink-subtle mx-auto max-w-7xl px-4 text-center text-sm sm:px-6 lg:px-8">
             Chisos
           </div>
         </footer>
@@ -298,13 +299,13 @@ function LandingPage() {
   )
 }
 
-const COLOR_MAP: Record<string, { bg: string; text: string; icon: string }> = {
-  blue: { bg: 'bg-blue-50', text: 'text-blue-900', icon: 'text-blue-600' },
-  purple: { bg: 'bg-purple-50', text: 'text-purple-900', icon: 'text-purple-600' },
-  green: { bg: 'bg-green-50', text: 'text-green-900', icon: 'text-green-600' },
-  orange: { bg: 'bg-orange-50', text: 'text-orange-900', icon: 'text-orange-600' },
-  rose: { bg: 'bg-rose-50', text: 'text-rose-900', icon: 'text-rose-600' },
-  teal: { bg: 'bg-teal-50', text: 'text-teal-900', icon: 'text-teal-600' },
+const COLOR_MAP: Record<string, { iconBg: string; icon: string }> = {
+  blue: { iconBg: 'bg-domain-notes/10', icon: 'text-domain-notes' },
+  purple: { iconBg: 'bg-domain-vinyl/10', icon: 'text-domain-vinyl' },
+  green: { iconBg: 'bg-positive-soft', icon: 'text-positive' },
+  orange: { iconBg: 'bg-domain-meals/10', icon: 'text-domain-meals' },
+  rose: { iconBg: 'bg-warning-soft', icon: 'text-warning' },
+  teal: { iconBg: 'bg-domain-tasks/10', icon: 'text-domain-tasks' },
 }
 
 function FeatureCard({
@@ -320,12 +321,14 @@ function FeatureCard({
 }) {
   const colors = COLOR_MAP[color] ?? COLOR_MAP.blue
   return (
-    <div
-      className={`${colors.bg} p-6 rounded-xl border border-transparent hover:border-gray-200 hover:shadow-md transition-all`}
-    >
-      <div className={`${colors.icon} mb-4`}>{icon}</div>
-      <h4 className={`text-lg font-semibold ${colors.text} mb-2`}>{title}</h4>
-      <p className="text-gray-600 text-sm leading-relaxed">{description}</p>
+    <div className="border-line bg-surface hover:border-line-strong hover:shadow-lift rounded-xl border p-5 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5">
+      <div
+        className={`${colors.iconBg} ${colors.icon} mb-3 grid size-9 place-items-center rounded-lg`}
+      >
+        {icon}
+      </div>
+      <h4 className="text-ink mb-1.5 text-base font-semibold tracking-[-0.015em]">{title}</h4>
+      <p className="text-ink-muted text-sm leading-relaxed">{description}</p>
     </div>
   )
 }

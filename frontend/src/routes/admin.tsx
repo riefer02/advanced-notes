@@ -1,10 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Activity, Bug, Inbox, Mail, RefreshCw, RotateCw, Send, Server } from 'lucide-react'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { DetailCard, DetailCardHeader, Disclosure } from '@/components/ui/detail'
+import { PageHeader } from '@/components/ui/page-header'
+import { StatCard } from '@/components/ui/stat-card'
 import {
   fetchOpsEvents,
   fetchOpsSummary,
@@ -90,7 +93,7 @@ export default function AdminPage() {
 
   if (forbidden) {
     return (
-      <div className="mx-auto max-w-3xl p-6 lg:p-10">
+      <div className="mx-auto max-w-3xl px-5 py-6 sm:px-8">
         <Alert variant="warning">
           <AlertTitle>Admin access required</AlertTitle>
           <AlertDescription>
@@ -109,125 +112,126 @@ export default function AdminPage() {
   const events = eventsQuery.data?.events ?? []
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6 lg:p-10">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Operations</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Live health for the administrator. Not linked in navigation.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void summaryQuery.refetch()
-              void reportsQuery.refetch()
-              void eventsQuery.refetch()
-            }}
-            loading={summaryQuery.isFetching}
-          >
-            Refresh
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => testAlertMutation.mutate()}
-            loading={testAlertMutation.isPending}
-          >
-            Send test alert
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => outboxRetryMutation.mutate()}
-            loading={outboxRetryMutation.isPending}
-            disabled={summary?.database.ok === false}
-          >
-            Retry email outbox
-          </Button>
-        </div>
-      </div>
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-5xl space-y-4 px-5 py-6 sm:px-8">
+        <PageHeader
+          title="Operations"
+          description="Live health for the administrator. Not linked in navigation."
+          actions={
+            <>
+              <Button
+                size="sm"
+                onClick={() => {
+                  void summaryQuery.refetch()
+                  void reportsQuery.refetch()
+                  void eventsQuery.refetch()
+                }}
+                loading={summaryQuery.isFetching}
+              >
+                <RefreshCw />
+                Refresh
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => testAlertMutation.mutate()}
+                loading={testAlertMutation.isPending}
+              >
+                <Send />
+                Test alert
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => outboxRetryMutation.mutate()}
+                loading={outboxRetryMutation.isPending}
+                disabled={summary?.database.ok === false}
+              >
+                <RotateCw />
+                Retry outbox
+              </Button>
+            </>
+          }
+        />
 
-      {summaryQuery.isError && !forbidden && (
-        <Alert variant="destructive">
-          <AlertTitle>Could not load operations summary</AlertTitle>
-          <AlertDescription>
-            {summaryQuery.error instanceof Error ? summaryQuery.error.message : 'Unknown error'}
-          </AlertDescription>
-        </Alert>
-      )}
+        {summaryQuery.isError && !forbidden && (
+          <Alert variant="destructive">
+            <AlertTitle>Could not load operations summary</AlertTitle>
+            <AlertDescription>
+              {summaryQuery.error instanceof Error ? summaryQuery.error.message : 'Unknown error'}
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {testAlertMutation.isSuccess && (
-        <Alert variant={testAlertMutation.data.queued ? 'success' : 'warning'}>
-          <AlertTitle>
-            {testAlertMutation.data.queued ? 'Test alert queued' : 'Test alert not queued'}
-          </AlertTitle>
-          <AlertDescription>
-            {testAlertMutation.data.queued
-              ? `Check the admin inbox (${testAlertMutation.data.recipients} recipient${
-                  testAlertMutation.data.recipients === 1 ? '' : 's'
-                }).`
-              : 'Email is not configured. Set SES credentials and ADMIN_EMAILS.'}
-          </AlertDescription>
-        </Alert>
-      )}
+        {testAlertMutation.isSuccess && (
+          <Alert variant={testAlertMutation.data.queued ? 'success' : 'warning'}>
+            <AlertTitle>
+              {testAlertMutation.data.queued ? 'Test alert queued' : 'Test alert not queued'}
+            </AlertTitle>
+            <AlertDescription>
+              {testAlertMutation.data.queued
+                ? `Check the admin inbox (${testAlertMutation.data.recipients} recipient${
+                    testAlertMutation.data.recipients === 1 ? '' : 's'
+                  }).`
+                : 'Email is not configured. Set SES credentials and ADMIN_EMAILS.'}
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {outboxRetryMutation.isSuccess && (
-        <Alert variant="success">
-          <AlertTitle>Outbox recovery requested</AlertTitle>
-          <AlertDescription>
-            {`Requeued ${outboxRetryMutation.data.requeued} failed email${
-              outboxRetryMutation.data.requeued === 1 ? '' : 's'
-            } and reclaimed ${outboxRetryMutation.data.reclaimed} stuck row${
-              outboxRetryMutation.data.reclaimed === 1 ? '' : 's'
-            }.`}
-          </AlertDescription>
-        </Alert>
-      )}
+        {outboxRetryMutation.isSuccess && (
+          <Alert variant="success">
+            <AlertTitle>Outbox recovery requested</AlertTitle>
+            <AlertDescription>
+              {`Requeued ${outboxRetryMutation.data.requeued} failed email${
+                outboxRetryMutation.data.requeued === 1 ? '' : 's'
+              } and reclaimed ${outboxRetryMutation.data.reclaimed} stuck row${
+                outboxRetryMutation.data.reclaimed === 1 ? '' : 's'
+              }.`}
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {(statusMutation.isError || testAlertMutation.isError || outboxRetryMutation.isError) && (
-        <Alert variant="destructive">
-          <AlertTitle>Admin action failed</AlertTitle>
-          <AlertDescription>
-            {(statusMutation.error || testAlertMutation.error || outboxRetryMutation.error)
-              ?.message || 'Please retry.'}
-          </AlertDescription>
-        </Alert>
-      )}
+        {(statusMutation.isError || testAlertMutation.isError || outboxRetryMutation.isError) && (
+          <Alert variant="destructive">
+            <AlertTitle>Admin action failed</AlertTitle>
+            <AlertDescription>
+              {(statusMutation.error || testAlertMutation.error || outboxRetryMutation.error)
+                ?.message || 'Please retry.'}
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {summary && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardDescription>Environment</CardDescription>
-              <CardTitle className="flex items-center gap-2">
-                {summary.environment}
+        {summary && (
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            <StatCard
+              interactive={false}
+              icon={Server}
+              accent="brand"
+              label="Environment"
+              value={summary.environment}
+              meta={summary.release || 'unknown release'}
+              badge={
                 <Badge variant={summary.database.ok ? 'success' : 'destructive'}>
                   {summary.database.ok ? 'DB healthy' : 'DB down'}
                 </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-gray-600">
-              Release: {summary.release || 'unknown'}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardDescription>Server errors</CardDescription>
-              <CardTitle>{summary.errors.last_24h} in 24h</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-gray-600">
-              {summary.errors.last_hour} in the last hour
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardDescription>Email worker</CardDescription>
-              <CardTitle className="flex items-center gap-2">
-                {formatAge(summary.worker.age_seconds)}
+              }
+            />
+            <StatCard
+              interactive={false}
+              icon={Bug}
+              accent="notes"
+              label="Server errors"
+              value={summary.errors.last_24h}
+              meta={`${summary.errors.last_hour} last hour`}
+            />
+            <StatCard
+              interactive={false}
+              icon={Activity}
+              accent="tasks"
+              label="Email worker"
+              value={formatAge(summary.worker.age_seconds)}
+              meta={`seen ${formatDate(summary.worker.last_seen_at)}`}
+              badge={
                 <Badge
                   variant={
                     summary.worker.age_seconds !== null &&
@@ -238,142 +242,143 @@ export default function AdminPage() {
                 >
                   {summary.worker.age_seconds === null ? 'missing' : 'heartbeat'}
                 </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-gray-600">
-              Last seen: {formatDate(summary.worker.last_seen_at)}
-            </CardContent>
-          </Card>
+              }
+            />
+            <StatCard
+              interactive={false}
+              icon={Mail}
+              accent="meals"
+              label="Email outbox"
+              value={outboxCounts?.pending ?? 0}
+              meta={`${outboxCounts?.failed ?? 0} failed · oldest ${formatAge(
+                outbox?.oldest_pending_age_seconds
+              )}`}
+            />
+            <StatCard
+              interactive={false}
+              icon={Inbox}
+              accent="vinyl"
+              label="Problem reports"
+              value={summary.problem_reports.open}
+              meta={`${summary.problem_reports.last_24h} in last 24h`}
+            />
+            <StatCard
+              interactive={false}
+              icon={Send}
+              accent="neutral"
+              label="Admin email"
+              value={summary.email.configured ? 'Configured' : 'Off'}
+              meta={`${summary.email.recipients} recipient${
+                summary.email.recipients === 1 ? '' : 's'
+              }`}
+            />
+          </div>
+        )}
 
-          <Card>
-            <CardHeader>
-              <CardDescription>Email outbox</CardDescription>
-              <CardTitle>
-                {outboxCounts?.pending ?? 0} pending · {outboxCounts?.failed ?? 0} failed
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-gray-600">
-              Oldest pending: {formatAge(outbox?.oldest_pending_age_seconds)}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardDescription>Problem reports</CardDescription>
-              <CardTitle>{summary.problem_reports.open} open</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-gray-600">
-              {summary.problem_reports.last_24h} in the last 24h
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardDescription>Admin email</CardDescription>
-              <CardTitle>{summary.email.configured ? 'Configured' : 'Not configured'}</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-gray-600">
-              {summary.email.recipients} recipient
-              {summary.email.recipients === 1 ? '' : 's'}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Top errors (24h)</CardTitle>
-          <CardDescription>Grouped by route, exception type, and 10-minute bucket.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {summary && (summary.errors.top_24h?.length ?? 0) > 0 ? (
-            <div className="divide-y">
-              {summary.errors.top_24h.map((item) => (
-                <div
-                  key={item.fingerprint}
-                  className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
-                >
-                  <div>
-                    <span className="font-medium text-gray-900">{item.error_type || 'Error'}</span>{' '}
-                    <span className="text-gray-500">on {item.route || 'unknown route'}</span>
+        <DetailCard>
+          <DetailCardHeader
+            icon={Bug}
+            title="Top errors · 24h"
+            subtitle="Grouped by route, exception type, and 10-minute bucket."
+          />
+          <div className="border-line border-t">
+            {summary && (summary.errors.top_24h?.length ?? 0) > 0 ? (
+              <div className="divide-line divide-y">
+                {summary.errors.top_24h.map((item) => (
+                  <div
+                    key={item.fingerprint}
+                    className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-[13px]"
+                  >
+                    <div className="min-w-0">
+                      <span className="text-ink font-medium">{item.error_type || 'Error'}</span>{' '}
+                      <span className="text-ink-subtle">on {item.route || 'unknown route'}</span>
+                    </div>
+                    <div className="text-ink-subtle text-[11px]">
+                      {item.count}× · last {formatDate(item.last_seen_at)}
+                    </div>
                   </div>
-                  <div className="text-gray-600">
-                    {item.count}× · last {formatDate(item.last_seen_at)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : summary && !summary.database.ok ? (
-            <p className="text-sm text-red-700">
-              Database is unreachable; error data may be incomplete.
-            </p>
-          ) : (
-            <p className="text-sm text-gray-600">No server errors recorded. Good.</p>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+              </div>
+            ) : (
+              <p className="text-ink-subtle px-4 py-4 text-[13px]">
+                {summary && !summary.database.ok
+                  ? 'Database is unreachable; error data may be incomplete.'
+                  : 'No server errors recorded. Good.'}
+              </p>
+            )}
+          </div>
+        </DetailCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Problem reports</CardTitle>
-          <CardDescription>
-            Reports are persisted before email, so they survive a broken mail path.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {reportsQuery.isLoading ? (
-            <p className="text-sm text-gray-600">Loading reports…</p>
-          ) : reportsQuery.isError ? (
-            <p className="text-sm text-red-600">Could not load reports.</p>
-          ) : reports.length === 0 ? (
-            <p className="text-sm text-gray-600">No reports.</p>
-          ) : (
-            <div className="space-y-3">
-              {reports.map((report) => (
+        <DetailCard>
+          <DetailCardHeader
+            icon={Inbox}
+            title="Problem reports"
+            subtitle="Persisted before email, so they survive a broken mail path."
+          />
+          <div className="border-line space-y-2 border-t p-3">
+            {reportsQuery.isLoading ? (
+              <p className="text-ink-subtle px-1 py-2 text-[13px]">Loading reports…</p>
+            ) : reportsQuery.isError ? (
+              <p className="text-destructive px-1 py-2 text-[13px]">Could not load reports.</p>
+            ) : reports.length === 0 ? (
+              <p className="text-ink-subtle px-1 py-2 text-[13px]">No reports.</p>
+            ) : (
+              reports.map((report) => (
                 <ReportRow
                   key={report.id}
                   report={report}
                   onStatus={(status) => statusMutation.mutate({ id: report.id, status })}
                   busy={statusMutation.isPending}
                 />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              ))
+            )}
+          </div>
+        </DetailCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent ops events</CardTitle>
-          <CardDescription>Newest 25 errors and degraded-dependency events.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {eventsQuery.isError ? (
-            <p className="text-sm text-red-600">Could not load ops events.</p>
-          ) : events.length === 0 ? (
-            <p className="text-sm text-gray-600">No events recorded.</p>
-          ) : (
-            <div className="divide-y">
-              {events.map((event) => (
-                <div key={event.id} className="py-2 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-medium text-gray-900">
-                      {event.status} {event.error_type || 'Error'}
-                    </span>
-                    <span className="text-gray-500">{formatDate(event.created_at)}</span>
-                  </div>
-                  <p className="text-gray-600">
-                    {event.method} {event.route || event.path || '—'}
-                  </p>
-                  {event.message && (
-                    <p className="mt-1 line-clamp-2 text-xs text-gray-500">{event.message}</p>
-                  )}
+        <DetailCard>
+          <DetailCardHeader
+            icon={Activity}
+            title="Recent ops events"
+            subtitle="Newest 25 errors and degraded-dependency events."
+          />
+          <div className="border-line border-t px-4 pb-3">
+            <Disclosure
+              summary="Show events"
+              hint={`${events.length} events`}
+              className="border-0 pt-3"
+            >
+              {eventsQuery.isError ? (
+                <p className="text-destructive text-[13px]">Could not load ops events.</p>
+              ) : events.length === 0 ? (
+                <p className="text-ink-subtle text-[13px]">No events recorded.</p>
+              ) : (
+                <div className="divide-line divide-y">
+                  {events.map((event) => (
+                    <div key={event.id} className="py-2.5 text-[13px]">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-ink font-medium">
+                          {event.status} {event.error_type || 'Error'}
+                        </span>
+                        <span className="text-ink-subtle text-[11px]">
+                          {formatDate(event.created_at)}
+                        </span>
+                      </div>
+                      <p className="text-ink-muted">
+                        {event.method} {event.route || event.path || '—'}
+                      </p>
+                      {event.message && (
+                        <p className="text-ink-subtle mt-1 line-clamp-2 text-[11px]">
+                          {event.message}
+                        </p>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              )}
+            </Disclosure>
+          </div>
+        </DetailCard>
+      </div>
     </div>
   )
 }
@@ -388,18 +393,18 @@ function ReportRow({
   busy: boolean
 }) {
   return (
-    <div className="rounded-lg border p-3">
+    <div className="border-line bg-surface-muted/40 rounded-lg border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Badge variant={reportVariant(report.status)}>{report.status}</Badge>
-          <span className="text-sm font-medium text-gray-900">{formatDate(report.created_at)}</span>
+          <span className="text-ink text-[13px] font-medium">{formatDate(report.created_at)}</span>
         </div>
-        <span className="text-xs text-gray-500">{report.page || 'unknown page'}</span>
+        <span className="text-ink-subtle text-[11px]">{report.page || 'unknown page'}</span>
       </div>
-      <p className="mt-2 whitespace-pre-wrap text-sm text-gray-800">
+      <p className="text-ink mt-2 text-[13px] whitespace-pre-wrap">
         {report.message || '(no message)'}
       </p>
-      <p className="mt-1 text-xs text-gray-500">
+      <p className="text-ink-subtle mt-1 text-[11px]">
         User: {report.user_id || 'anonymous'} · Notified: {formatDate(report.notified_at)}
       </p>
       {report.status !== 'resolved' && report.status !== 'ignored' && (

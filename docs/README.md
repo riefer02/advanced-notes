@@ -22,6 +22,7 @@ Complete documentation for the Chisos advanced notes project.
 - **[SES Notifications](./ses-notifications.md)** - Admin email notifications and SNS webhooks
 
 ### Development
+- **[Design System](./design-system.md)** - Tokens, detail-card primitives, density rules, light/dark themes, and the dev-only `/design` preview
 - **[Contributing Guide](./contributing.md)** - Conventions, commands, code organization, debugging, and CI details
 - **[Glossary](../GLOSSARY.md)** - Project-specific terms (notes, folders, tags, sharing, services)
 
@@ -134,5 +135,5 @@ Found an error or want to improve documentation?
 
 ---
 
-**Last Updated**: November 13, 2026
+**Last Updated**: November 14, 2026
 **Maintained By**: Development Team

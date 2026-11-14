@@ -6,6 +6,8 @@ import { ClerkProvider } from '@clerk/clerk-react'
 import './index.css'
 
 import { AuthTokenBridge } from './components/AuthTokenBridge'
+import { ThemeProvider } from './components/theme/ThemeProvider'
+import { TooltipProvider } from './components/ui/tooltip'
 
 // Import the generated route tree
 import { routeTree } from './routeTree.gen'
@@ -54,11 +56,15 @@ if (!rootElement.innerHTML) {
   root.render(
     <React.StrictMode>
       <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
-        <QueryClientProvider client={queryClient}>
-          <AuthTokenBridge>
-            <RouterProvider router={router} />
-          </AuthTokenBridge>
-        </QueryClientProvider>
+        <ThemeProvider>
+          <QueryClientProvider client={queryClient}>
+            <TooltipProvider>
+              <AuthTokenBridge>
+                <RouterProvider router={router} />
+              </AuthTokenBridge>
+            </TooltipProvider>
+          </QueryClientProvider>
+        </ThemeProvider>
       </ClerkProvider>
     </React.StrictMode>
   )

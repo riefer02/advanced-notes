@@ -12,14 +12,12 @@ const sizeClasses = {
 }
 
 const bgColors = [
-  'bg-blue-500',
-  'bg-green-500',
-  'bg-purple-500',
-  'bg-orange-500',
-  'bg-pink-500',
-  'bg-teal-500',
-  'bg-indigo-500',
-  'bg-rose-500',
+  'bg-brand/10 text-brand',
+  'bg-positive/10 text-positive',
+  'bg-domain-vinyl/10 text-domain-vinyl',
+  'bg-domain-meals/10 text-domain-meals',
+  'bg-domain-tasks/10 text-domain-tasks',
+  'bg-domain-notes/10 text-domain-notes',
 ]
 
 function getColorForName(name: string): string {
@@ -52,7 +50,7 @@ export default function UserAvatar({
 
   return (
     <div
-      className={`${sizeClass} ${bgColor} rounded-full flex items-center justify-center text-white font-medium shrink-0 ${className}`}
+      className={`${sizeClass} ${bgColor} rounded-full flex items-center justify-center font-medium shrink-0 ${className}`}
     >
       {initial}
     </div>

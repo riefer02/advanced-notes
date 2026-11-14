@@ -1,3 +1,4 @@
+import { CalendarCheck } from 'lucide-react'
 import type { Todo } from '../lib/api'
 import TodoItem from './TodoItem'
 
@@ -14,27 +15,15 @@ export default function TodoList({
 }: TodoListProps) {
   if (todos.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
-        <svg
-          className="mx-auto h-12 w-12 text-gray-300 mb-4"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-          />
-        </svg>
-        <p className="text-sm">{emptyMessage}</p>
+      <div className="border-line bg-surface-muted/30 rounded-xl border border-dashed px-4 py-8 text-center">
+        <CalendarCheck className="text-line-strong mx-auto size-6" aria-hidden />
+        <p className="text-ink-subtle mt-2 text-[13px]">{emptyMessage}</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-1.5">
       {todos.map((todo) => (
         <TodoItem key={todo.id} todo={todo} showNoteLink={showNoteLinks} />
       ))}

@@ -62,12 +62,7 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <svg
-          className="w-6 h-6 text-blue-600"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
+        <svg className="w-6 h-6 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -75,11 +70,11 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
             d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
           />
         </svg>
-        <h2 className="text-lg font-semibold text-gray-900">Record Meal</h2>
+        <h2 className="text-lg font-semibold text-ink">Record Meal</h2>
       </div>
 
       {/* Instructions */}
-      <p className="text-sm text-gray-600">
+      <p className="text-sm text-ink-muted">
         Describe what you ate. Example: &quot;For breakfast I had two scrambled eggs with toast and
         orange juice&quot;
       </p>
@@ -103,12 +98,8 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
             Start Recording
           </Button>
         ) : (
-          <Button
-            onClick={stopRecording}
-            size="lg"
-            className="w-full bg-gray-800 hover:bg-gray-900"
-          >
-            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2" />
+          <Button onClick={stopRecording} size="lg" className="w-full bg-ink hover:bg-ink">
+            <div className="w-3 h-3 bg-destructive rounded-full animate-pulse mr-2" />
             Stop Recording ({formatTime(recordingTime)})
           </Button>
         )}
@@ -131,7 +122,7 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
 
       {/* Processing State */}
       {transcribeMutation.isPending && (
-        <div className="flex items-center space-x-2 text-green-600 bg-green-50 rounded-lg p-4">
+        <div className="flex items-center space-x-2 text-positive bg-positive-soft rounded-lg p-4">
           <svg
             className="animate-spin h-5 w-5"
             xmlns="http://www.w3.org/2000/svg"
@@ -170,17 +161,17 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
 
       {/* Success Result */}
       {lastResult && lastResult.meal && (
-        <div className="rounded-xl bg-linear-to-br from-green-50 to-emerald-50 p-4 border-2 border-green-200 shadow-xs">
+        <div className="rounded-xl bg-linear-to-br from-positive-soft to-positive-soft/50 p-4 border-2 border-positive/25 shadow-xs">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <span className="text-xl">{MEAL_TYPE_ICONS[lastResult.meal.meal_type]}</span>
-              <h3 className="text-lg font-semibold text-green-900">
+              <h3 className="text-lg font-semibold text-positive">
                 {MEAL_TYPE_LABELS[lastResult.meal.meal_type]} Logged!
               </h3>
             </div>
             <button
               onClick={clearResult}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-ink-subtle hover:text-ink-muted transition-colors"
               aria-label="Clear result"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -195,23 +186,23 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
           </div>
 
           {/* Transcription */}
-          <div className="bg-white rounded-lg p-3 border border-green-200 mb-3">
-            <p className="text-sm text-gray-700 italic">&quot;{lastResult.text}&quot;</p>
+          <div className="bg-surface rounded-lg p-3 border border-positive/25 mb-3">
+            <p className="text-sm text-ink italic">&quot;{lastResult.text}&quot;</p>
           </div>
 
           {/* Food Items */}
           {lastResult.meal.items.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-green-800">Extracted Items:</h4>
+              <h4 className="text-sm font-medium text-positive">Extracted Items:</h4>
               <div className="flex flex-wrap gap-2">
                 {lastResult.meal.items.map((item) => (
                   <span
                     key={item.id}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-white rounded-full text-sm border border-green-200"
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-surface rounded-full text-sm border border-positive/25"
                   >
-                    <span className="text-gray-800">{item.name}</span>
+                    <span className="text-ink">{item.name}</span>
                     {item.portion && (
-                      <span className="text-gray-500 text-xs">({item.portion})</span>
+                      <span className="text-ink-subtle text-xs">({item.portion})</span>
                     )}
                   </span>
                 ))}
@@ -220,7 +211,7 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
           )}
 
           {/* Confidence */}
-          <div className="mt-3 flex items-center gap-2 text-xs text-green-700">
+          <div className="mt-3 flex items-center gap-2 text-xs text-positive">
             <span>Confidence:</span>
             <span className="font-medium">
               {Math.round((lastResult.extraction.confidence || 0) * 100)}%

@@ -8,7 +8,7 @@ import {
 import type { Friendship, UserProfile } from '../lib/api'
 import UserAvatar from './UserAvatar'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { DetailCard } from '@/components/ui/detail'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
 export default function FriendsList({ currentUserId }: { currentUserId: string }) {
@@ -22,13 +22,11 @@ export default function FriendsList({ currentUserId }: { currentUserId: string }
   const requests = requestsData?.requests ?? []
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Pending Requests */}
       {requests.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">
-            Pending Requests ({requests.length})
-          </h3>
+          <h3 className="section-label mb-2.5">Pending requests · {requests.length}</h3>
           <div className="space-y-2">
             {requests.map((req) => (
               <RequestCard
@@ -46,16 +44,16 @@ export default function FriendsList({ currentUserId }: { currentUserId: string }
 
       {/* Friends List */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-900 mb-3">
-          Friends {!loadingFriends && `(${friends.length})`}
-        </h3>
+        <h3 className="section-label mb-2.5">Friends{!loadingFriends && ` · ${friends.length}`}</h3>
 
         {loadingFriends || loadingRequests ? (
-          <div className="text-sm text-gray-500 py-4">Loading...</div>
+          <div className="text-ink-subtle rounded-xl border border-dashed border-line px-4 py-6 text-center text-[13px]">
+            Loading friends…
+          </div>
         ) : friends.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-sm text-gray-500">No friends yet</p>
-            <p className="text-xs text-gray-400 mt-1">Use the search above to find people</p>
+          <div className="border-line bg-surface-muted/30 rounded-xl border border-dashed px-4 py-8 text-center">
+            <p className="text-ink text-[13px] font-medium">No friends yet</p>
+            <p className="text-ink-subtle mt-1 text-xs">Use the search above to find people.</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -108,11 +106,11 @@ function RequestCard({
           size="sm"
         />
         <div className="min-w-0">
-          <p className="text-sm font-medium text-gray-900 truncate">
+          <p className="text-sm font-medium text-ink truncate">
             {profile?.display_name ?? 'Unknown user'}
           </p>
           {profile?.username && (
-            <p className="text-xs text-gray-500 truncate">@{profile.username}</p>
+            <p className="text-xs text-ink-subtle truncate">@{profile.username}</p>
           )}
         </div>
       </AlertDescription>
@@ -138,7 +136,7 @@ function FriendCard({
   isRemoving: boolean
 }) {
   return (
-    <Card className="flex items-center justify-between p-3">
+    <DetailCard className="flex items-center justify-between p-3">
       <div className="flex items-center gap-3 min-w-0">
         <UserAvatar
           avatarUrl={profile?.avatar_url}
@@ -146,13 +144,13 @@ function FriendCard({
           size="sm"
         />
         <div className="min-w-0">
-          <p className="text-sm font-medium text-gray-900 truncate">
+          <p className="text-sm font-medium text-ink truncate">
             {profile?.display_name ?? 'Unknown user'}
           </p>
           {profile?.username ? (
-            <p className="text-xs text-gray-500 truncate">@{profile.username}</p>
+            <p className="text-xs text-ink-subtle truncate">@{profile.username}</p>
           ) : (
-            profile?.bio && <p className="text-xs text-gray-500 truncate mt-0.5">{profile.bio}</p>
+            profile?.bio && <p className="text-xs text-ink-subtle truncate mt-0.5">{profile.bio}</p>
           )}
         </div>
       </div>
@@ -161,10 +159,10 @@ function FriendCard({
         size="sm"
         onClick={onRemove}
         disabled={isRemoving}
-        className="ml-3 text-red-600 hover:text-red-700 hover:bg-red-50"
+        className="ml-3 text-destructive hover:text-destructive hover:bg-danger-soft"
       >
         Remove
       </Button>
-    </Card>
+    </DetailCard>
   )
 }

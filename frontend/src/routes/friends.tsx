@@ -5,6 +5,7 @@ import FriendsList from '../components/FriendsList'
 import FriendSearch from '../components/FriendSearch'
 import ShareManager from '../components/ShareManager'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PageHeader } from '@/components/ui/page-header'
 
 interface FriendsSearch {
   tab?: 'friends' | 'shares'
@@ -34,8 +35,12 @@ function FriendsPage() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
-        <div className="p-4 lg:p-8 max-w-3xl mx-auto">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Friends & Sharing</h2>
+        <div className="mx-auto max-w-3xl px-5 py-6 sm:px-8">
+          <PageHeader
+            title="Friends & Sharing"
+            description="People you share with, and what they can see."
+            className="mb-5"
+          />
 
           {/* Tabs */}
           <div className="mb-6">

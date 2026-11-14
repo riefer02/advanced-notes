@@ -41,10 +41,10 @@ export function OutageBanner() {
   return (
     <div
       role="alert"
-      className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 shadow-lg"
+      className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 border-warning/30 bg-warning-soft text-warning shadow-pop rounded-xl border p-4 text-sm"
     >
       <p className="font-medium">Chisos can&apos;t reach the server right now.</p>
-      <p className="mt-1 text-amber-900">
+      <p className="text-warning/90 mt-1">
         Your saved data is safe. Try again, or let the admin know so they can check on it.
       </p>
 
@@ -54,7 +54,7 @@ export function OutageBanner() {
         </Button>
 
         {status === 'sent' ? (
-          <span className="text-green-800">Thanks — the admin has been notified.</span>
+          <span className="text-positive">Thanks — the admin has been notified.</span>
         ) : (
           <Button size="sm" onClick={sendReport} disabled={status === 'sending'}>
             {status === 'sending' ? 'Sending...' : 'Report this'}
@@ -67,7 +67,7 @@ export function OutageBanner() {
       </div>
 
       {status === 'failed' && (
-        <p className="mt-2 text-amber-900">
+        <p className="mt-2 text-warning">
           Automatic reporting failed.{' '}
           <a href={emailHref} className="font-medium underline underline-offset-2">
             Email the admin

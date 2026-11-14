@@ -166,19 +166,21 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
   }
 
   return (
-    <div className="h-full bg-white flex flex-col">
-      <div className="p-6 space-y-6 flex-1 overflow-y-auto">
+    <div className="bg-surface flex h-full flex-col">
+      <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
         {/* Header */}
-        <div className="border-b pb-4">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-2xl font-bold text-gray-900">Your Notes</h2>
+        <div className="border-line border-b pb-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-ink text-xl leading-6 font-semibold tracking-[-0.02em]">
+              Your Notes
+            </h2>
             {!debouncedSearch && !selectedTag && !selectedFolder && (
-              <span className="text-sm font-medium text-gray-500">
+              <span className="text-ink-subtle text-xs font-medium tabular-nums">
                 {noteCount} {noteCount === 1 ? 'note' : 'notes'}
               </span>
             )}
           </div>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-ink-muted mt-1 text-[13px] leading-5">
             Capture, pin, archive, and restore — nothing is lost by accident.
           </p>
           <Tabs
@@ -242,21 +244,21 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
             <AlertDescription className="flex items-center gap-2 text-sm">
               {debouncedSearch ? (
                 <>
-                  <svg className="h-4 w-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="h-4 w-4 text-brand" fill="currentColor" viewBox="0 0 20 20">
                     <path
                       fillRule="evenodd"
                       d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
                       clipRule="evenodd"
                     />
                   </svg>
-                  <span className="font-medium text-blue-900">
+                  <span className="font-medium text-brand">
                     Found {noteCount} result{noteCount !== 1 ? 's' : ''} for "{debouncedSearch}"
                   </span>
                 </>
               ) : selectedTag ? (
                 <>
                   <svg
-                    className="h-4 w-4 text-blue-600"
+                    className="h-4 w-4 text-brand"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -268,14 +270,14 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
                       d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
                     />
                   </svg>
-                  <span className="font-medium text-blue-900">
+                  <span className="font-medium text-brand">
                     Showing {noteCount} note{noteCount !== 1 ? 's' : ''} tagged with "{selectedTag}"
                   </span>
                 </>
               ) : selectedFolder ? (
                 <>
                   <svg
-                    className="h-4 w-4 text-blue-600"
+                    className="h-4 w-4 text-brand"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -287,9 +289,7 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
                       d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
                     />
                   </svg>
-                  <span className="font-medium text-blue-900">
-                    Viewing folder: {selectedFolder}
-                  </span>
+                  <span className="font-medium text-brand">Viewing folder: {selectedFolder}</span>
                 </>
               ) : null}
             </AlertDescription>
@@ -299,7 +299,7 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
                 setSelectedTag(null)
                 setSelectedFolder(null)
               }}
-              className="text-xs text-blue-700 hover:text-blue-900 font-medium flex items-center gap-1"
+              className="text-xs text-brand hover:text-brand font-medium flex items-center gap-1"
             >
               Clear
               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -346,7 +346,7 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
             <>
               <button
                 onClick={() => setShowFolders(!showFolders)}
-                className="text-sm text-gray-600 hover:text-gray-800 flex items-center gap-1"
+                className="text-sm text-ink-muted hover:text-ink flex items-center gap-1"
               >
                 <svg
                   className={`h-4 w-4 transition-transform ${showFolders ? 'rotate-90' : ''}`}
@@ -376,9 +376,7 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
 
               {selectedFolder ? (
                 <div className="mt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                    Notes in {selectedFolder}
-                  </h3>
+                  <h3 className="text-lg font-semibold text-ink mb-3">Notes in {selectedFolder}</h3>
                   <NotesList
                     folder={selectedFolder}
                     onTagClick={(tag) => {
@@ -405,7 +403,7 @@ export default function NotesPanel({ focusNoteId, onFocusHandled }: NotesPanelPr
       <SlideOver
         isOpen={!!selectedNote}
         onClose={() => setSelectedNote(null)}
-        title={selectedNote?.title || 'Note Details'}
+        title="Note"
         width="max-w-xl"
       >
         {selectedNote && (

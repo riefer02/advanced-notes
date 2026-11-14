@@ -43,8 +43,8 @@ export function QueryStateRenderer<T>({
         {loadingComponent || (
           <div className="flex items-center justify-center p-8" role="status" aria-label="Loading">
             <div className="flex flex-col items-center gap-3">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
-              <p className="text-sm text-gray-500">Loading...</p>
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-line-strong border-t-brand" />
+              <p className="text-ink-subtle text-[13px]">Loading...</p>
             </div>
           </div>
         )}
@@ -57,16 +57,16 @@ export function QueryStateRenderer<T>({
     return (
       <>
         {errorComponent || (
-          <div className="rounded-lg bg-red-50 p-4 border border-red-200">
+          <div className="bg-danger-soft border-destructive/25 rounded-xl border p-4">
             <div className="flex items-center gap-2">
-              <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+              <svg className="h-5 w-5 text-destructive" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
                   d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
                   clipRule="evenodd"
                 />
               </svg>
-              <p className="text-sm text-red-800">{errorMessage}</p>
+              <p className="text-sm text-destructive">{errorMessage}</p>
             </div>
           </div>
         )}
@@ -92,11 +92,11 @@ export function ListLoadingSkeleton({ count = 3 }: { count?: number }) {
   return (
     <div className="space-y-3" role="status" aria-label="Loading">
       {[...Array(count)].map((_, i) => (
-        <div key={i} className="rounded-lg border border-gray-200 bg-white p-4 animate-pulse">
-          <div className="h-5 bg-gray-200 rounded-sm w-3/4 mb-3" />
+        <div key={i} className="border-line bg-surface animate-pulse rounded-xl border p-3">
+          <div className="h-5 bg-surface-sunken rounded-sm w-3/4 mb-3" />
           <div className="flex items-center gap-3 mb-3">
-            <div className="h-3 bg-gray-200 rounded-sm w-24" />
-            <div className="h-3 bg-gray-200 rounded-sm w-20" />
+            <div className="h-3 bg-surface-sunken rounded-sm w-24" />
+            <div className="h-3 bg-surface-sunken rounded-sm w-20" />
           </div>
         </div>
       ))}
@@ -109,16 +109,16 @@ export function ListLoadingSkeleton({ count = 3 }: { count?: number }) {
  */
 export function QueryError({ message }: { message: string }) {
   return (
-    <div className="rounded-lg bg-red-50 p-4 border border-red-200">
+    <div className="bg-danger-soft border-destructive/25 rounded-xl border p-4">
       <div className="flex items-center gap-2">
-        <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+        <svg className="h-5 w-5 text-destructive" viewBox="0 0 20 20" fill="currentColor">
           <path
             fillRule="evenodd"
             d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
             clipRule="evenodd"
           />
         </svg>
-        <p className="text-sm text-red-800">{message}</p>
+        <p className="text-sm text-destructive">{message}</p>
       </div>
     </div>
   )

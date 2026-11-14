@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { CheckCircle2 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { DetailCard } from '@/components/ui/detail'
+import { PageHeader } from '@/components/ui/page-header'
 
 export const Route = createFileRoute('/feedback')({
   component: FeedbackPage,
@@ -48,163 +51,155 @@ function FeedbackPage() {
 
   if (showSuccess) {
     return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <Alert variant="success" className="rounded-xl p-8 text-center">
-          <AlertDescription>
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg
-                className="w-8 h-8 text-green-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            </div>
-            <h2 className="text-xl font-semibold text-green-900 mb-2">
-              Thank you for your feedback!
-            </h2>
-            <p className="text-green-700 mb-6">
-              We appreciate you taking the time to help us improve Chisos.
-            </p>
-            <Button onClick={handleNewFeedback}>Submit More Feedback</Button>
-          </AlertDescription>
-        </Alert>
+      <div className="mx-auto max-w-lg px-5 py-16 text-center">
+        <div className="bg-positive-soft text-positive mx-auto grid size-14 place-items-center rounded-full">
+          <CheckCircle2 className="size-7" />
+        </div>
+        <h1 className="text-ink mt-4 text-[22px] leading-7 font-semibold tracking-[-0.02em]">
+          Thanks for the feedback
+        </h1>
+        <p className="text-ink-muted mt-2 text-[13px] leading-5">
+          It goes straight to the person building Chisos. Nothing you typed was lost.
+        </p>
+        <Button className="mt-6" size="sm" onClick={handleNewFeedback}>
+          Send more feedback
+        </Button>
       </div>
     )
   }
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Send Feedback</h1>
-        <p className="text-gray-600 mt-2">
-          Help us improve Chisos by reporting bugs, suggesting features, or sharing your thoughts.
-        </p>
-      </div>
+    <div className="mx-auto max-w-2xl px-5 py-8 sm:px-8">
+      <PageHeader
+        title="Send feedback"
+        description="Report a bug, request a feature, or just tell us how it feels to use Chisos."
+      />
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Feedback Type */}
-        <div>
-          <Label className="mb-2">Feedback Type</Label>
-          <div className="flex gap-3">
-            {[
-              { value: 'bug', label: 'Bug Report', icon: '🐛' },
-              { value: 'feature', label: 'Feature Request', icon: '💡' },
-              { value: 'general', label: 'General Feedback', icon: '💬' },
-            ].map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setFeedbackType(option.value as FeedbackType)}
-                className={`flex-1 px-4 py-3 rounded-lg border-2 transition-colors ${
-                  feedbackType === option.value
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <span className="block text-xl mb-1">{option.icon}</span>
-                <span className="block text-sm font-medium">{option.label}</span>
-              </button>
-            ))}
+      <DetailCard className="mt-5 p-5">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Feedback Type */}
+          <div>
+            <span className="section-label mb-2 block">Feedback type</span>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {[
+                { value: 'bug', label: 'Bug Report', icon: '🐛' },
+                { value: 'feature', label: 'Feature Request', icon: '💡' },
+                { value: 'general', label: 'General Feedback', icon: '💬' },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setFeedbackType(option.value as FeedbackType)}
+                  aria-pressed={feedbackType === option.value}
+                  className={`focus-visible:ring-ring rounded-xl border p-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none ${
+                    feedbackType === option.value
+                      ? 'border-brand/40 bg-brand-soft text-brand'
+                      : 'border-line bg-surface text-ink hover:border-line-strong'
+                  }`}
+                >
+                  <span className="mb-1 block text-lg">{option.icon}</span>
+                  <span className="block text-[13px] font-medium">{option.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Title */}
-        <div>
-          <Label htmlFor="title" className="mb-2">
-            Title <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            type="text"
-            id="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={
-              feedbackType === 'bug'
-                ? 'Describe the issue briefly'
-                : feedbackType === 'feature'
-                  ? 'What feature would you like?'
-                  : 'What would you like to share?'
-            }
-            maxLength={255}
-          />
-        </div>
-
-        {/* Description */}
-        <div>
-          <Label htmlFor="description" className="mb-2">
-            Description <span className="text-gray-400">(optional)</span>
-          </Label>
-          <Textarea
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder={
-              feedbackType === 'bug'
-                ? 'Steps to reproduce, expected vs actual behavior, etc.'
-                : feedbackType === 'feature'
-                  ? 'Describe the feature and how it would help you...'
-                  : 'Share more details...'
-            }
-            rows={5}
-            maxLength={5000}
-            className="resize-none"
-          />
-          <p className="text-xs text-gray-500 mt-1">{description.length}/5000 characters</p>
-        </div>
-
-        {/* Rating */}
-        <div>
-          <Label className="mb-2">
-            How would you rate your experience? <span className="text-gray-400">(optional)</span>
-          </Label>
-          <div className="flex gap-2">
-            {[1, 2, 3, 4, 5].map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setRating(rating === value ? null : value)}
-                className={`w-12 h-12 rounded-lg border-2 text-2xl transition-all ${
-                  rating === value
-                    ? 'border-yellow-400 bg-yellow-50'
-                    : rating && rating >= value
-                      ? 'border-yellow-200 bg-yellow-25'
-                      : 'border-gray-200 bg-white hover:border-gray-300'
-                }`}
-              >
-                {rating && rating >= value ? '★' : '☆'}
-              </button>
-            ))}
+          {/* Title */}
+          <div>
+            <Label htmlFor="title" className="mb-2">
+              Title <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              type="text"
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={
+                feedbackType === 'bug'
+                  ? 'Describe the issue briefly'
+                  : feedbackType === 'feature'
+                    ? 'What feature would you like?'
+                    : 'What would you like to share?'
+              }
+              maxLength={255}
+            />
           </div>
-        </div>
 
-        {/* Error */}
-        {submitMutation.isError && (
-          <Alert variant="destructive">
-            <AlertDescription>
-              {submitMutation.error instanceof Error
-                ? submitMutation.error.message
-                : 'Failed to submit feedback'}
-            </AlertDescription>
-          </Alert>
-        )}
+          {/* Description */}
+          <div>
+            <Label htmlFor="description" className="mb-2">
+              Description <span className="text-ink-subtle">(optional)</span>
+            </Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={
+                feedbackType === 'bug'
+                  ? 'Steps to reproduce, expected vs actual behavior, etc.'
+                  : feedbackType === 'feature'
+                    ? 'Describe the feature and how it would help you...'
+                    : 'Share more details...'
+              }
+              rows={5}
+              maxLength={5000}
+              className="resize-none"
+            />
+            <p className="text-xs text-ink-subtle mt-1">{description.length}/5000 characters</p>
+          </div>
 
-        {/* Submit */}
-        <Button
-          type="submit"
-          disabled={submitMutation.isPending || !title.trim()}
-          size="lg"
-          className="w-full"
-        >
-          {submitMutation.isPending ? 'Submitting...' : 'Submit Feedback'}
-        </Button>
-      </form>
+          {/* Rating */}
+          <div>
+            <Label className="mb-2">
+              How would you rate your experience?{' '}
+              <span className="text-ink-subtle">(optional)</span>
+            </Label>
+            <div className="flex gap-2">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setRating(rating === value ? null : value)}
+                  aria-label={`${value} star${value === 1 ? '' : 's'}`}
+                  className={`focus-visible:ring-ring size-10 rounded-lg border text-xl transition-colors focus-visible:ring-2 focus-visible:outline-none ${
+                    rating === value
+                      ? 'border-warning bg-warning-soft'
+                      : rating && rating >= value
+                        ? 'border-warning/25 bg-warning-soft/60'
+                        : 'border-line bg-surface hover:border-line-strong'
+                  }`}
+                >
+                  {rating && rating >= value ? '★' : '☆'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Error */}
+          {submitMutation.isError && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                {submitMutation.error instanceof Error
+                  ? submitMutation.error.message
+                  : 'Failed to submit feedback'}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Submit */}
+          <div className="border-line flex items-center justify-between gap-3 border-t pt-4">
+            <p className="text-ink-subtle text-[11px]">Goes to the maintainer, not a black hole.</p>
+            <Button
+              type="submit"
+              disabled={submitMutation.isPending || !title.trim()}
+              loading={submitMutation.isPending}
+              size="sm"
+            >
+              Submit feedback
+            </Button>
+          </div>
+        </form>
+      </DetailCard>
     </div>
   )
 }

@@ -68,10 +68,10 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
   }
 
   return (
-    <div className="mx-auto max-w-2xl p-6 space-y-4">
+    <div className="space-y-4">
       {/* Record or upload audio */}
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">Record or upload audio</label>
+        <label className="block text-sm font-medium text-ink">Record or upload audio</label>
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-3">
             {!isRecording ? (
@@ -79,7 +79,7 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
                 ref={recordButtonRef}
                 onClick={startRecording}
                 disabled={transcribeMutation.isPending}
-                className="bg-linear-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                className="brand-gradient text-white hover:opacity-95"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                   <path
@@ -92,7 +92,7 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
               </Button>
             ) : (
               <Button variant="secondary" onClick={stopRecording}>
-                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                <div className="w-3 h-3 bg-destructive rounded-full animate-pulse"></div>
                 Stop Recording ({formatTime(recordingTime)})
               </Button>
             )}
@@ -124,7 +124,7 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
             />
           </div>
           {!isRecording && (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-ink-subtle">
               💡 Record a thought, or upload an existing audio file (MP3, WAV, M4A, WebM).
             </p>
           )}
@@ -146,7 +146,7 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
       )}
 
       {transcribeMutation.isPending && (
-        <div className="flex items-center space-x-2 text-blue-600" role="status">
+        <div className="flex items-center space-x-2 text-brand" role="status">
           <svg
             className="animate-spin h-5 w-5"
             xmlns="http://www.w3.org/2000/svg"
@@ -205,22 +205,22 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
       )}
 
       {lastResult && (
-        <div className="rounded-xl bg-linear-to-br from-green-50 to-emerald-50 p-6 border-2 border-green-200 shadow-xs">
+        <div className="rounded-xl bg-linear-to-br from-positive-soft to-positive-soft/50 p-6 border-2 border-positive/25 shadow-xs">
           <div className="flex items-center gap-2 mb-3">
-            <svg className="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+            <svg className="h-5 w-5 text-positive" fill="currentColor" viewBox="0 0 20 20">
               <path
                 fillRule="evenodd"
                 d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
                 clipRule="evenodd"
               />
             </svg>
-            <h2 className="text-lg font-semibold text-green-900">Transcript ready!</h2>
+            <h2 className="text-lg font-semibold text-positive">Transcript ready!</h2>
           </div>
 
           {lastResult.categorization && (
             <div className="mb-3 space-y-1">
-              <p className="font-medium text-green-900">{lastResult.categorization.title}</p>
-              <p className="text-xs text-green-800">
+              <p className="font-medium text-positive">{lastResult.categorization.title}</p>
+              <p className="text-xs text-positive">
                 Filed in{' '}
                 <span className="font-semibold">{lastResult.categorization.folder_path}</span>
                 {lastResult.categorization.tags?.length > 0 && (
@@ -230,12 +230,12 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
             </div>
           )}
 
-          <div className="bg-white rounded-lg p-4 border border-green-200 max-h-96 overflow-y-auto">
-            <p className="whitespace-pre-wrap text-gray-800 text-base leading-relaxed">
+          <div className="bg-surface rounded-lg p-4 border border-positive/25 max-h-96 overflow-y-auto">
+            <p className="whitespace-pre-wrap text-ink text-base leading-relaxed">
               {lastResult.text}
             </p>
           </div>
-          <p className="text-xs text-green-700 mt-3">
+          <p className="text-xs text-positive mt-3">
             ✓ Saved and organized automatically — it is already in your notes list.
           </p>
         </div>
