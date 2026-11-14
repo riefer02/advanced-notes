@@ -19,10 +19,10 @@ interface EmptyStateProps {
  */
 export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
   return (
-    <div className="rounded-lg bg-linear-to-br from-gray-50 to-blue-50 p-8 text-center border-2 border-dashed border-gray-300">
+    <div className="border-line bg-surface-muted/40 rounded-xl border border-dashed p-8 text-center">
       {icon || (
         <svg
-          className="mx-auto h-16 w-16 text-gray-400"
+          className="text-line-strong mx-auto size-10"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -35,9 +35,13 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
           />
         </svg>
       )}
-      <h3 className="mt-4 text-lg font-semibold text-gray-900">{title}</h3>
-      {description && <p className="mt-2 text-sm text-gray-600 max-w-sm mx-auto">{description}</p>}
-      {action && <div className="mt-6">{action}</div>}
+      <h3 className="text-ink mt-3 text-sm font-semibold">{title}</h3>
+      {description && (
+        <p className="text-ink-muted mx-auto mt-1.5 max-w-sm text-[13px] leading-5">
+          {description}
+        </p>
+      )}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   )
 }
@@ -50,7 +54,7 @@ export function NoResultsState({ query }: { query?: string }) {
     <EmptyState
       icon={
         <svg
-          className="mx-auto h-16 w-16 text-gray-400"
+          className="text-line-strong mx-auto size-10"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -82,9 +86,9 @@ export function NoNotesState() {
       title="No notes yet"
       description="Start recording your first voice note to get organized with AI-powered tagging."
       action={
-        <p className="text-xs text-gray-500">
-          Use the <span className="font-semibold text-gray-700">Start Recording</span> button in the
-          left panel to create your first note.
+        <p className="text-ink-subtle text-xs">
+          Use the <span className="text-ink font-medium">Start Recording</span> button in the left
+          panel to create your first note.
         </p>
       }
     />
@@ -105,7 +109,7 @@ export function NoTodosState({ status }: { status?: string }) {
     <EmptyState
       icon={
         <svg
-          className="mx-auto h-16 w-16 text-gray-400"
+          className="text-line-strong mx-auto size-10"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"

@@ -1,3 +1,4 @@
+import { ChevronRight, Pin } from 'lucide-react'
 import { useNotes, useSearchNotes, useNotesByTag } from '../hooks/useNotes'
 import type { Note, NoteView } from '../lib/api'
 
@@ -44,15 +45,15 @@ export default function NotesList({
     return (
       <div className="space-y-3" role="status" aria-label="Loading notes">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="rounded-lg border border-gray-200 bg-white p-4 animate-pulse">
-            <div className="h-5 bg-gray-200 rounded-sm w-3/4 mb-3"></div>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="h-3 bg-gray-200 rounded-sm w-24"></div>
-              <div className="h-3 bg-gray-200 rounded-sm w-20"></div>
+          <div key={i} className="border-line bg-surface animate-pulse rounded-xl border p-3">
+            <div className="bg-surface-sunken mb-2 h-4 w-3/4 rounded"></div>
+            <div className="flex items-center gap-3">
+              <div className="bg-surface-sunken h-3 w-24 rounded"></div>
+              <div className="bg-surface-sunken h-3 w-20 rounded"></div>
             </div>
           </div>
         ))}
-        <p className="text-center text-sm text-gray-500 mt-4">
+        <p className="text-ink-subtle mt-4 text-center text-xs">
           {isSearchMode ? 'Searching...' : 'Loading your notes...'}
         </p>
       </div>
@@ -61,8 +62,8 @@ export default function NotesList({
 
   if (error) {
     return (
-      <div className="rounded-lg bg-red-50 p-4 border border-red-200">
-        <p className="text-sm text-red-800">
+      <div className="border-destructive/20 bg-destructive/5 rounded-xl border p-4">
+        <p className="text-destructive text-sm">
           {isSearchMode
             ? 'Search failed'
             : isTagMode
@@ -82,9 +83,9 @@ export default function NotesList({
 
   if (notes.length === 0) {
     return (
-      <div className="rounded-lg bg-linear-to-br from-gray-50 to-blue-50 p-8 text-center border-2 border-dashed border-gray-300">
+      <div className="border-line bg-surface-muted/40 rounded-xl border border-dashed p-8 text-center">
         <svg
-          className="mx-auto h-16 w-16 text-gray-400"
+          className="text-line-strong mx-auto size-10"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -96,7 +97,7 @@ export default function NotesList({
             d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
           />
         </svg>
-        <h3 className="mt-4 text-lg font-semibold text-gray-900">
+        <h3 className="text-ink mt-3 text-sm font-semibold">
           {isSearchMode
             ? 'No results found'
             : isTagMode
@@ -107,7 +108,7 @@ export default function NotesList({
                   ? 'No archived notes'
                   : 'No notes yet'}
         </h3>
-        <p className="mt-2 text-sm text-gray-600 max-w-sm mx-auto">
+        <p className="text-ink-muted mx-auto mt-1.5 max-w-sm text-[13px] leading-5">
           {isSearchMode
             ? 'Try adjusting your search terms or browse all notes'
             : isTagMode
@@ -120,10 +121,10 @@ export default function NotesList({
         </p>
         {!isSearchMode && !isTagMode && view === 'active' && (
           <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <p className="text-xs text-gray-500">
-              Use the <span className="font-semibold text-gray-700">Record / Upload</span> or{' '}
-              <span className="font-semibold text-gray-700">Write</span> tab in the Capture panel to
-              create your first note.
+            <p className="text-ink-subtle text-xs">
+              Use the <span className="text-ink font-medium">Record / Upload</span> or{' '}
+              <span className="text-ink font-medium">Write</span> tab in the Capture panel to create
+              your first note.
             </p>
           </div>
         )}
@@ -135,7 +136,7 @@ export default function NotesList({
     <div
       role="list"
       aria-label={isSearchMode ? 'Search results' : 'Notes list'}
-      className="space-y-2"
+      className="space-y-1.5"
     >
       {notes.map((note) => (
         <NoteItem
@@ -168,87 +169,87 @@ function NoteItem({ note, isSelected, onClick, onTagClick }: NoteItemProps) {
   return (
     <div
       onClick={onClick}
-      className={`
-        group relative rounded-lg border p-4 cursor-pointer transition-all
-        ${
-          isSelected
-            ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 shadow-xs'
-            : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-xs'
-        }
-      `}
+      className={`group relative cursor-pointer rounded-xl border p-3 transition-[border-color,box-shadow,background-color] duration-150 ${
+        isSelected
+          ? 'border-brand/40 bg-brand-soft/50 ring-brand/15 ring-1'
+          : 'border-line bg-surface hover:border-line-strong hover:shadow-lift'
+      }`}
       role="listitem"
     >
-      <div className="flex justify-between items-start gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h4
-              className={`text-sm font-semibold truncate ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}
+      <div className="flex items-start justify-between gap-3">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            onClick()
+          }}
+          className="focus-visible:ring-ring min-w-0 flex-1 rounded-md text-left focus-visible:ring-2 focus-visible:outline-none"
+          aria-label={`Open note: ${note.title}`}
+        >
+          <span className="flex items-center gap-1.5">
+            <span
+              className={`truncate text-[13px] leading-5 font-semibold tracking-[-0.01em] ${
+                isSelected ? 'text-brand' : 'text-ink'
+              }`}
             >
               {note.title}
-            </h4>
+            </span>
             {note.pinned_at && (
-              <svg
-                className="h-3.5 w-3.5 shrink-0 text-amber-500"
+              <Pin
+                className="size-3 shrink-0 text-warning"
                 fill="currentColor"
-                viewBox="0 0 24 24"
                 aria-label="Pinned"
-              >
-                <path d="M14.5 2.5 21.5 9.5l-2.1 2.1-1.4-.4-3.6 3.6.4 3.2-2.1 2.1-3.9-3.9-5.3 5.3-1.4-1.4 5.3-5.3-3.9-3.9L6 8.8l3.2.4 3.6-3.6-.4-1.4 2.1-2.1z" />
-              </svg>
+              />
             )}
             {hasSnippet && note.rank && (
-              <span className="shrink-0 text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full font-medium">
+              <span className="text-2xs shrink-0 rounded bg-warning-soft px-1.5 py-0.5 font-medium tracking-tight text-warning tabular-nums">
                 {Math.round(note.rank * 100)}%
               </span>
             )}
-          </div>
+          </span>
 
-          <p
-            className={`text-sm line-clamp-2 mb-2 ${isSelected ? 'text-blue-800' : 'text-gray-600'}`}
-          >
+          <span className="text-ink-muted mt-0.5 line-clamp-2 block text-xs leading-5">
             {contentPreview}
-          </p>
+          </span>
+        </button>
 
-          <div className="flex items-center gap-3 text-xs text-gray-500">
-            <span>{new Date(note.updated_at || note.created_at).toLocaleDateString()}</span>
-            {note.word_count > 0 && <span>{note.word_count} words</span>}
-          </div>
-        </div>
-
-        <div
-          className={`opacity-0 group-hover:opacity-100 transition-opacity ${isSelected ? 'opacity-100' : ''}`}
-        >
-          <svg
-            className="h-5 w-5 text-gray-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </div>
+        <ChevronRight
+          className={`text-line-strong mt-0.5 size-4 shrink-0 transition-opacity ${
+            isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}
+          aria-hidden
+        />
       </div>
 
-      {/* Tags row - prevent click propagation to not select note when clicking tag */}
-      {note.tags && note.tags.length > 0 && (
-        <div className="mt-3 flex gap-1 flex-wrap">
-          {note.tags.slice(0, 3).map((tag) => (
-            <button
-              key={tag}
-              onClick={(e) => {
-                e.stopPropagation()
-                onTagClick?.(tag)
-              }}
-              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-700 transition-colors"
-            >
-              {tag}
-            </button>
-          ))}
-          {note.tags.length > 3 && (
-            <span className="text-xs text-gray-400">+{note.tags.length - 3}</span>
-          )}
-        </div>
-      )}
+      <div className="text-ink-subtle mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-4">
+        <span>
+          {new Date(note.updated_at || note.created_at).toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+          })}
+        </span>
+        {note.word_count > 0 && (
+          <>
+            <span aria-hidden className="bg-line-strong size-0.5 rounded-full" />
+            <span className="tabular-nums">{note.word_count} words</span>
+          </>
+        )}
+        {note.tags?.slice(0, 3).map((tag) => (
+          <button
+            key={tag}
+            onClick={(event) => {
+              event.stopPropagation()
+              onTagClick?.(tag)
+            }}
+            className="hover:text-brand focus-visible:ring-ring max-w-28 truncate rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          >
+            #{tag}
+          </button>
+        ))}
+        {note.tags && note.tags.length > 3 && (
+          <span className="text-ink-subtle">+{note.tags.length - 3}</span>
+        )}
+      </div>
     </div>
   )
 }

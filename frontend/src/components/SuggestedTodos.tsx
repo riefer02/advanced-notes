@@ -1,3 +1,4 @@
+import { Check, X } from 'lucide-react'
 import {
   useTodosForNote,
   useAcceptTodo,
@@ -6,7 +7,6 @@ import {
 } from '../hooks/useTodos'
 import type { Todo } from '../lib/api'
 import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface SuggestedTodosProps {
   noteId: string
@@ -19,7 +19,7 @@ export default function SuggestedTodos({ noteId }: SuggestedTodosProps) {
   const acceptAllTodos = useAcceptNoteTodos()
 
   if (isLoading) {
-    return <div className="text-sm text-gray-500">Loading todos...</div>
+    return <div className="text-ink-subtle text-xs">Loading suggested todos…</div>
   }
 
   const suggestedTodos = data?.todos.filter((t: Todo) => t.status === 'suggested') || []
@@ -42,71 +42,60 @@ export default function SuggestedTodos({ noteId }: SuggestedTodosProps) {
   }
 
   return (
-    <Alert variant="warning">
-      <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-        />
-      </svg>
-      <AlertDescription>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-amber-900">
-            Suggested Todos ({suggestedTodos.length})
-          </h3>
-          {suggestedTodos.length > 1 && (
-            <Button
-              variant="link"
-              size="xs"
-              onClick={handleAcceptAll}
-              disabled={acceptAllTodos.isPending}
-              className="text-amber-700 hover:text-amber-900"
-            >
-              Accept All
-            </Button>
-          )}
-        </div>
+    <div className="border-line space-y-2 border-t pt-4">
+      <div className="flex items-center justify-between gap-3">
+        <span className="section-label">Suggested todos · {suggestedTodos.length}</span>
+        {suggestedTodos.length > 1 && (
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={handleAcceptAll}
+            disabled={acceptAllTodos.isPending}
+          >
+            Accept all
+          </Button>
+        )}
+      </div>
 
-        <div className="space-y-2">
-          {suggestedTodos.map((todo: Todo) => (
-            <div
-              key={todo.id}
-              className="flex items-start gap-3 bg-white rounded-md p-3 border border-amber-100"
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-900">{todo.title}</p>
-                {todo.description && (
-                  <p className="text-xs text-gray-500 mt-1">{todo.description}</p>
-                )}
-                {todo.confidence !== null && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    {Math.round(todo.confidence * 100)}% confidence
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button
-                  size="xs"
-                  onClick={() => handleAccept(todo.id)}
-                  disabled={acceptTodo.isPending}
-                >
-                  Accept
-                </Button>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => handleDismiss(todo.id)}
-                  disabled={dismissTodo.isPending}
-                >
-                  Dismiss
-                </Button>
-              </div>
+      <div className="space-y-1.5">
+        {suggestedTodos.map((todo: Todo) => (
+          <div
+            key={todo.id}
+            className="border-line bg-surface-muted/60 group flex items-start gap-2.5 rounded-lg border px-2.5 py-2"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-ink text-[13px] leading-5">{todo.title}</p>
+              {(todo.description || todo.confidence !== null) && (
+                <p className="text-ink-subtle mt-0.5 truncate text-[11px] leading-4">
+                  {todo.description || `${Math.round((todo.confidence ?? 0) * 100)}% confidence`}
+                </p>
+              )}
             </div>
-          ))}
-        </div>
-      </AlertDescription>
-    </Alert>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Accept ${todo.title}`}
+                onClick={() => handleAccept(todo.id)}
+                disabled={acceptTodo.isPending}
+                className="text-positive hover:bg-positive-soft hover:text-positive"
+              >
+                <Check />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Dismiss ${todo.title}`}
+                onClick={() => handleDismiss(todo.id)}
+                disabled={dismissTodo.isPending}
+                className="text-ink-subtle hover:bg-surface-muted hover:text-ink"
+              >
+                <X />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }

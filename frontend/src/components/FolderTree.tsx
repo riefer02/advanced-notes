@@ -40,7 +40,7 @@ export default function FolderTree({ selectedFolder, onSelectFolder }: FolderTre
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="flex items-center gap-2 text-gray-500">
+        <div className="flex items-center gap-2 text-ink-subtle">
           <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
             <circle
               className="opacity-25"
@@ -64,17 +64,17 @@ export default function FolderTree({ selectedFolder, onSelectFolder }: FolderTre
 
   if (error) {
     return (
-      <div className="rounded-lg bg-red-50 p-4 border border-red-200">
-        <p className="text-sm text-red-800">Failed to load folders</p>
+      <div className="rounded-lg bg-danger-soft p-4 border border-destructive/25">
+        <p className="text-sm text-destructive">Failed to load folders</p>
       </div>
     )
   }
 
   if (!root || (root.subfolders.length === 0 && root.note_count === 0)) {
     return (
-      <div className="rounded-lg bg-gray-50 p-8 text-center border-2 border-dashed border-gray-300">
+      <div className="border-line bg-surface-muted/40 rounded-xl border border-dashed p-8 text-center">
         <svg
-          className="mx-auto h-12 w-12 text-gray-400"
+          className="mx-auto h-12 w-12 text-ink-subtle"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -86,8 +86,8 @@ export default function FolderTree({ selectedFolder, onSelectFolder }: FolderTre
             d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
           />
         </svg>
-        <h3 className="mt-2 text-sm font-semibold text-gray-900">No notes yet</h3>
-        <p className="mt-1 text-sm text-gray-500">
+        <h3 className="text-ink mt-3 text-[13px] font-semibold">No notes yet</h3>
+        <p className="text-ink-subtle mt-1 text-xs">
           Record or upload audio to create your first note
         </p>
       </div>
@@ -96,7 +96,7 @@ export default function FolderTree({ selectedFolder, onSelectFolder }: FolderTre
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+      <h3 className="text-sm font-semibold text-ink mb-3 flex items-center gap-2">
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
             strokeLinecap="round"
@@ -168,12 +168,12 @@ function FolderTreeNode({
         {hasChildren && (
           <button
             onClick={() => onToggle(node.path)}
-            className="p-1 hover:bg-gray-100 rounded-sm transition-colors"
+            className="p-1 hover:bg-surface-muted rounded-sm transition-colors"
             aria-label={isExpanded ? 'Collapse folder' : 'Expand folder'}
             tabIndex={-1}
           >
             <svg
-              className={`h-4 w-4 text-gray-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+              className={`h-4 w-4 text-ink-subtle transition-transform ${isExpanded ? 'rotate-90' : ''}`}
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -187,13 +187,13 @@ function FolderTreeNode({
           onClick={() => onSelect(node.path)}
           onKeyDown={handleKeyDown}
           className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors text-left ${
-            isSelected ? 'bg-blue-50 text-blue-900 font-medium' : 'hover:bg-gray-50 text-gray-700'
+            isSelected ? 'bg-brand-soft text-brand font-medium' : 'hover:bg-surface-muted text-ink'
           }`}
           style={{ paddingLeft: `${(level + (hasChildren ? 0 : 1)) * 0.75 + 0.5}rem` }}
           aria-current={isSelected ? 'true' : undefined}
         >
           <svg
-            className={`h-4 w-4 shrink-0 ${isSelected ? 'text-blue-600' : 'text-gray-400'}`}
+            className={`h-4 w-4 shrink-0 ${isSelected ? 'text-brand' : 'text-ink-subtle'}`}
             fill={isExpanded ? 'none' : 'currentColor'}
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -209,7 +209,7 @@ function FolderTreeNode({
           {node.note_count > 0 && (
             <span
               className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                isSelected ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                isSelected ? 'bg-brand-soft text-brand' : 'bg-surface-muted text-ink-muted'
               }`}
             >
               {node.note_count}

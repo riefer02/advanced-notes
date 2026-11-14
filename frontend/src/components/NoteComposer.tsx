@@ -140,12 +140,12 @@ export default function NoteComposer({ onCreated }: NoteComposerProps) {
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Write a note</h2>
-          <p className="text-sm text-gray-600">
+          <h2 className="text-ink text-[15px] font-semibold tracking-[-0.015em]">Write a note</h2>
+          <p className="text-sm text-ink-muted">
             Type it yourself. It lands in your notes immediately — no audio needed.
           </p>
         </div>
-        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+        <span className="rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-medium text-ink-muted">
           {wordCount} {wordCount === 1 ? 'word' : 'words'}
         </span>
       </div>
@@ -219,11 +219,11 @@ export default function NoteComposer({ onCreated }: NoteComposerProps) {
         </Alert>
       )}
 
-      <div className="flex items-center gap-3">
+      <div className="border-line flex items-center justify-between gap-3 border-t pt-4">
         <Button type="submit" disabled={!canSave} loading={createNote.isPending}>
           Save note
         </Button>
-        <span className="text-xs text-gray-500">⌘/Ctrl + Enter</span>
+        <span className="text-xs text-ink-subtle">⌘/Ctrl + Enter</span>
       </div>
     </form>
   )

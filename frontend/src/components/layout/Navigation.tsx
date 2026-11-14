@@ -34,16 +34,14 @@ export function DesktopSidebar({
   pendingCount: number
 }) {
   return (
-    <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-gray-200 lg:bg-white">
-      <div className="h-16 px-4 flex items-center border-b border-gray-200">
+    <aside className="border-line bg-surface hidden lg:flex lg:w-60 lg:flex-col lg:border-r">
+      <div className="border-line flex h-14 items-center border-b px-4">
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Chisos
-          </span>
+          <span className="text-ink text-[15px] font-semibold tracking-[-0.02em]">Chisos</span>
         </div>
       </div>
-      <nav className="p-3" aria-label="Primary">
-        <ul className="space-y-1">
+      <nav className="p-2.5" aria-label="Primary">
+        <ul className="space-y-0.5">
           {NAV_ITEMS.map((item) => {
             const active = getIsActive(pathname, item.to)
             return (
@@ -51,16 +49,16 @@ export function DesktopSidebar({
                 <Link
                   to={item.to}
                   aria-current={active ? 'page' : undefined}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`focus-visible:ring-ring flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors duration-150 focus-visible:ring-2 focus-visible:outline-none ${
                     active
-                      ? 'bg-blue-50 text-blue-800'
-                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                      ? 'bg-brand-soft/70 text-brand'
+                      : 'text-ink-muted hover:bg-surface-muted hover:text-ink'
                   }`}
                 >
-                  <item.icon className="h-5 w-5" />
+                  <item.icon className="size-4.5 shrink-0" />
                   <span>{item.label}</span>
                   {item.to === '/friends' && pendingCount > 0 && (
-                    <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-white bg-red-500 rounded-full">
+                    <span className="bg-destructive text-background ml-auto inline-flex size-5 items-center justify-center rounded-full text-[11px] font-semibold">
                       {pendingCount}
                     </span>
                   )}
@@ -152,7 +150,7 @@ export function MobileDrawer({
       aria-hidden={!isOpen}
     >
       <div
-        className={`absolute inset-0 bg-gray-900/40 transition-opacity ${
+        className={`bg-scrim absolute inset-0 backdrop-blur-[2px] transition-opacity ${
           isOpen ? 'opacity-100' : 'opacity-0'
         }`}
         onClick={onClose}
@@ -163,16 +161,16 @@ export function MobileDrawer({
           role="dialog"
           aria-modal="true"
           aria-label="Navigation drawer"
-          className={`h-full bg-white shadow-xl transform transition-transform ${
+          className={`bg-surface shadow-pop h-full transform transition-transform ease-[cubic-bezier(0.32,0.72,0,1)] ${
             isOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
-          <div className="h-16 px-4 flex items-center justify-between border-b border-gray-200">
-            <span className="text-base font-semibold text-gray-900">Menu</span>
+          <div className="border-line flex h-14 items-center justify-between border-b px-4">
+            <span className="text-ink text-[15px] font-semibold tracking-[-0.015em]">Menu</span>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+              className="text-ink-subtle hover:bg-surface-muted hover:text-ink focus-visible:ring-ring grid size-8 place-items-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
             >
               <span className="sr-only">Close menu</span>
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -185,8 +183,8 @@ export function MobileDrawer({
               </svg>
             </button>
           </div>
-          <nav className="p-3" aria-label="Primary">
-            <ul className="space-y-1">
+          <nav className="p-2.5" aria-label="Primary">
+            <ul className="space-y-0.5">
               {NAV_ITEMS.map((item) => {
                 const active = getIsActive(pathname, item.to)
                 return (
@@ -195,16 +193,16 @@ export function MobileDrawer({
                       to={item.to}
                       aria-current={active ? 'page' : undefined}
                       onClick={onClose}
-                      className={`flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
+                      className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors ${
                         active
-                          ? 'bg-blue-50 text-blue-800'
-                          : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                          ? 'bg-brand-soft/70 text-brand'
+                          : 'text-ink-muted hover:bg-surface-muted hover:text-ink'
                       }`}
                     >
-                      <item.icon className="h-5 w-5" />
+                      <item.icon className="size-4.5 shrink-0" />
                       <span>{item.label}</span>
                       {item.to === '/friends' && pendingCount > 0 && (
-                        <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-white bg-red-500 rounded-full">
+                        <span className="bg-destructive text-background ml-auto inline-flex size-5 items-center justify-center rounded-full text-[11px] font-semibold">
                           {pendingCount}
                         </span>
                       )}

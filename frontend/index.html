@@ -4,11 +4,43 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chisos - Your Life, Intelligently Organized</title>
-    <meta name="description" content="Voice notes, meal tracking, task management, and a vinyl collection — all powered by AI. Speak it, snap it, or type it. Chisos handles the rest." />
+    <meta
+      name="description"
+      content="Voice notes, meal tracking, task management, and a vinyl collection — all powered by AI. Speak it, snap it, or type it. Chisos handles the rest."
+    />
     <meta name="theme-color" content="#2563eb" />
 
+    <!-- Apply the saved theme before first paint so dark mode never flashes light. -->
+    <script>
+      ;(function () {
+        var stored = 'system'
+        try {
+          stored = localStorage.getItem('chisos-theme') || 'system'
+        } catch (e) {}
+        if (stored !== 'light' && stored !== 'dark' && stored !== 'system') stored = 'system'
+
+        var systemDark = false
+        try {
+          systemDark = !!(
+            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+          )
+        } catch (e) {}
+
+        var dark = stored === 'dark' || (stored === 'system' && systemDark)
+        try {
+          document.documentElement.classList.toggle('dark', dark)
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+          var meta = document.querySelector('meta[name="theme-color"]')
+          if (meta) meta.setAttribute('content', dark ? '#1c1c20' : '#fbfbfd')
+        } catch (e) {}
+      })()
+    </script>
+
     <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐺</text></svg>" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐺</text></svg>"
+    />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="canonical" href="%VITE_SITE_URL%/" />
@@ -17,7 +49,10 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="%VITE_SITE_URL%/" />
     <meta property="og:title" content="Chisos - Your Life, Intelligently Organized" />
-    <meta property="og:description" content="Voice notes, meal tracking, task management, and a vinyl collection — all powered by AI. Speak it, snap it, or type it. Chisos handles the rest." />
+    <meta
+      property="og:description"
+      content="Voice notes, meal tracking, task management, and a vinyl collection — all powered by AI. Speak it, snap it, or type it. Chisos handles the rest."
+    />
     <meta property="og:image" content="%VITE_SITE_URL%/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
@@ -27,7 +62,10 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="%VITE_SITE_URL%/" />
     <meta name="twitter:title" content="Chisos - Your Life, Intelligently Organized" />
-    <meta name="twitter:description" content="Voice notes, meal tracking, task management, and a vinyl collection — all powered by AI. Speak it, snap it, or type it. Chisos handles the rest." />
+    <meta
+      name="twitter:description"
+      content="Voice notes, meal tracking, task management, and a vinyl collection — all powered by AI. Speak it, snap it, or type it. Chisos handles the rest."
+    />
     <meta name="twitter:image" content="%VITE_SITE_URL%/og-image.png" />
   </head>
   <body>
@@ -35,4 +73,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

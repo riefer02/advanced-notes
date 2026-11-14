@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { ChevronRight } from 'lucide-react'
 import { useAuth } from '@clerk/clerk-react'
 import { useState, useCallback, useMemo } from 'react'
 import MealCalendar from '../components/MealCalendar'
@@ -129,7 +130,7 @@ function MealsPage() {
           <Link
             to="/friends"
             search={{ tab: 'shares' }}
-            className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+            className="text-xs text-ink-subtle hover:text-ink transition-colors"
           >
             Share Calendar
           </Link>
@@ -138,7 +139,7 @@ function MealsPage() {
 
       {/* Mobile Tabs */}
       {(!isSharedView || canEdit) && (
-        <div className="lg:hidden bg-white shrink-0 px-4 pt-2">
+        <div className="lg:hidden bg-surface shrink-0 px-4 pt-2">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'record' | 'calendar')}>
             <TabsList className="w-full">
               {MOBILE_TABS.map((t) => (
@@ -156,38 +157,26 @@ function MealsPage() {
         {/* Left Pane: Record Controls (40%) — hidden in view-only shared view */}
         {(!isSharedView || canEdit) && (
           <div
-            className={`lg:w-[40%] lg:border-r lg:border-gray-200 bg-white lg:bg-gray-50 overflow-y-auto ${
+            className={`lg:w-[40%] lg:border-r lg:border-line bg-surface lg:bg-surface-muted overflow-y-auto ${
               activeTab === 'record' ? 'block' : 'hidden lg:block'
             }`}
           >
-            <div className="p-4 lg:p-8 max-w-xl mx-auto">
+            <div className="mx-auto max-w-xl px-5 py-6 sm:px-8">
               <MealRecorder onMealCreated={handleMealCreated} calendarOwner={calendarOwner} />
 
               {/* Quick Actions */}
-              <div className="mt-8 pt-6 border-t border-gray-200">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Quick View</h3>
+              <div className="border-line mt-7 border-t pt-5">
+                <h3 className="section-label mb-2.5">Quick view</h3>
                 <button
                   type="button"
                   onClick={() => handleSelectDate(todayStr)}
-                  className="w-full flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-xs transition-all"
+                  className="border-line bg-surface hover:border-line-strong hover:shadow-card focus-visible:ring-ring flex w-full items-center justify-between rounded-xl border p-3 transition-[border-color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-lg">📅</span>
-                    <span className="text-sm text-gray-700">Today&apos;s meals</span>
+                    <span className="text-sm text-ink">Today&apos;s meals</span>
                   </div>
-                  <svg
-                    className="w-5 h-5 text-gray-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
+                  <ChevronRight className="text-ink-subtle size-4" aria-hidden />
                 </button>
               </div>
             </div>
@@ -196,11 +185,11 @@ function MealsPage() {
 
         {/* Right Pane: Calendar */}
         <div
-          className={`${isSharedView && !canEdit ? 'w-full' : 'lg:w-[60%]'} overflow-y-auto bg-gray-50 ${
+          className={`${isSharedView && !canEdit ? 'w-full' : 'lg:w-[60%]'} overflow-y-auto bg-surface-muted ${
             (isSharedView && !canEdit) || activeTab === 'calendar' ? 'block' : 'hidden lg:block'
           }`}
         >
-          <div className="p-4 lg:p-8">
+          <div className="px-5 py-6 sm:px-8">
             <MealCalendar
               year={calendarYear}
               month={calendarMonth}

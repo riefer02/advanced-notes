@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import { ListChecks, Mic, Monitor, Moon, Palette, Sun, UserRound } from 'lucide-react'
 import { useUserSettings, useUpdateUserSettings } from '../hooks/useSettings'
 import { useMyProfile, useUpdateProfile } from '../hooks/useProfile'
+import { useTheme, type Theme } from '../components/theme/ThemeProvider'
 import AvatarUploader from '../components/AvatarUploader'
 import UsernameInput from '../components/UsernameInput'
 import { Button } from '@/components/ui/button'
@@ -9,15 +11,27 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { DetailCard, DetailCardHeader } from '@/components/ui/detail'
+import { PageHeader } from '@/components/ui/page-header'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
 })
 
+const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'system', label: 'System', icon: Monitor },
+]
+
 function SettingsPage() {
-  const { data: settings, isLoading: settingsLoading } = useUserSettings()
+  const {
+    data: settings,
+    isLoading: settingsLoading,
+    isError: settingsLoadFailed,
+  } = useUserSettings()
   const updateSettings = useUpdateUserSettings()
-  const { data: profile, isLoading: profileLoading } = useMyProfile()
+  const { data: profile, isLoading: profileLoading, isError: profileLoadFailed } = useMyProfile()
   const updateProfile = useUpdateProfile()
 
   const [displayName, setDisplayName] = useState('')
@@ -80,6 +94,15 @@ function SettingsPage() {
     updateSettings.mutate({ transcription_languages: languages })
   }
 
+  const handleDiscardProfile = () => {
+    if (!profile) return
+    setDisplayName(profile.display_name)
+    setUsername(profile.username ?? '')
+    setBio(profile.bio ?? '')
+    setDiscoverable(profile.discoverable)
+    updateProfile.reset()
+  }
+
   const handleSaveProfile = () => {
     const data: {
       display_name?: string
@@ -100,31 +123,31 @@ function SettingsPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        <h2 className="text-xl font-semibold text-gray-900">Settings</h2>
+      <div className="mx-auto max-w-3xl space-y-4 px-5 py-6 sm:px-8">
+        <PageHeader
+          title="Settings"
+          description="How you show up to friends, and how the app behaves."
+        />
 
-        {/* Profile Section */}
-        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-          <div className="px-4 py-4 border-b border-gray-100">
-            <h3 className="text-base font-medium text-gray-900">Profile</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Your public profile information visible to friends.
-            </p>
-          </div>
-
-          <div className="px-4 py-4 space-y-5">
+        <DetailCard>
+          <DetailCardHeader
+            icon={UserRound}
+            title="Profile"
+            subtitle="Your public profile information, visible to friends."
+          />
+          <div className="border-line space-y-4 border-t px-4 py-4">
             {profileLoading ? (
-              <div className="text-sm text-gray-500">Loading profile...</div>
+              <div className="text-ink-subtle text-[13px]">Loading profile…</div>
+            ) : profileLoadFailed ? (
+              <p className="text-destructive text-[13px]">
+                Could not load your profile. Refresh the page to try again.
+              </p>
             ) : profile ? (
               <>
-                {/* Avatar */}
                 <AvatarUploader avatarUrl={profile.avatar_url} displayName={profile.display_name} />
 
-                {/* Display Name */}
-                <div>
-                  <Label htmlFor="display-name" className="mb-1">
-                    Display name
-                  </Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="display-name">Display name</Label>
                   <Input
                     id="display-name"
                     type="text"
@@ -134,118 +157,115 @@ function SettingsPage() {
                   />
                 </div>
 
-                {/* Username */}
                 <UsernameInput
                   value={username}
                   onChange={setUsername}
                   currentUsername={profile.username}
                 />
 
-                {/* Bio */}
-                <div>
-                  <Label htmlFor="bio" className="mb-1">
-                    Bio
-                  </Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bio">Bio</Label>
                   <Textarea
                     id="bio"
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
                     maxLength={1000}
                     rows={3}
-                    placeholder="Tell us about yourself..."
+                    placeholder="Tell us about yourself…"
                     className="resize-none"
                   />
                 </div>
 
-                {/* Discoverable */}
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <Label
-                      htmlFor="discoverable-toggle"
-                      className="text-sm font-medium text-gray-900 cursor-pointer"
-                    >
-                      Discoverable
-                    </Label>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Allow other users to find you by name, username, or email.
-                    </p>
-                  </div>
-                  <Switch
-                    id="discoverable-toggle"
-                    checked={discoverable}
-                    onCheckedChange={setDiscoverable}
-                  />
-                </div>
+                <SettingRow
+                  id="discoverable-toggle"
+                  title="Discoverable"
+                  description="Allow other users to find you by name, username, or email."
+                  checked={discoverable}
+                  onCheckedChange={setDiscoverable}
+                />
 
-                {/* Save Button */}
-                {hasChanges && (
-                  <div className="flex items-center gap-3 pt-2">
-                    <Button onClick={handleSaveProfile} loading={updateProfile.isPending}>
-                      {updateProfile.isPending ? 'Saving...' : 'Save changes'}
-                    </Button>
-                    {updateProfile.isError && (
-                      <p className="text-sm text-red-500">{updateProfile.error.message}</p>
-                    )}
-                  </div>
+                {updateProfile.isError && (
+                  <p className="text-destructive text-[13px]">{updateProfile.error.message}</p>
                 )}
                 {updateProfile.isSuccess && !hasChanges && (
-                  <p className="text-sm text-green-600">Profile updated!</p>
+                  <p className="text-positive text-[13px]">Profile updated.</p>
+                )}
+
+                {hasChanges && (
+                  <div className="border-line flex items-center justify-end gap-3 border-t pt-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleDiscardProfile}
+                      disabled={updateProfile.isPending}
+                    >
+                      Discard
+                    </Button>
+                    <Button size="sm" onClick={handleSaveProfile} loading={updateProfile.isPending}>
+                      Save changes
+                    </Button>
+                  </div>
                 )}
               </>
             ) : null}
           </div>
-        </div>
+        </DetailCard>
 
-        {/* Todo Settings Section */}
-        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-          <div className="px-4 py-4 border-b border-gray-100">
-            <h3 className="text-base font-medium text-gray-900">Todo Extraction</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Control how AI-extracted todos are handled when you record notes.
-            </p>
+        <DetailCard>
+          <DetailCardHeader
+            icon={Palette}
+            title="Appearance"
+            subtitle="Pick a theme, or follow your system setting."
+          />
+          <div className="border-line border-t px-4 py-4">
+            <ThemeSelector />
           </div>
+        </DetailCard>
 
-          <div className="px-4 py-4">
+        <DetailCard>
+          <DetailCardHeader
+            icon={ListChecks}
+            title="Todo extraction"
+            subtitle="Control what happens to tasks found in your notes."
+          />
+          <div className="border-line border-t px-4 py-4">
             {settingsLoading ? (
-              <div className="text-sm text-gray-500">Loading settings...</div>
+              <div className="text-ink-subtle text-[13px]">Loading settings…</div>
+            ) : settingsLoadFailed ? (
+              <p className="text-destructive text-[13px]">
+                Could not load settings. Refresh the page to try again.
+              </p>
             ) : (
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <Label
-                    htmlFor="auto-accept-todos"
-                    className="text-sm font-medium text-gray-900 cursor-pointer"
-                  >
-                    Auto-accept extracted todos
-                  </Label>
-                  <p className="mt-1 text-sm text-gray-500">
-                    When enabled, todos extracted from your voice notes will be automatically added
-                    to your todo list. When disabled, they will appear as suggestions that you can
-                    review and accept individually.
-                  </p>
-                </div>
-                <Switch
-                  id="auto-accept-todos"
-                  checked={settings?.auto_accept_todos ?? false}
-                  onCheckedChange={() => handleAutoAcceptToggle()}
-                  disabled={updateSettings.isPending}
-                />
-              </div>
+              <SettingRow
+                id="auto-accept-todos"
+                title="Auto-accept extracted todos"
+                description="Add extracted todos to your list immediately. When off, they appear as suggestions to review."
+                checked={settings?.auto_accept_todos ?? false}
+                onCheckedChange={() => handleAutoAcceptToggle()}
+                disabled={updateSettings.isPending}
+              />
+            )}
+            {updateSettings.isError && !settingsLoading && (
+              <p className="text-destructive mt-3 text-xs">
+                {updateSettings.error?.message || 'Could not save that change.'}
+              </p>
             )}
           </div>
-        </div>
+        </DetailCard>
 
-        {/* Transcription Settings Section */}
-        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-          <div className="px-4 py-4 border-b border-gray-100">
-            <h3 className="text-base font-medium text-gray-900">Transcription</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Hint at the languages you speak so names and accents transcribe more accurately.
-            </p>
-          </div>
-
-          <div className="px-4 py-4 space-y-3">
+        <DetailCard>
+          <DetailCardHeader
+            icon={Mic}
+            title="Transcription"
+            subtitle="Hint at the languages you speak so names transcribe accurately."
+          />
+          <div className="border-line space-y-3 border-t px-4 py-4">
             {settingsLoading ? (
-              <div className="text-sm text-gray-500">Loading settings...</div>
+              <div className="text-ink-subtle text-[13px]">Loading settings…</div>
+            ) : settingsLoadFailed ? (
+              <p className="text-destructive text-[13px]">
+                Could not load settings. Refresh the page to try again.
+              </p>
             ) : settings ? (
               <>
                 <div className="space-y-1.5">
@@ -257,11 +277,17 @@ function SettingsPage() {
                     placeholder="en, es, fr"
                     maxLength={50}
                   />
-                  <p className="text-xs text-gray-500">
-                    Comma-separated ISO codes (for example: en, es, fr). Leave empty to auto-detect.
+                  <p className="text-ink-subtle text-xs leading-4">
+                    Comma-separated ISO codes. Leave empty to auto-detect.
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-end gap-3">
+                  {updateSettings.isError && (
+                    <p className="text-destructive text-xs">
+                      {updateSettings.error?.message || 'Could not save.'}
+                    </p>
+                  )}
+                  {updateSettings.isSuccess && <p className="text-positive text-xs">Saved.</p>}
                   <Button
                     size="sm"
                     onClick={handleSaveLanguages}
@@ -269,13 +295,71 @@ function SettingsPage() {
                   >
                     Save languages
                   </Button>
-                  {updateSettings.isSuccess && <p className="text-sm text-green-600">Saved!</p>}
                 </div>
               </>
             ) : null}
           </div>
-        </div>
+        </DetailCard>
       </div>
+    </div>
+  )
+}
+
+function SettingRow({
+  id,
+  title,
+  description,
+  checked,
+  onCheckedChange,
+  disabled,
+}: {
+  id: string
+  title: string
+  description: string
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0 flex-1">
+        <Label htmlFor={id} className="cursor-pointer">
+          {title}
+        </Label>
+        <p className="text-ink-subtle mt-1 text-xs leading-5">{description}</p>
+      </div>
+      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
+    </div>
+  )
+}
+
+function ThemeSelector() {
+  const { theme, setTheme } = useTheme()
+
+  return (
+    <div role="group" aria-label="Theme">
+      <div className="bg-surface-muted grid grid-cols-3 gap-1 rounded-lg p-1">
+        {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
+          const active = theme === value
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTheme(value)}
+              aria-pressed={active}
+              className={`focus-visible:ring-ring flex items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition-all focus-visible:ring-2 focus-visible:outline-none ${
+                active ? 'bg-surface-raised text-ink shadow-card' : 'text-ink-subtle hover:text-ink'
+              }`}
+            >
+              <Icon className="size-3.5" />
+              {label}
+            </button>
+          )
+        })}
+      </div>
+      <p className="text-ink-subtle mt-2 text-xs leading-4">
+        System follows the appearance setting of your device.
+      </p>
     </div>
   )
 }

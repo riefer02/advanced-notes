@@ -43,6 +43,7 @@ export default defineConfig(({ command, mode }) => {
           '/sign-in',
           '/sign-up',
           '/admin',
+          '/design',
         ],
         changefreq: 'monthly',
         robots: [
@@ -62,6 +63,7 @@ export default defineConfig(({ command, mode }) => {
               '/sign-in',
               '/sign-up',
               '/admin',
+              '/design',
             ],
           },
         ],

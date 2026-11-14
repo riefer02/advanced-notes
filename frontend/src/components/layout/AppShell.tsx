@@ -56,7 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AppShellContext.Provider value={appShellCtx}>
-      <div className="min-h-screen bg-gray-50 flex">
+      <div className="bg-background flex min-h-screen">
         <DesktopSidebar pathname={pathname} pendingCount={pendingCount} />
         <MobileDrawer
           isOpen={isDrawerOpen}

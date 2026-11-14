@@ -42,7 +42,7 @@ function VinylPage() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
-        <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-4">
+        <div className="mx-auto max-w-6xl space-y-4 px-5 py-6 sm:px-8">
           {isSharedView && (
             <SharedContentBanner ownerId={owner} backTo="/vinyl" backLabel="Vinyl Collection" />
           )}

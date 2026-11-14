@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import { Plus } from 'lucide-react'
 import { useTodos, useCreateTodo } from '../hooks/useTodos'
 import TodoList from '../components/TodoList'
 import type { Todo } from '../lib/api'
@@ -7,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Callout, DetailCard } from '@/components/ui/detail'
+import { PageHeader } from '@/components/ui/page-header'
 
 export const Route = createFileRoute('/todos')({
   component: TodosPage,
@@ -72,28 +74,22 @@ function TodosPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">Todos</h2>
-          {!isCreating && (
-            <Button onClick={() => setIsCreating(true)}>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              New Todo
-            </Button>
-          )}
-        </div>
+      <div className="mx-auto max-w-3xl space-y-4 px-5 py-6 sm:px-8">
+        <PageHeader
+          title="Todos"
+          description="Accept suggestions from your notes, or add your own."
+          actions={
+            !isCreating && (
+              <Button size="sm" onClick={() => setIsCreating(true)}>
+                <Plus />
+                New todo
+              </Button>
+            )
+          }
+        />
 
-        {/* New Todo Form */}
         {isCreating && (
-          <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
+          <DetailCard className="space-y-2 p-3">
             <Input
               type="text"
               value={newTodoTitle}
@@ -105,6 +101,7 @@ function TodosPage() {
             <div className="flex justify-end gap-2">
               <Button
                 variant="ghost"
+                size="sm"
                 onClick={() => {
                   setIsCreating(false)
                   setNewTodoTitle('')
@@ -113,72 +110,58 @@ function TodosPage() {
                 Cancel
               </Button>
               <Button
+                size="sm"
                 onClick={handleCreateTodo}
                 disabled={!newTodoTitle.trim()}
                 loading={createTodo.isPending}
               >
-                Add Todo
+                Add todo
               </Button>
             </div>
-          </div>
+          </DetailCard>
         )}
 
-        {/* Suggested Todos Section */}
         {suggestedTodos.length > 0 && activeTab === 'all' && (
-          <Alert variant="warning">
-            <svg
-              className="h-5 w-5 text-amber-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-            <AlertDescription>
-              <h3 className="text-sm font-semibold text-amber-900 mb-1">
-                Suggested Todos ({suggestedTodos.length})
-              </h3>
-              <p className="text-sm text-amber-700 mb-3">
-                These todos were extracted from your voice notes. Accept them to add to your list.
-              </p>
-              <TodoList todos={suggestedTodos} showNoteLinks />
-            </AlertDescription>
-          </Alert>
+          <Callout
+            tone="warning"
+            label={`Suggested todos · ${suggestedTodos.length}`}
+            className="space-y-2"
+          >
+            <p className="text-xs leading-5 text-warning/90">
+              Extracted from your voice notes. Accept one to add it to your list.
+            </p>
+            <TodoList todos={suggestedTodos} showNoteLinks />
+          </Callout>
         )}
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
-          <TabsList variant="line">
-            {tabs.map((tab) => (
-              <TabsTrigger key={tab.key} value={tab.key}>
-                {tab.label}
-                {tab.count !== undefined && (
-                  <Badge variant="neutral" className="ml-2 text-xs">
-                    {tab.count}
-                  </Badge>
-                )}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center justify-between gap-3">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
+            <TabsList variant="line">
+              {tabs.map((tab) => (
+                <TabsTrigger key={tab.key} value={tab.key}>
+                  {tab.label}
+                  {tab.count !== undefined && (
+                    <Badge variant="neutral" className="ml-2 px-1.5 text-[10px] tabular-nums">
+                      {tab.count}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
 
-        {/* Todo List */}
         {isLoading ? (
-          <div className="text-center py-8 text-gray-500">Loading todos...</div>
+          <div className="text-ink-subtle py-10 text-center text-sm">Loading todos…</div>
         ) : error ? (
-          <div className="text-center py-8 text-red-500">Failed to load todos</div>
+          <div className="text-destructive py-10 text-center text-sm">Failed to load todos</div>
         ) : (
           <TodoList
             todos={activeTodos}
             emptyMessage={
               activeTab === 'completed'
                 ? 'No completed todos yet.'
-                : 'No active todos. Create one to get started!'
+                : 'No active todos. Create one to get started.'
             }
             showNoteLinks
           />

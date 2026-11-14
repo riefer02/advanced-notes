@@ -5,7 +5,7 @@ import type { UserProfile } from '../lib/api'
 import UserAvatar from './UserAvatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card } from '@/components/ui/card'
+import { DetailCard } from '@/components/ui/detail'
 
 export default function FriendSearch() {
   const [query, setQuery] = useState('')
@@ -25,7 +25,7 @@ export default function FriendSearch() {
   return (
     <div className="space-y-4">
       <div>
-        <label htmlFor="friend-search" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="friend-search" className="section-label mb-1.5 block">
           Find people
         </label>
         <Input
@@ -38,11 +38,11 @@ export default function FriendSearch() {
       </div>
 
       {isLoading && debouncedQuery.length >= 2 && (
-        <div className="text-sm text-gray-500 py-2">Searching...</div>
+        <div className="text-sm text-ink-subtle py-2">Searching...</div>
       )}
 
       {!isLoading && debouncedQuery.length >= 2 && users.length === 0 && (
-        <div className="text-sm text-gray-500 py-2">No users found</div>
+        <div className="text-sm text-ink-subtle py-2">No users found</div>
       )}
 
       {users.length > 0 && debouncedQuery.length >= 2 && (
@@ -74,26 +74,26 @@ function UserSearchResult({
   isSent: boolean
 }) {
   return (
-    <Card className="flex items-center justify-between p-3">
+    <DetailCard className="flex items-center justify-between p-3">
       <div className="flex items-center gap-3 min-w-0">
         <UserAvatar avatarUrl={user.avatar_url} displayName={user.display_name} size="sm" />
         <div className="min-w-0">
-          <p className="text-sm font-medium text-gray-900 truncate">{user.display_name}</p>
-          {user.username && <p className="text-xs text-gray-500 truncate">@{user.username}</p>}
+          <p className="text-sm font-medium text-ink truncate">{user.display_name}</p>
+          {user.username && <p className="text-xs text-ink-subtle truncate">@{user.username}</p>}
           {!user.username && user.email && (
-            <p className="text-xs text-gray-500 truncate">{user.email}</p>
+            <p className="text-xs text-ink-subtle truncate">{user.email}</p>
           )}
         </div>
       </div>
       <Button
         variant="ghost"
         size="sm"
-        className="ml-3 text-blue-700 bg-blue-50 hover:bg-blue-100"
+        className="text-brand bg-brand-soft hover:bg-brand-soft ml-3"
         onClick={onSendRequest}
         disabled={isSending || isSent}
       >
         {isSent ? 'Pending' : isSending ? 'Sending...' : 'Add Friend'}
       </Button>
-    </Card>
+    </DetailCard>
   )
 }

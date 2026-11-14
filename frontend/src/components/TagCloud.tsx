@@ -11,7 +11,7 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   if (loading) {
-    return <div className="h-12 bg-gray-50 rounded-lg animate-pulse"></div>
+    return <div className="h-12 bg-surface-muted rounded-lg animate-pulse"></div>
   }
 
   if (error || !tags || tags.length === 0) {
@@ -23,13 +23,13 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
       <div
         className={`flex items-center gap-2 ${
           isExpanded
-            ? 'flex-wrap p-4 bg-linear-to-br from-blue-50 to-purple-50 rounded-lg border border-blue-100'
+            ? 'border-brand/15 from-brand-soft/70 to-domain-vinyl/10 flex-wrap rounded-xl border bg-linear-to-br p-3'
             : 'overflow-x-auto pb-2 scrollbar-hide'
         }`}
       >
         <div className="flex items-center gap-2 mr-2 shrink-0">
           <span className="text-lg">🏷️</span>
-          {isExpanded && <span className="font-semibold text-gray-900">Tags</span>}
+          {isExpanded && <span className="font-semibold text-ink">Tags</span>}
         </div>
 
         {tags.map((tag) => {
@@ -43,8 +43,8 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
                 transition-all duration-150 ease-in-out whitespace-nowrap
                 ${
                   isSelected
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-700 border border-gray-200'
+                    ? 'bg-brand text-brand-foreground shadow-xs'
+                    : 'bg-surface text-ink hover:bg-brand-soft hover:text-brand border border-line'
                 }
               `}
             >
@@ -57,8 +57,8 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className={`
-            shrink-0 p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors
-            ${!isExpanded && 'sticky right-0 bg-linear-to-l from-white pl-4'}
+            shrink-0 p-1 rounded-full text-ink-subtle hover:text-ink-muted hover:bg-surface-muted transition-colors
+            ${!isExpanded && 'sticky right-0 bg-linear-to-l from-surface pl-4'}
           `}
           title={isExpanded ? 'Show less' : 'Show all tags'}
         >
@@ -75,7 +75,7 @@ export default function TagCloud({ selectedTag, onSelectTag }: TagCloudProps) {
 
       {/* Scroll indicator hint for collapsed view */}
       {!isExpanded && (
-        <div className="absolute right-8 top-0 bottom-2 w-8 bg-linear-to-l from-white to-transparent pointer-events-none" />
+        <div className="from-surface absolute right-8 top-0 bottom-2 w-8 bg-linear-to-l to-transparent pointer-events-none" />
       )}
     </div>
   )

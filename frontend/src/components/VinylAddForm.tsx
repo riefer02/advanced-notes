@@ -143,7 +143,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
 
   return (
     <SlideOver isOpen={isOpen} onClose={handleClose} title="Add Vinyl Record">
-      <form onSubmit={handleSubmit} className="p-4 space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4 pb-2">
         {createMutation.isError && (
           <Alert variant="destructive">
             <AlertDescription>{createMutation.error.message}</AlertDescription>
@@ -196,10 +196,10 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
         {images.length > 0 && (
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200" />
+              <div className="w-full border-t border-line" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="bg-white px-2 text-gray-500">
+              <span className="bg-surface px-2 text-ink-subtle">
                 {extraction ? 'Review & edit' : 'Or enter manually'}
               </span>
             </div>
@@ -208,8 +208,8 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
 
         {/* Form fields */}
         <div>
-          <Label className="text-xs text-gray-600 mb-1">
-            Artist <span className="text-red-500">*</span>
+          <Label className="text-xs text-ink-muted mb-1">
+            Artist <span className="text-destructive">*</span>
           </Label>
           <Input
             type="text"
@@ -221,8 +221,8 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
         </div>
 
         <div>
-          <Label className="text-xs text-gray-600 mb-1">
-            Album Title <span className="text-red-500">*</span>
+          <Label className="text-xs text-ink-muted mb-1">
+            Album Title <span className="text-destructive">*</span>
           </Label>
           <Input
             type="text"
@@ -235,7 +235,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label className="text-xs text-gray-600 mb-1">Year</Label>
+            <Label className="text-xs text-ink-muted mb-1">Year</Label>
             <Input
               type="number"
               value={releaseYear}
@@ -244,7 +244,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
             />
           </div>
           <div>
-            <Label className="text-xs text-gray-600 mb-1">Format</Label>
+            <Label className="text-xs text-ink-muted mb-1">Format</Label>
             <Select
               value={format || '__none__'}
               onValueChange={(v) => setFormat(v === '__none__' ? '' : v)}
@@ -265,7 +265,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
         </div>
 
         <div>
-          <Label className="text-xs text-gray-600 mb-1">Genre (comma-separated)</Label>
+          <Label className="text-xs text-ink-muted mb-1">Genre (comma-separated)</Label>
           <Input
             type="text"
             value={genre}
@@ -276,7 +276,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label className="text-xs text-gray-600 mb-1">Label</Label>
+            <Label className="text-xs text-ink-muted mb-1">Label</Label>
             <Input
               type="text"
               value={label}
@@ -285,7 +285,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
             />
           </div>
           <div>
-            <Label className="text-xs text-gray-600 mb-1">Catalog #</Label>
+            <Label className="text-xs text-ink-muted mb-1">Catalog #</Label>
             <Input
               type="text"
               value={catalogNumber}
@@ -297,7 +297,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label className="text-xs text-gray-600 mb-1">Country</Label>
+            <Label className="text-xs text-ink-muted mb-1">Country</Label>
             <Input
               type="text"
               value={pressingCountry}
@@ -306,7 +306,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
             />
           </div>
           <div>
-            <Label className="text-xs text-gray-600 mb-1">Color</Label>
+            <Label className="text-xs text-ink-muted mb-1">Color</Label>
             <Input
               type="text"
               value={color}
@@ -317,7 +317,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
         </div>
 
         <div>
-          <Label className="text-xs text-gray-600 mb-1">Condition</Label>
+          <Label className="text-xs text-ink-muted mb-1">Condition</Label>
           <Select
             value={condition || '__none__'}
             onValueChange={(v) => setCondition(v === '__none__' ? '' : v)}
@@ -340,7 +340,7 @@ export default function VinylAddForm({ isOpen, onClose, onCreated }: VinylAddFor
         </div>
 
         <div>
-          <Label className="text-xs text-gray-600 mb-1">Notes</Label>
+          <Label className="text-xs text-ink-muted mb-1">Notes</Label>
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}

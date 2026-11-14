@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useMealsCalendar } from '../hooks/useMeals'
 import type { MealType } from '../lib/api'
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface MealCalendarProps {
@@ -14,10 +15,10 @@ interface MealCalendarProps {
 }
 
 const MEAL_TYPE_COLORS: Record<MealType, string> = {
-  breakfast: 'bg-yellow-400',
-  lunch: 'bg-green-400',
-  dinner: 'bg-blue-400',
-  snack: 'bg-purple-400',
+  breakfast: 'bg-warning',
+  lunch: 'bg-positive',
+  dinner: 'bg-brand',
+  snack: 'bg-domain-vinyl',
 }
 
 const MONTH_NAMES = [
@@ -67,6 +68,12 @@ export default function MealCalendar({
       days.push({ date: dateStr, dayNum: day })
     }
 
+    // Pad the final week so the grid keeps its borders.
+    const remainder = days.length % 7
+    if (remainder !== 0) {
+      for (let i = 0; i < 7 - remainder; i++) days.push({ date: null, dayNum: null })
+    }
+
     return days
   }, [year, month])
 
@@ -77,45 +84,31 @@ export default function MealCalendar({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div className="bg-surface rounded-xl border border-line overflow-hidden">
       {/* Header with navigation */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
-        <Button variant="ghost" size="icon" onClick={onPrevMonth} aria-label="Previous month">
-          <svg
-            className="w-5 h-5 text-gray-600"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-surface-muted">
+        <Button variant="ghost" size="icon-sm" onClick={onPrevMonth} aria-label="Previous month">
+          <ChevronLeft className="size-4" />
         </Button>
-        <h2 className="text-lg font-semibold text-gray-900">
-          {MONTH_NAMES[month - 1]} {year}
-        </h2>
-        <Button variant="ghost" size="icon" onClick={onNextMonth} aria-label="Next month">
-          <svg
-            className="w-5 h-5 text-gray-600"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+        <div className="flex items-center gap-2">
+          <h2 className="text-ink text-[15px] font-semibold tracking-[-0.015em]">
+            {MONTH_NAMES[month - 1]} {year}
+          </h2>
+          {isLoading && (
+            <Loader2 className="text-ink-subtle size-3.5 animate-spin" aria-label="Loading meals" />
+          )}
+        </div>
+        <Button variant="ghost" size="icon-sm" onClick={onNextMonth} aria-label="Next month">
+          <ChevronRight className="size-4" />
         </Button>
       </div>
 
       {/* Day names header */}
-      <div className="grid grid-cols-7 border-b border-gray-200">
+      <div className="grid grid-cols-7 border-b border-line">
         {DAY_NAMES.map((day) => (
           <div
             key={day}
-            className="py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+            className="text-ink-subtle py-2 text-center text-[10px] font-medium tracking-[0.08em] uppercase"
           >
             {day}
           </div>
@@ -123,10 +116,12 @@ export default function MealCalendar({
       </div>
 
       {/* Calendar grid */}
-      <div className="grid grid-cols-7">
+      <div className="grid grid-cols-7" aria-busy={isLoading}>
         {calendarDays.map((day, index) => {
           if (!day.date) {
-            return <div key={`empty-${index}`} className="h-20 border-b border-r border-gray-100" />
+            return (
+              <div key={`empty-${index}`} className="border-line h-16 border-r border-b sm:h-20" />
+            )
           }
 
           const meals = data?.calendar[day.date] || []
@@ -138,15 +133,19 @@ export default function MealCalendar({
               key={day.date}
               type="button"
               onClick={() => onSelectDate(day.date!)}
-              className={`h-20 p-1 border-b border-r border-gray-100 text-left hover:bg-gray-50 transition-colors relative ${
-                isSelected ? 'bg-blue-50 ring-2 ring-blue-500 ring-inset' : ''
+              aria-label={`${MONTH_NAMES[month - 1]} ${day.dayNum}, ${year}${
+                meals.length ? `, ${meals.length} meal${meals.length === 1 ? '' : 's'}` : ''
+              }`}
+              aria-current={today ? 'date' : undefined}
+              className={`border-line hover:bg-surface-muted relative h-16 border-r border-b p-1 text-left transition-colors sm:h-20 ${
+                isSelected ? 'bg-brand-soft ring-brand/40 ring-1 ring-inset' : ''
               }`}
             >
               <span
                 className={`text-sm font-medium ${
                   today
-                    ? 'w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center'
-                    : 'text-gray-700'
+                    ? 'bg-brand text-brand-foreground flex size-6 items-center justify-center rounded-full'
+                    : 'text-ink'
                 }`}
               >
                 {day.dayNum}
@@ -158,20 +157,20 @@ export default function MealCalendar({
                   {meals.slice(0, 4).map((meal) => (
                     <span
                       key={meal.id}
-                      className={`w-2 h-2 rounded-full ${MEAL_TYPE_COLORS[meal.meal_type]}`}
+                      className={`size-1.5 rounded-full ${MEAL_TYPE_COLORS[meal.meal_type]}`}
                       title={`${meal.meal_type}: ${meal.item_count} item(s)`}
                     />
                   ))}
                   {meals.length > 4 && (
-                    <span className="text-xs text-gray-500">+{meals.length - 4}</span>
+                    <span className="text-ink-subtle text-[10px]">+{meals.length - 4}</span>
                   )}
                 </div>
               )}
 
               {/* Loading indicator */}
               {isLoading && (
-                <div className="absolute inset-0 bg-white/50 flex items-center justify-center">
-                  <div className="w-3 h-3 border border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                <div className="bg-surface/60 absolute inset-0 flex items-center justify-center">
+                  <div className="w-3 h-3 border border-line-strong border-t-ink-muted rounded-full animate-spin" />
                 </div>
               )}
             </button>
@@ -180,12 +179,12 @@ export default function MealCalendar({
       </div>
 
       {/* Legend */}
-      <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
-        <div className="flex flex-wrap gap-4 text-xs">
+      <div className="px-4 py-3 border-t border-line bg-surface-muted">
+        <div className="flex flex-wrap gap-4 text-[11px]">
           {(Object.entries(MEAL_TYPE_COLORS) as [MealType, string][]).map(([type, color]) => (
             <div key={type} className="flex items-center gap-1.5">
-              <span className={`w-2.5 h-2.5 rounded-full ${color}`} />
-              <span className="text-gray-600 capitalize">{type}</span>
+              <span className={`size-2 rounded-full ${color}`} />
+              <span className="text-ink-muted capitalize">{type}</span>
             </div>
           ))}
         </div>

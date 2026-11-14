@@ -35,7 +35,7 @@ function RootComponent() {
           </RequireAuth>
         </AppShell>
       ) : (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-surface-muted">
           <ErrorBoundary key={pathname}>
             <Outlet />
           </ErrorBoundary>

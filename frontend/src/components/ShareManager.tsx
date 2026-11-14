@@ -12,7 +12,7 @@ import { useFriends } from '../hooks/useFriends'
 import type { ResourceShare, Friendship, UserProfile } from '../lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card } from '@/components/ui/card'
+import { DetailCard } from '@/components/ui/detail'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Select,
@@ -33,7 +33,7 @@ export default function ShareManager({ currentUserId }: { currentUserId: string 
   const friends = friendsData?.friends ?? []
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Pending Share Invitations */}
       {received.length > 0 && <PendingShareInvitations shares={received} />}
 
@@ -69,18 +69,16 @@ function PendingShareInvitations({ shares }: { shares: ResourceShare[] }) {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-900 mb-3">
-        Pending Invitations ({shares.length})
-      </h3>
+      <h3 className="section-label mb-2.5">Pending invitations · {shares.length}</h3>
       <div className="space-y-2">
         {shares.map((share) => (
           <Alert key={share.id} variant="info" className="flex items-center justify-between">
             <AlertDescription className="min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
+              <p className="text-sm font-medium text-ink truncate">
                 {share.owner_profile?.display_name ?? 'Someone'} wants to share their{' '}
                 {formatResourceType(share.resource_type)}
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">Permission: {share.permission}</p>
+              <p className="text-xs text-ink-subtle mt-0.5">Permission: {share.permission}</p>
             </AlertDescription>
             <div className="flex items-center gap-2 ml-3">
               <Button
@@ -138,14 +136,14 @@ function CreateShareSection({
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-900 mb-3">Share Something</h3>
-      <Card className="p-4 space-y-3">
+      <h3 className="section-label mb-2.5">Share something</h3>
+      <DetailCard className="space-y-3 p-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Select
             value={selectedFriend || '__none__'}
             onValueChange={(v) => setSelectedFriend(v === '__none__' ? '' : v)}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label="Friend">
               <SelectValue placeholder="Select friend..." />
             </SelectTrigger>
             <SelectContent>
@@ -158,7 +156,7 @@ function CreateShareSection({
             </SelectContent>
           </Select>
           <Select value={resourceType} onValueChange={(v) => setResourceType(v)}>
-            <SelectTrigger>
+            <SelectTrigger aria-label="What to share">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -167,7 +165,7 @@ function CreateShareSection({
             </SelectContent>
           </Select>
           <Select value={permission} onValueChange={(v) => setPermission(v as 'view' | 'edit')}>
-            <SelectTrigger>
+            <SelectTrigger aria-label="Permission">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -179,8 +177,10 @@ function CreateShareSection({
         <Button onClick={handleCreate} disabled={!selectedFriend || createShare.isPending}>
           {createShare.isPending ? 'Sharing...' : 'Share'}
         </Button>
-        {createShare.isError && <p className="text-xs text-red-600">{createShare.error.message}</p>}
-      </Card>
+        {createShare.isError && (
+          <p className="text-xs text-destructive">{createShare.error.message}</p>
+        )}
+      </DetailCard>
     </div>
   )
 }
@@ -207,19 +207,23 @@ function SharesList({
   if (isLoading) {
     return (
       <div>
-        <h3 className="text-sm font-semibold text-gray-900 mb-1">{title}</h3>
-        <p className="text-xs text-gray-500 mb-3">{description}</p>
-        <div className="text-sm text-gray-500 py-4">Loading...</div>
+        <h3 className="section-label">{title}</h3>
+        <p className="text-ink-subtle mt-1 mb-2.5 text-xs">{description}</p>
+        <div className="text-ink-subtle rounded-xl border border-dashed border-line px-4 py-6 text-center text-[13px]">
+          Loading shares…
+        </div>
       </div>
     )
   }
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-900 mb-1">{title}</h3>
-      <p className="text-xs text-gray-500 mb-3">{description}</p>
+      <h3 className="section-label">{title}</h3>
+      <p className="text-ink-subtle mt-1 mb-2.5 text-xs">{description}</p>
       {shares.length === 0 ? (
-        <div className="text-sm text-gray-400 py-2">None yet</div>
+        <div className="text-ink-subtle border-line rounded-xl border border-dashed px-4 py-5 text-[13px]">
+          Nothing here yet.
+        </div>
       ) : (
         <div className="space-y-2">
           {shares.map((share) => {
@@ -275,12 +279,12 @@ function ShareCard({
   const viewLink = !isOwner ? getShareViewLink(share) : null
 
   return (
-    <Card className="flex items-center justify-between p-3">
+    <DetailCard className="flex items-center justify-between p-3">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-gray-900 truncate">
+        <p className="text-sm font-medium text-ink truncate">
           {formatResourceType(share.resource_type)}
           {personProfile && (
-            <span className="text-gray-500 font-normal">
+            <span className="text-ink-subtle font-normal">
               {' '}
               {isOwner
                 ? `shared with ${personProfile.display_name}`
@@ -289,7 +293,7 @@ function ShareCard({
           )}
         </p>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-xs text-gray-500 capitalize">{share.permission}</span>
+          <span className="text-xs text-ink-subtle capitalize">{share.permission}</span>
           <Badge
             variant={
               share.status === 'accepted'
@@ -308,9 +312,9 @@ function ShareCard({
           <Link
             to={viewLink.to}
             search={viewLink.search}
-            className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+            className="text-brand hover:bg-brand-soft focus-visible:ring-ring rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
-            View
+            Open
           </Link>
         )}
         <Button
@@ -318,12 +322,12 @@ function ShareCard({
           size="sm"
           onClick={onRevoke}
           disabled={isRevoking}
-          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+          className="text-destructive hover:text-destructive hover:bg-danger-soft"
         >
           {isOwner ? 'Revoke' : 'Leave'}
         </Button>
       </div>
-    </Card>
+    </DetailCard>
   )
 }
 

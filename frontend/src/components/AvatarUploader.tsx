@@ -43,11 +43,11 @@ export default function AvatarUploader({ avatarUrl, displayName }: AvatarUploade
         className="relative group"
       >
         <UserAvatar avatarUrl={avatarUrl} displayName={displayName} size="lg" />
-        <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+        <div className="absolute inset-0 rounded-full bg-scrim opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
           <span className="text-white text-xs font-medium">Change</span>
         </div>
         {isLoading && (
-          <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
+          <div className="absolute inset-0 rounded-full bg-scrim flex items-center justify-center">
             <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
           </div>
         )}
@@ -67,7 +67,7 @@ export default function AvatarUploader({ avatarUrl, displayName }: AvatarUploade
           size="sm"
           onClick={() => fileInputRef.current?.click()}
           disabled={isLoading}
-          className="text-blue-600 hover:text-blue-700 p-0 h-auto"
+          className="text-brand hover:text-brand p-0 h-auto"
         >
           Upload photo
         </Button>
@@ -77,7 +77,7 @@ export default function AvatarUploader({ avatarUrl, displayName }: AvatarUploade
             size="sm"
             onClick={() => deleteAvatar.mutate()}
             disabled={isLoading}
-            className="text-red-500 hover:text-red-600 p-0 h-auto"
+            className="text-destructive hover:text-destructive p-0 h-auto"
           >
             Remove
           </Button>

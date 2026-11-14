@@ -1,19 +1,21 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useUser } from '@clerk/clerk-react'
 import {
-  FileText,
-  CheckCircle2,
-  UtensilsCrossed,
-  Disc3,
-  Mic,
-  MessageSquare,
-  PenLine,
   ArrowRight,
+  CheckCircle2,
+  Disc3,
+  FileText,
+  MessageSquare,
+  Mic,
+  PenLine,
+  UtensilsCrossed,
 } from 'lucide-react'
 
-import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { DetailCard, DetailCardHeader } from '@/components/ui/detail'
+import { PageHeader } from '@/components/ui/page-header'
+import { StatCard } from '@/components/ui/stat-card'
 import { QueryStateRenderer } from '../components/QueryStateRenderer'
 import { useDashboardStats } from '../hooks/useDashboard'
 import { useTodos } from '../hooks/useTodos'
@@ -46,16 +48,44 @@ function DashboardPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8">
-        {/* Greeting */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {getGreeting()}, {firstName}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">{today}</p>
-        </div>
+      <div className="mx-auto max-w-5xl space-y-6 px-5 py-6 sm:px-8">
+        <PageHeader
+          title={`${getGreeting()}, ${firstName}`}
+          description={today}
+          actions={
+            <div className="flex flex-wrap items-center gap-0.5">
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/notes" search={{ compose: true }}>
+                  <PenLine className="size-4" />
+                  Write
+                </Link>
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/notes">
+                  <Mic className="size-4" />
+                  Record
+                </Link>
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/meals">
+                  <UtensilsCrossed className="size-4" />
+                  Log meal
+                </Link>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={openAsk}>
+                <MessageSquare className="size-4" />
+                Ask notes
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/summaries">
+                  <FileText className="size-4" />
+                  Summarize
+                </Link>
+              </Button>
+            </div>
+          }
+        />
 
-        {/* Stats Grid */}
         <QueryStateRenderer
           data={statsQuery.data}
           isLoading={statsQuery.isLoading}
@@ -64,87 +94,54 @@ function DashboardPage() {
           {(stats: DashboardStats) => <StatsGrid stats={stats} />}
         </QueryStateRenderer>
 
-        {/* Quick Actions */}
-        <div>
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
-            Quick Actions
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            <Link to="/notes" search={{ compose: true }}>
-              <Button variant="outline" size="sm">
-                <PenLine className="h-4 w-4 mr-1.5" />
-                Write a Note
+        <DetailCard>
+          <DetailCardHeader
+            title="Active todos"
+            subtitle="Tasks you accepted, newest first"
+            icon={CheckCircle2}
+            action={
+              <Button variant="ghost" size="xs" asChild>
+                <Link to="/todos">
+                  View all
+                  <ArrowRight className="size-3" />
+                </Link>
               </Button>
-            </Link>
-            <Link to="/notes">
-              <Button variant="outline" size="sm">
-                <Mic className="h-4 w-4 mr-1.5" />
-                Record a Note
-              </Button>
-            </Link>
-            <Link to="/meals">
-              <Button variant="outline" size="sm">
-                <UtensilsCrossed className="h-4 w-4 mr-1.5" />
-                Log a Meal
-              </Button>
-            </Link>
-            <Button variant="outline" size="sm" onClick={openAsk}>
-              <MessageSquare className="h-4 w-4 mr-1.5" />
-              Ask Notes
-            </Button>
-            <Link to="/summaries">
-              <Button variant="outline" size="sm">
-                <FileText className="h-4 w-4 mr-1.5" />
-                Create Summary
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Active Todos */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
-              Active Todos
-            </h2>
-            <Link
-              to="/todos"
-              className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
-            >
-              View all <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
+            }
+            className="pb-2.5"
+          />
           <QueryStateRenderer
             data={todosQuery.data}
             isLoading={todosQuery.isLoading}
             error={todosQuery.error}
             emptyCheck={(data) => data.todos.length === 0}
             emptyComponent={
-              <p className="text-sm text-muted-foreground py-4">
-                No active todos. Tasks you accept will appear here.
+              <p className="text-ink-subtle border-line border-t px-4 py-5 text-[13px]">
+                Nothing active. Accept a suggested todo from a note and it shows up here.
               </p>
             }
           >
             {(data) => (
-              <div className="space-y-2">
+              <div className="border-line divide-line divide-y border-t">
                 {data.todos.map((todo) => (
                   <Link
                     key={todo.id}
                     to="/todos"
-                    className="block rounded-lg border bg-white p-3 hover:border-blue-300 hover:shadow-sm transition"
+                    className="hover:bg-surface-muted/60 focus-visible:bg-surface-muted/60 group flex items-center justify-between gap-4 px-4 py-2.5 transition-colors focus-visible:outline-none"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-900">{todo.title}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatAge(todo.created_at)}
-                      </span>
-                    </div>
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <span className="border-line-strong size-3.5 shrink-0 rounded-full border" />
+                      <span className="text-ink truncate text-[13px] leading-5">{todo.title}</span>
+                    </span>
+                    <span className="text-ink-subtle flex shrink-0 items-center gap-2 text-[11px]">
+                      {formatAge(todo.created_at)}
+                      <ArrowRight className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
+                    </span>
                   </Link>
                 ))}
               </div>
             )}
           </QueryStateRenderer>
-        </div>
+        </DetailCard>
       </div>
     </div>
   )
@@ -152,82 +149,52 @@ function DashboardPage() {
 
 function StatsGrid({ stats }: { stats: DashboardStats }) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <Link to="/notes">
-        <Card className="hover:border-blue-300 hover:shadow-md transition-all cursor-pointer h-full">
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-blue-50 p-2">
-                <FileText className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">{stats.notes.total}</p>
-                <p className="text-xs text-muted-foreground">Notes recorded</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+    <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+      <Link to="/notes" className="block">
+        <StatCard
+          icon={FileText}
+          accent="notes"
+          label="Notes"
+          value={stats.notes.total}
+          meta="recorded"
+        />
       </Link>
 
-      <Link to="/todos">
-        <Card className="hover:border-green-300 hover:shadow-md transition-all cursor-pointer h-full">
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-green-50 p-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-2xl font-bold text-gray-900">{stats.todos.accepted}</p>
-                  {stats.todos.suggested > 0 && (
-                    <Badge variant="info" className="text-[10px]">
-                      {stats.todos.suggested} new
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Active &middot; {stats.todos.completed} done
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <Link to="/todos" className="block">
+        <StatCard
+          icon={CheckCircle2}
+          accent="tasks"
+          label="Active todos"
+          value={stats.todos.accepted}
+          meta={`${stats.todos.completed} done`}
+          badge={
+            stats.todos.suggested > 0 ? (
+              <Badge variant="info" className="text-2xs px-1.5 py-0 leading-4 font-medium">
+                {stats.todos.suggested} new
+              </Badge>
+            ) : undefined
+          }
+        />
       </Link>
 
-      <Link to="/meals">
-        <Card className="hover:border-orange-300 hover:shadow-md transition-all cursor-pointer h-full">
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-orange-50 p-2">
-                <UtensilsCrossed className="h-5 w-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">{stats.meals.this_month}</p>
-                <p className="text-xs text-muted-foreground">
-                  This month &middot; {stats.meals.today} today
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <Link to="/meals" className="block">
+        <StatCard
+          icon={UtensilsCrossed}
+          accent="meals"
+          label="Meals"
+          value={stats.meals.this_month}
+          meta={`${stats.meals.today} today`}
+        />
       </Link>
 
-      <Link to="/vinyl">
-        <Card className="hover:border-purple-300 hover:shadow-md transition-all cursor-pointer h-full">
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-purple-50 p-2">
-                <Disc3 className="h-5 w-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">{stats.vinyl.total_records}</p>
-                <p className="text-xs text-muted-foreground">
-                  Records &middot; {stats.vinyl.total_artists} artists
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <Link to="/vinyl" className="block">
+        <StatCard
+          icon={Disc3}
+          accent="vinyl"
+          label="Records"
+          value={stats.vinyl.total_records}
+          meta={`${stats.vinyl.total_artists} artists`}
+        />
       </Link>
     </div>
   )

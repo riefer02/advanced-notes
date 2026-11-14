@@ -48,7 +48,7 @@ function NotesPage() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Mobile Tabs - Visible only on mobile */}
-      <div className="lg:hidden border-b bg-white shrink-0">
+      <div className="border-line bg-surface shrink-0 border-b lg:hidden">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'capture' | 'notes')}>
           <TabsList variant="line" className="w-full">
             <TabsTrigger value="capture" className="flex-1">
@@ -65,11 +65,11 @@ function NotesPage() {
       <div className="flex-1 lg:flex overflow-hidden">
         {/* Left Pane: Capture (40%) */}
         <div
-          className={`lg:w-[40%] lg:border-r lg:border-gray-200 bg-white lg:bg-gray-50 overflow-y-auto ${
+          className={`bg-surface lg:bg-background overflow-y-auto lg:w-[40%] lg:border-r lg:border-line ${
             activeTab === 'capture' ? 'block' : 'hidden lg:block'
           }`}
         >
-          <div className="p-4 lg:p-8 max-w-2xl mx-auto">
+          <div className="mx-auto max-w-2xl p-4 lg:p-6">
             <Tabs
               value={captureMode}
               onValueChange={(value) => setCaptureMode(value as CaptureMode)}

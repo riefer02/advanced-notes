@@ -1,11 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 import SlideOver from '../components/ui/SlideOver'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ChevronRight, Trash2 } from 'lucide-react'
+import { Callout, DetailCard, DetailCardHeader, DetailSection } from '@/components/ui/detail'
+import { PageHeader } from '@/components/ui/page-header'
 import NoteDetail from '../components/NoteDetail'
 import { fetchNote } from '../lib/api'
 import type { AskHistoryItem, DigestHistoryItem, DigestResult, Note } from '../lib/api'
@@ -38,6 +41,7 @@ function SummariesPage() {
 
   const [selectedSourceNote, setSelectedSourceNote] = useState<Note | null>(null)
   const [isLoadingSourceNote, setIsLoadingSourceNote] = useState(false)
+  const sourceRequestRef = useRef(0)
 
   const [inlineResult, setInlineResult] = useState<DigestResult | null>(null)
   const [summaryError, setSummaryError] = useState<string | null>(null)
@@ -78,15 +82,24 @@ function SummariesPage() {
     return { queryPlan, cited, scores }
   }, [selectedAsk])
 
+  const closeSourceNote = () => {
+    // Invalidate any in-flight fetch so a late response cannot reopen the drawer.
+    sourceRequestRef.current += 1
+    setIsLoadingSourceNote(false)
+    setSelectedSourceNote(null)
+  }
+
   const openSourceNote = async (noteId: string) => {
+    const requestId = sourceRequestRef.current + 1
+    sourceRequestRef.current = requestId
     setIsLoadingSourceNote(true)
     try {
       const note = await fetchNote(noteId)
-      setSelectedSourceNote(note)
+      if (sourceRequestRef.current === requestId) setSelectedSourceNote(note)
     } catch {
-      alert('Failed to load note')
+      if (sourceRequestRef.current === requestId) alert('Failed to load note')
     } finally {
-      setIsLoadingSourceNote(false)
+      if (sourceRequestRef.current === requestId) setIsLoadingSourceNote(false)
     }
   }
 
@@ -126,13 +139,20 @@ function SummariesPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-semibold text-gray-900">Summaries</h2>
-          <Button onClick={handleGenerateSummary} loading={generateSummaryMutation.isPending}>
-            Generate Summary
-          </Button>
-        </div>
+      <div className="mx-auto max-w-5xl space-y-5 px-5 py-6 sm:px-8">
+        <PageHeader
+          title="Summaries"
+          description="Digests of what you have captured, generated on demand."
+          actions={
+            <Button
+              size="sm"
+              onClick={handleGenerateSummary}
+              loading={generateSummaryMutation.isPending}
+            >
+              Generate summary
+            </Button>
+          }
+        />
 
         {summaryError && (
           <Alert variant="destructive">
@@ -140,7 +160,7 @@ function SummariesPage() {
               <span>{summaryError}</span>
               <button
                 onClick={() => setSummaryError(null)}
-                className="text-red-600 hover:text-red-800 text-sm font-medium"
+                className="text-destructive hover:text-destructive text-sm font-medium"
               >
                 Dismiss
               </button>
@@ -149,46 +169,40 @@ function SummariesPage() {
         )}
 
         {inlineResult && (
-          <Alert variant="accent" className="rounded-xl p-6">
-            <AlertDescription>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-purple-900">New Summary</h3>
-                <button
-                  onClick={() => setInlineResult(null)}
-                  className="text-purple-600 hover:text-purple-800 text-sm font-medium"
-                >
+          <DetailCard>
+            <DetailCardHeader
+              title="New summary"
+              subtitle="Generated just now"
+              action={
+                <Button variant="ghost" size="xs" onClick={() => setInlineResult(null)}>
                   Dismiss
-                </button>
-              </div>
-              <div className="prose prose-purple max-w-none text-sm mb-4">
+                </Button>
+              }
+            />
+            <div className="border-line space-y-4 border-t px-4 py-4">
+              <div className="markdown">
                 <ReactMarkdown>{inlineResult.summary}</ReactMarkdown>
               </div>
               {inlineResult.key_themes.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-semibold text-purple-800 uppercase tracking-wider mb-2">
-                    Key Themes
-                  </h4>
-                  <ul className="space-y-1 text-sm text-gray-800 list-disc pl-5">
+                <DetailSection label="Key themes">
+                  <ul className="text-ink-muted list-disc space-y-1 pl-5 text-[13px] leading-5">
                     {inlineResult.key_themes.map((theme, i) => (
                       <li key={i}>{theme}</li>
                     ))}
                   </ul>
-                </div>
+                </DetailSection>
               )}
               {inlineResult.action_items.length > 0 && (
-                <div className="pt-4 border-t border-purple-200">
-                  <h4 className="text-sm font-semibold text-purple-800 uppercase tracking-wider mb-2">
-                    Action Items
-                  </h4>
-                  <ul className="space-y-1 text-sm text-gray-800 list-disc pl-5">
+                <DetailSection label="Action items">
+                  <ul className="text-ink-muted list-disc space-y-1 pl-5 text-[13px] leading-5">
                     {inlineResult.action_items.map((item, i) => (
                       <li key={i}>{item}</li>
                     ))}
                   </ul>
-                </div>
+                </DetailSection>
               )}
-            </AlertDescription>
-          </Alert>
+            </div>
+          </DetailCard>
         )}
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
@@ -222,53 +236,49 @@ function SummariesPage() {
         width="max-w-2xl"
       >
         {selectedDigest && (
-          <div className="space-y-4 pb-6">
-            <div className="text-xs text-gray-500">
+          <div className="space-y-4 pb-2">
+            <div className="text-ink-subtle text-xs">
               {new Date(selectedDigest.created_at).toLocaleString()}
             </div>
             {parsedDigest?.summary ? (
-              <div className="prose prose-purple max-w-none">
+              <div className="markdown">
                 <ReactMarkdown>{parsedDigest.summary}</ReactMarkdown>
               </div>
             ) : (
-              <div className="text-sm text-gray-700 whitespace-pre-wrap">
+              <div className="text-ink text-[15px] leading-7 whitespace-pre-wrap">
                 {selectedDigest.content}
               </div>
             )}
 
             {parsedDigest?.key_themes?.length ? (
-              <div>
-                <div className="text-xs font-semibold text-purple-800 uppercase tracking-wider mb-2">
-                  Key Themes
-                </div>
-                <ul className="space-y-1 text-sm text-gray-800 list-disc pl-5">
+              <DetailSection label="Key themes">
+                <ul className="text-ink-muted list-disc space-y-1 pl-5 text-[13px] leading-5">
                   {parsedDigest.key_themes.map((t, i) => (
                     <li key={i}>{t}</li>
                   ))}
                 </ul>
-              </div>
+              </DetailSection>
             ) : null}
 
             {parsedDigest?.action_items?.length ? (
-              <div>
-                <div className="text-xs font-semibold text-purple-800 uppercase tracking-wider mb-2">
-                  Action Items
-                </div>
-                <ul className="space-y-1 text-sm text-gray-800 list-disc pl-5">
+              <DetailSection label="Action items">
+                <ul className="text-ink-muted list-disc space-y-1 pl-5 text-[13px] leading-5">
                   {parsedDigest.action_items.map((t, i) => (
                     <li key={i}>{t}</li>
                   ))}
                 </ul>
-              </div>
+              </DetailSection>
             ) : null}
 
-            <div className="pt-4 border-t">
+            <div className="border-line border-t pt-4">
               <Button
-                variant="destructive"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive/8 hover:text-destructive"
                 onClick={() => void handleDeleteDigest(selectedDigest.id)}
-                className="w-full"
               >
-                Delete Digest
+                <Trash2 />
+                Delete digest
               </Button>
             </div>
           </div>
@@ -282,66 +292,52 @@ function SummariesPage() {
         width="max-w-2xl"
       >
         {selectedAsk && (
-          <div className="space-y-4 pb-6">
-            <div className="text-xs text-gray-500">
+          <div className="space-y-4 pb-2">
+            <div className="text-ink-subtle text-xs">
               {new Date(selectedAsk.created_at).toLocaleString()}
             </div>
-            <Alert variant="info">
-              <AlertDescription>
-                <div className="text-xs font-semibold text-blue-900 uppercase tracking-wider mb-1">
-                  Question
-                </div>
-                <div className="text-sm text-blue-900">{selectedAsk.query}</div>
-              </AlertDescription>
-            </Alert>
-            <div className="prose prose-blue max-w-none">
+            <Callout tone="brand" label="Question">
+              <p className="text-[13px] leading-5">{selectedAsk.query}</p>
+            </Callout>
+            <div className="markdown">
               <ReactMarkdown>{selectedAsk.answer_markdown}</ReactMarkdown>
             </div>
 
             {parsedAsk?.cited?.length ? (
-              <div className="border-t pt-4">
-                <div className="text-sm font-semibold text-gray-900 mb-2">Cited Notes</div>
-                <div className="space-y-2">
+              <DetailSection label="Cited notes">
+                <div className="space-y-1.5">
                   {parsedAsk.cited.map((nid) => (
                     <button
                       key={nid}
                       onClick={() => void openSourceNote(nid)}
-                      className="w-full text-left rounded-lg border border-gray-200 bg-white p-3 hover:border-blue-300 hover:shadow-xs transition"
+                      className="border-line bg-surface hover:border-line-strong hover:shadow-card focus-visible:ring-ring w-full rounded-xl border p-3 text-left transition-[border-color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="text-sm font-semibold text-gray-900 truncate">{nid}</div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            score {Math.round(((parsedAsk.scores?.[nid] ?? 0) as number) * 100)}%
+                          <div className="text-ink truncate text-[13px] font-medium">
+                            Note {nid.slice(0, 8)}
+                          </div>
+                          <div className="text-ink-subtle mt-0.5 text-[11px]">
+                            {Math.round(((parsedAsk.scores?.[nid] ?? 0) as number) * 100)}% match
                           </div>
                         </div>
-                        <svg
-                          className="h-5 w-5 text-gray-400 shrink-0"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5l7 7-7 7"
-                          />
-                        </svg>
+                        <ChevronRight className="text-ink-subtle size-4 shrink-0" aria-hidden />
                       </div>
                     </button>
                   ))}
                 </div>
-              </div>
+              </DetailSection>
             ) : null}
 
-            <div className="pt-4 border-t">
+            <div className="border-line border-t pt-4">
               <Button
-                variant="destructive"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive/8 hover:text-destructive"
                 onClick={() => void handleDeleteAsk(selectedAsk.id)}
-                className="w-full"
               >
-                Delete Ask History Item
+                <Trash2 />
+                Delete ask history item
               </Button>
             </div>
           </div>
@@ -350,12 +346,12 @@ function SummariesPage() {
 
       <SlideOver
         isOpen={!!selectedSourceNote || isLoadingSourceNote}
-        onClose={() => setSelectedSourceNote(null)}
+        onClose={closeSourceNote}
         title="Source Note"
         width="max-w-xl"
       >
         {isLoadingSourceNote ? (
-          <div className="py-10 text-sm text-gray-600">Loading note…</div>
+          <div className="py-10 text-sm text-ink-muted">Loading note…</div>
         ) : selectedSourceNote ? (
           <NoteDetail
             note={selectedSourceNote}
@@ -380,41 +376,50 @@ function DigestList(props: {
   onSelect: (d: DigestHistoryItem) => void
 }) {
   if (props.isLoading) {
-    return <div className="text-sm text-gray-600">Loading digests…</div>
+    return <div className="text-ink-subtle py-6 text-[13px]">Loading digests…</div>
   }
   if (props.error) {
-    return <div className="text-sm text-red-700">Failed to load digests</div>
+    return <div className="text-destructive py-6 text-[13px]">Failed to load digests</div>
   }
   if (!props.digests.length) {
-    return <div className="text-sm text-gray-600">No digests yet.</div>
+    return (
+      <div className="border-line bg-surface-muted/30 rounded-xl border border-dashed px-4 py-8 text-center">
+        <p className="text-ink text-[13px] font-medium">No digests yet</p>
+        <p className="text-ink-subtle mt-1 text-xs">
+          Generate a summary to turn your notes into a digest.
+        </p>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-2">
-      {props.digests.map((d) => (
-        <button
-          key={d.id}
-          onClick={() => props.onSelect(d)}
-          className="w-full text-left rounded-lg border border-gray-200 bg-white p-4 hover:border-purple-300 hover:shadow-xs transition"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-gray-900 truncate">Digest</div>
-              <div className="text-xs text-gray-500 mt-1">
-                {new Date(d.created_at).toLocaleString()}
+      {props.digests.map((d) => {
+        const preview =
+          d.content
+            .replace(/[#*_>`~-]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 110) || 'Digest'
+
+        return (
+          <button
+            key={d.id}
+            onClick={() => props.onSelect(d)}
+            className="border-line bg-surface hover:border-line-strong hover:shadow-card focus-visible:ring-ring w-full rounded-xl border p-3 text-left transition-[border-color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-ink line-clamp-1 text-[13px] font-medium">{preview}</div>
+                <div className="text-ink-subtle mt-0.5 text-[11px]">
+                  {new Date(d.created_at).toLocaleString()}
+                </div>
               </div>
+              <ChevronRight className="text-ink-subtle size-4 shrink-0" aria-hidden />
             </div>
-            <svg
-              className="h-5 w-5 text-gray-400 shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
-        </button>
-      ))}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -426,13 +431,20 @@ function AskHistoryList(props: {
   onSelect: (d: AskHistoryItem) => void
 }) {
   if (props.isLoading) {
-    return <div className="text-sm text-gray-600">Loading ask history…</div>
+    return <div className="text-ink-subtle py-6 text-[13px]">Loading ask history…</div>
   }
   if (props.error) {
-    return <div className="text-sm text-red-700">Failed to load ask history</div>
+    return <div className="text-destructive py-6 text-[13px]">Failed to load ask history</div>
   }
   if (!props.items.length) {
-    return <div className="text-sm text-gray-600">No ask history yet.</div>
+    return (
+      <div className="border-line bg-surface-muted/30 rounded-xl border border-dashed px-4 py-8 text-center">
+        <p className="text-ink text-[13px] font-medium">No questions yet</p>
+        <p className="text-ink-subtle mt-1 text-xs">
+          Ask a question from the header or command palette and it will show up here.
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -441,23 +453,16 @@ function AskHistoryList(props: {
         <button
           key={d.id}
           onClick={() => props.onSelect(d)}
-          className="w-full text-left rounded-lg border border-gray-200 bg-white p-4 hover:border-blue-300 hover:shadow-xs transition"
+          className="border-line bg-surface hover:border-line-strong hover:shadow-card focus-visible:ring-ring w-full rounded-xl border p-3 text-left transition-[border-color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-gray-900 truncate">{d.query}</div>
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-ink truncate text-[13px] font-medium">{d.query}</div>
+              <div className="text-ink-subtle mt-0.5 text-[11px]">
                 {new Date(d.created_at).toLocaleString()}
               </div>
             </div>
-            <svg
-              className="h-5 w-5 text-gray-400 shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <ChevronRight className="text-ink-subtle size-4 shrink-0" aria-hidden />
           </div>
         </button>
       ))}

@@ -17,6 +17,7 @@ import { Route as NotesRouteImport } from './routes/notes'
 import { Route as MealsRouteImport } from './routes/meals'
 import { Route as FriendsRouteImport } from './routes/friends'
 import { Route as FeedbackRouteImport } from './routes/feedback'
+import { Route as DesignRouteImport } from './routes/design'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
@@ -63,6 +64,11 @@ const FeedbackRoute = FeedbackRouteImport.update({
   path: '/feedback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DesignRoute = DesignRouteImport.update({
+  id: '/design',
+  path: '/design',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/dashboard': typeof DashboardRoute
+  '/design': typeof DesignRoute
   '/feedback': typeof FeedbackRoute
   '/friends': typeof FriendsRoute
   '/meals': typeof MealsRoute
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/dashboard': typeof DashboardRoute
+  '/design': typeof DesignRoute
   '/feedback': typeof FeedbackRoute
   '/friends': typeof FriendsRoute
   '/meals': typeof MealsRoute
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/dashboard': typeof DashboardRoute
+  '/design': typeof DesignRoute
   '/feedback': typeof FeedbackRoute
   '/friends': typeof FriendsRoute
   '/meals': typeof MealsRoute
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/dashboard'
+    | '/design'
     | '/feedback'
     | '/friends'
     | '/meals'
@@ -156,6 +166,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/dashboard'
+    | '/design'
     | '/feedback'
     | '/friends'
     | '/meals'
@@ -171,6 +182,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/dashboard'
+    | '/design'
     | '/feedback'
     | '/friends'
     | '/meals'
@@ -187,6 +199,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   DashboardRoute: typeof DashboardRoute
+  DesignRoute: typeof DesignRoute
   FeedbackRoute: typeof FeedbackRoute
   FriendsRoute: typeof FriendsRoute
   MealsRoute: typeof MealsRoute
@@ -257,6 +270,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FeedbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/design': {
+      id: '/design'
+      path: '/design'
+      fullPath: '/design'
+      preLoaderRoute: typeof DesignRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
@@ -299,6 +319,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   DashboardRoute: DashboardRoute,
+  DesignRoute: DesignRoute,
   FeedbackRoute: FeedbackRoute,
   FriendsRoute: FriendsRoute,
   MealsRoute: MealsRoute,
