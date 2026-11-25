@@ -62,6 +62,9 @@ class Config:
     JWKS_TIMEOUT_SECONDS: float = float(os.getenv("JWKS_TIMEOUT_SECONDS", "5"))
     JWKS_ATTEMPTS: int = int(os.getenv("JWKS_ATTEMPTS", "2"))
 
+    # Optional: used only for best-effort Clerk user deletion after a purge.
+    CLERK_SECRET_KEY: str | None = os.getenv("CLERK_SECRET_KEY")
+
     # Public "report a problem" endpoint: per-IP and per-user limits.
     REPORT_RATE_LIMIT_PER_IP: int = int(os.getenv("REPORT_RATE_LIMIT_PER_IP", "3"))
     REPORT_RATE_LIMIT_PER_USER: int = int(os.getenv("REPORT_RATE_LIMIT_PER_USER", "2"))

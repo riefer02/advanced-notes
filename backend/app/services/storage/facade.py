@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .account import AccountStorageMixin
 from .audio import AudioStorageMixin
 from .embeddings import EmbeddingStorageMixin
 from .engine import StorageEngine
@@ -16,6 +17,7 @@ from .vinyl import VinylStorageMixin
 
 
 class NoteStorage(
+    AccountStorageMixin,
     NoteStorageMixin,
     AudioStorageMixin,
     EmbeddingStorageMixin,
@@ -35,6 +37,7 @@ class NoteStorage(
     enforce user isolation by requiring `user_id` as the first parameter.
 
     Composed from feature-specific mixins for maintainability:
+    - AccountStorageMixin: storage-key inventory and full account purge
     - NoteStorageMixin: Note CRUD, folders, tags, search
     - AudioStorageMixin: Audio clip lifecycle
     - EmbeddingStorageMixin: Embeddings, semantic search, hybrid retrieval

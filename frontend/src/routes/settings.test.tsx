@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 // Mock Clerk
 vi.mock('@clerk/clerk-react', () => ({
   useAuth: () => ({ isLoaded: true, isSignedIn: true }),
+  useClerk: () => ({ signOut: vi.fn() }),
 }))
 
 // Mock settings hooks
