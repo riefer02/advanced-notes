@@ -17,6 +17,7 @@ import { fetchAskHistory, fetchDigests, fetchNote } from '../lib/api'
 import type { AskHistoryItem, DigestHistoryItem, DigestResult, Note } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 import { formatDateTime } from '../lib/format'
+import { track } from '../lib/analytics'
 import { useDeleteAskHistoryItem, useDeleteDigest, useGenerateSummary } from '../hooks/useNotes'
 
 export const Route = createFileRoute('/summaries')({
@@ -233,9 +234,11 @@ function SummariesPage() {
       onSuccess: (data) => {
         setInlineResult(data)
         setTab('digests')
+        track('summary_generated', { status: 'success' })
       },
       onError: (error) => {
         setSummaryError(error instanceof Error ? error.message : 'Failed to generate summary')
+        track('summary_generated', { status: 'failure' })
       },
     })
   }

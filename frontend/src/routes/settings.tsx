@@ -39,6 +39,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { formatUtcDate } from '@/lib/format'
+import { track } from '@/lib/analytics'
 import { fetchAccountExport, type ExportFormat } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -118,6 +119,7 @@ function SettingsPage() {
   const settingsInitializedRef = useRef(false)
 
   const handleExport = async (format: ExportFormat) => {
+    track('data_export_started', { format })
     setExporting(format)
     setExported(null)
     setExportError(null)
@@ -517,7 +519,14 @@ function SettingsPage() {
               Deletes notes, audio, todos, meals, vinyl records, shares, profile, and usage history.
               This is immediate and permanent.
             </p>
-            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                track('account_deletion_started')
+                setDeleteOpen(true)
+              }}
+            >
               Delete account
             </Button>
           </div>

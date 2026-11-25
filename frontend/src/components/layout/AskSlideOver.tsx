@@ -23,6 +23,7 @@ import NoteDetail from '../NoteDetail'
 import { askNotes, deleteNote, fetchNote } from '../../lib/api'
 import type { AskResponse, Note } from '../../lib/api'
 import { formatShortDate, pluralize } from '../../lib/format'
+import { track } from '../../lib/analytics'
 
 const ASK_STAGES = ['Planning', 'Searching your notes', 'Writing the answer'] as const
 
@@ -78,11 +79,15 @@ export function AskSlideOver({ isOpen, onClose }: { isOpen: boolean; onClose: ()
     setCopyState('idle')
     try {
       const result = await askNotes(q, 12, false)
-      if (askRequestRef.current === requestId) setAskResult(result)
+      if (askRequestRef.current === requestId) {
+        setAskResult(result)
+        track('ask_submitted', { status: 'success' })
+      }
     } catch (error) {
       if (askRequestRef.current !== requestId) return
       console.error('Failed to ask notes:', error)
       setAskError(error instanceof Error ? error.message : 'Failed to ask notes')
+      track('ask_submitted', { status: 'failure' })
     } finally {
       if (askRequestRef.current === requestId) setIsAsking(false)
     }
