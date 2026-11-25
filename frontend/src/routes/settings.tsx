@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import { useClerk } from '@clerk/clerk-react'
 import {
   Download,
   FileArchive,
@@ -11,6 +12,7 @@ import {
   Moon,
   Palette,
   Sun,
+  Trash2,
   UserRound,
   X,
 } from 'lucide-react'
@@ -19,6 +21,7 @@ import { useMyProfile, useUpdateProfile } from '../hooks/useProfile'
 import { useUsage } from '../hooks/useUsage'
 import { useTheme, type Theme } from '../components/theme/ThemeProvider'
 import AvatarUploader from '../components/AvatarUploader'
+import { DeleteAccountDialog } from '../components/DeleteAccountDialog'
 import UsernameInput from '../components/UsernameInput'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -90,6 +93,7 @@ function formatUsageAmount(value: number): string {
 }
 
 function SettingsPage() {
+  const { signOut } = useClerk()
   const {
     data: settings,
     isLoading: settingsLoading,
@@ -109,6 +113,7 @@ function SettingsPage() {
   const [exporting, setExporting] = useState<ExportFormat | null>(null)
   const [exported, setExported] = useState<ExportFormat | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const initializedRef = useRef(false)
   const settingsInitializedRef = useRef(false)
 
@@ -500,7 +505,32 @@ function SettingsPage() {
             ) : null}
           </div>
         </DetailCard>
+
+        <DetailCard className="border-destructive/20">
+          <DetailCardHeader
+            icon={Trash2}
+            title="Delete account"
+            subtitle="Permanently remove your data. This cannot be undone."
+          />
+          <div className="border-line flex flex-wrap items-center justify-between gap-3 border-t px-4 py-4">
+            <p className="text-ink-muted max-w-xl text-[13px] leading-5">
+              Deletes notes, audio, todos, meals, vinyl records, shares, profile, and usage history.
+              This is immediate and permanent.
+            </p>
+            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+              Delete account
+            </Button>
+          </div>
+        </DetailCard>
       </div>
+
+      <DeleteAccountDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={() => {
+          void signOut({ redirectUrl: '/' }).catch(() => window.location.assign('/'))
+        }}
+      />
     </div>
   )
 }
