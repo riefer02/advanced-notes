@@ -247,6 +247,48 @@ export async function apiUpload<T>(
   return response.json()
 }
 
+/**
+ * Download a binary response (exports, future file downloads) with auth.
+ * Returns the blob and the server-provided attachment filename, if any.
+ */
+export async function apiDownload(
+  endpoint: string,
+  options?: {
+    params?: Record<string, string | number | boolean | undefined>
+    timeoutMs?: number
+  }
+): Promise<{ blob: Blob; filename: string | null }> {
+  const headers = new Headers(await getAuthHeaders())
+  let url = `${API_BASE_URL}${endpoint}`
+
+  if (options?.params) {
+    const searchParams = new URLSearchParams()
+    for (const [key, value] of Object.entries(options.params)) {
+      if (value !== undefined) searchParams.set(key, String(value))
+    }
+    const queryString = searchParams.toString()
+    if (queryString) url += `?${queryString}`
+  }
+
+  const response = await fetchWithTimeout(
+    url,
+    { method: 'GET', headers },
+    options?.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS
+  )
+
+  if (!response.ok) {
+    await throwResponseError(response, 'Download failed')
+  }
+
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const match = disposition.match(/filename="?([^";]+)"?/i)
+
+  return {
+    blob: await response.blob(),
+    filename: match?.[1] ?? null,
+  }
+}
+
 // ============================================================================
 // Audio Helpers
 // ============================================================================

@@ -9,6 +9,7 @@ from . import (
     admin,
     ask,
     dashboard,
+    export,
     feedback,
     health,
     meals,
@@ -40,6 +41,7 @@ for _module in [
     usage,
     feedback,
     dashboard,
+    export,
     reports,
     webhooks,
 ]:

@@ -566,6 +566,19 @@ worker. Body is optional: `{"limit": 100, "include_stuck": true}`. Returns
 
 ---
 
+## Data export
+
+### GET `/export`
+
+Download everything the signed-in user owns in one request.
+
+**Query params**
+- `format` — `zip` (default) or `json`.
+
+The JSON payload includes profile, settings, folders, tags, notes (active, archived, and trashed), todos, meals, vinyl, digests, and Ask history. The ZIP adds `data.json`, `README.txt`, and one Markdown file per note under `notes/`. Audio binaries are not included yet; note text and transcripts are.
+
+**Response**: a `application/json` or `application/zip` attachment named `chisos-export-YYYY-MM-DD.*`.
+
 ## Utility
 
 ### GET `/health`

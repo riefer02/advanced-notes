@@ -1,6 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { Gauge, ListChecks, Mic, Monitor, Moon, Palette, Sun, UserRound, X } from 'lucide-react'
+import {
+  Download,
+  FileArchive,
+  FileJson,
+  Gauge,
+  ListChecks,
+  Mic,
+  Monitor,
+  Moon,
+  Palette,
+  Sun,
+  UserRound,
+  X,
+} from 'lucide-react'
 import { useUserSettings, useUpdateUserSettings } from '../hooks/useSettings'
 import { useMyProfile, useUpdateProfile } from '../hooks/useProfile'
 import { useUsage } from '../hooks/useUsage'
@@ -23,6 +36,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { formatUtcDate } from '@/lib/format'
+import { fetchAccountExport, type ExportFormat } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/settings')({
@@ -92,8 +106,33 @@ function SettingsPage() {
   const [bio, setBio] = useState('')
   const [hasChanges, setHasChanges] = useState(false)
   const [languages, setLanguages] = useState<string[]>([])
+  const [exporting, setExporting] = useState<ExportFormat | null>(null)
+  const [exported, setExported] = useState<ExportFormat | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
   const initializedRef = useRef(false)
   const settingsInitializedRef = useRef(false)
+
+  const handleExport = async (format: ExportFormat) => {
+    setExporting(format)
+    setExported(null)
+    setExportError(null)
+    try {
+      const { blob, filename } = await fetchAccountExport(format)
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = filename ?? `chisos-export.${format}`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setExported(format)
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Could not build your export.')
+    } finally {
+      setExporting(null)
+    }
+  }
 
   // Sync form state from profile data (only on first load)
   useEffect(() => {
@@ -286,6 +325,51 @@ function SettingsPage() {
         </DetailCard>
 
         <UsageCard />
+
+        <DetailCard>
+          <DetailCardHeader
+            icon={Download}
+            title="Your data"
+            subtitle="Take a portable copy with you."
+          />
+          <div className="border-line space-y-3 border-t px-4 py-4">
+            <p className="text-ink-muted text-[13px] leading-5">
+              Includes notes and transcripts, folders, tags, todos, meals, vinyl, digests, and Ask
+              history. Audio files are not included in this export yet.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => void handleExport('zip')}
+                loading={exporting === 'zip'}
+                disabled={!!exporting}
+              >
+                <FileArchive />
+                Download .zip
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleExport('json')}
+                loading={exporting === 'json'}
+                disabled={!!exporting}
+              >
+                <FileJson />
+                JSON only
+              </Button>
+            </div>
+            {exported && (
+              <p className="text-positive text-xs" role="status">
+                Download started ({exported === 'zip' ? 'JSON + Markdown' : 'JSON'}).
+              </p>
+            )}
+            {exportError && (
+              <p className="text-destructive text-xs" role="status">
+                {exportError}
+              </p>
+            )}
+          </div>
+        </DetailCard>
 
         <DetailCard>
           <DetailCardHeader
