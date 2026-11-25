@@ -321,7 +321,7 @@ function RecentCaptures({ className }: { className?: string }) {
         icon={FileText}
         action={
           <Button variant="ghost" size="xs" asChild>
-            <Link to="/notes">
+            <Link to="/library">
               View all
               <ArrowRight className="size-3" />
             </Link>
@@ -338,8 +338,8 @@ function RecentCaptures({ className }: { className?: string }) {
         emptyComponent={
           <SectionEmpty>
             No active notes.{' '}
-            <Link to="/notes" className="text-brand hover:underline">
-              Open Notes
+            <Link to="/library" className="text-brand hover:underline">
+              Open Library
             </Link>{' '}
             to check the archive or capture something new.
           </SectionEmpty>

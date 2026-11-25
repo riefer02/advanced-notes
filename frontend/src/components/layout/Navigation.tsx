@@ -4,6 +4,15 @@ import { Link } from '@tanstack/react-router'
 import { NAV_ITEMS } from './nav-items'
 
 function getIsActive(pathname: string, to: string) {
+  if (to === '/library') {
+    return (
+      pathname === '/library' ||
+      pathname.startsWith('/library/') ||
+      pathname.startsWith('/notes') ||
+      pathname.startsWith('/meals') ||
+      pathname.startsWith('/vinyl')
+    )
+  }
   return pathname === to || pathname.startsWith(`${to}/`)
 }
 

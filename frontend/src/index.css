@@ -336,6 +336,14 @@
     transform: translateY(-1px);
   }
 
+  /* Horizontal filter rails: scrollable without a visible scrollbar. */
+  .scrollbar-hide {
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Long-form AI output (digests, answers). No typography plugin needed. */
   .markdown {
     @apply text-ink/90 text-[15px] leading-7;

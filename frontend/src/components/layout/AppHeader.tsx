@@ -10,7 +10,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ThemeToggle } from '../theme/ThemeToggle'
-import type { NavItem } from './nav-items'
 
 export function AppHeader({
   activeItem,
@@ -18,7 +17,7 @@ export function AppHeader({
   onOpenCommandPalette,
   onOpenAsk,
 }: {
-  activeItem: NavItem | undefined
+  activeItem: { label: string } | undefined
   onOpenDrawer: () => void
   onOpenCommandPalette: () => void
   onOpenAsk: () => void
