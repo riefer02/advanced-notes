@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { type FeedbackType } from '../lib/api'
 import { useSubmitFeedback } from '../hooks/useFeedback'
+import { track } from '../lib/analytics'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -33,12 +34,22 @@ function FeedbackPage() {
     }
 
     // Keep the form values until success so a failed submit loses nothing.
-    submitMutation.mutate({
-      feedback_type: feedbackType,
-      title: title.trim(),
-      description: description.trim() || undefined,
-      rating: rating ?? undefined,
-    })
+    submitMutation.mutate(
+      {
+        feedback_type: feedbackType,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        rating: rating ?? undefined,
+      },
+      {
+        onSuccess: () => {
+          track('feedback_submitted', {
+            type: feedbackType,
+            rating_present: rating !== null,
+          })
+        },
+      }
+    )
   }
 
   const handleNewFeedback = () => {

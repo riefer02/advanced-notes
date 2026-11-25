@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import or_
 
+from ...database import AnalyticsEvent as AnalyticsEventORM
 from ...database import AskHistory as AskHistoryORM
 from ...database import AudioClip as AudioClipORM
 from ...database import Digest as DigestORM
@@ -115,7 +116,8 @@ class AccountStorageMixin:
             delete(VinylEmbeddingORM, VinylEmbeddingORM.user_id == user_id)
             delete(VinylRecordORM, VinylRecordORM.user_id == user_id)
 
-            # AI history and feedback.
+            # Analytics, AI history, and feedback.
+            delete(AnalyticsEventORM, AnalyticsEventORM.user_id == user_id)
             delete(DigestORM, DigestORM.user_id == user_id)
             delete(AskHistoryORM, AskHistoryORM.user_id == user_id)
             delete(FeedbackORM, FeedbackORM.user_id == user_id)

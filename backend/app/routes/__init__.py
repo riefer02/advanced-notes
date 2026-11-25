@@ -8,6 +8,7 @@ from flask import Blueprint
 from . import (
     account,
     admin,
+    analytics,
     ask,
     dashboard,
     export,
@@ -33,6 +34,7 @@ for _module in [
     account,
     health,
     admin,
+    analytics,
     notes,
     transcription,
     ask,

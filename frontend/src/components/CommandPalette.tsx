@@ -24,6 +24,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useGlobalSearch } from '../hooks/useGlobalSearch'
 import { useNotes } from '../hooks/useNotes'
 import { formatShortDate } from '../lib/format'
+import { track } from '../lib/analytics'
 import { NAV_ITEMS } from './layout/nav-items'
 
 interface CommandPaletteProps {
@@ -76,16 +77,22 @@ export function CommandPalette({ isOpen, onClose, onOpenAsk }: CommandPalettePro
     if (!isOpen) setQuery('')
   }, [isOpen])
 
+  useEffect(() => {
+    if (isOpen) track('search_opened', { surface: 'command' })
+  }, [isOpen])
+
   const handleSelect = (action: () => void) => {
     action()
     onClose()
   }
 
   const handleNavSelect = (to: string) => {
+    track('search_result_opened', { kind: 'page' })
     handleSelect(() => void navigate({ to }))
   }
 
   const handleActionSelect = (action: (typeof QUICK_ACTIONS)[number]) => {
+    track('search_result_opened', { kind: 'action' })
     if ('action' in action && action.action === 'ask') {
       handleSelect(onOpenAsk)
     } else if ('action' in action && action.action === 'write') {
@@ -141,11 +148,12 @@ export function CommandPalette({ isOpen, onClose, onOpenAsk }: CommandPalettePro
                   <CommandItem
                     key={result.note.id}
                     value={`note ${result.note.id} ${result.note.title} ${result.note.folder_path}`}
-                    onSelect={() =>
+                    onSelect={() => {
+                      track('search_result_opened', { kind: 'note' })
                       handleSelect(
                         () => void navigate({ to: '/notes', search: { note: result.note.id } })
                       )
-                    }
+                    }}
                   >
                     <StickyNote className="text-domain-notes size-4" />
                     <span className="min-w-0 flex-1 truncate">
@@ -165,11 +173,12 @@ export function CommandPalette({ isOpen, onClose, onOpenAsk }: CommandPalettePro
                   <CommandItem
                     key={meal.id}
                     value={`meal ${meal.id} ${meal.meal_date} ${meal.transcription}`}
-                    onSelect={() =>
+                    onSelect={() => {
+                      track('search_result_opened', { kind: 'meal' })
                       handleSelect(
                         () => void navigate({ to: '/meals', search: { date: meal.meal_date } })
                       )
-                    }
+                    }}
                   >
                     <UtensilsCrossed className="text-domain-meals size-4" />
                     <span className="min-w-0 flex-1 truncate">
@@ -190,11 +199,12 @@ export function CommandPalette({ isOpen, onClose, onOpenAsk }: CommandPalettePro
                   <CommandItem
                     key={record.id}
                     value={`vinyl ${record.id} ${record.artist} ${record.album_title}`}
-                    onSelect={() =>
+                    onSelect={() => {
+                      track('search_result_opened', { kind: 'vinyl' })
                       handleSelect(
                         () => void navigate({ to: '/vinyl', search: { record: record.id } })
                       )
-                    }
+                    }}
                   >
                     <Disc3 className="text-domain-vinyl size-4" />
                     <span className="min-w-0 flex-1 truncate">{record.album_title}</span>
@@ -208,7 +218,10 @@ export function CommandPalette({ isOpen, onClose, onOpenAsk }: CommandPalettePro
               <CommandGroup heading="No matches">
                 <CommandItem
                   value="ask notes"
-                  onSelect={() => handleSelect(onOpenAsk)}
+                  onSelect={() => {
+                    track('search_result_opened', { kind: 'action' })
+                    handleSelect(onOpenAsk)
+                  }}
                   className="text-ink-muted"
                 >
                   <MessageSquare className="size-4" />
@@ -221,18 +234,25 @@ export function CommandPalette({ isOpen, onClose, onOpenAsk }: CommandPalettePro
             <CommandGroup heading="Actions">
               <CommandItem
                 value="all notes"
-                onSelect={() =>
+                onSelect={() => {
+                  track('search_result_opened', { kind: 'action' })
                   handleSelect(
                     () => void navigate({ to: '/notes', search: { q: debouncedQuery.trim() } })
                   )
-                }
+                }}
               >
                 <Search className="size-4" />
                 <span className="min-w-0 flex-1 truncate">
                   Search all notes for “{debouncedQuery.trim()}”
                 </span>
               </CommandItem>
-              <CommandItem value="ask notes" onSelect={() => handleSelect(onOpenAsk)}>
+              <CommandItem
+                value="ask notes"
+                onSelect={() => {
+                  track('search_result_opened', { kind: 'action' })
+                  handleSelect(onOpenAsk)
+                }}
+              >
                 <MessageSquare className="size-4" />
                 Ask notes
               </CommandItem>
@@ -248,9 +268,10 @@ export function CommandPalette({ isOpen, onClose, onOpenAsk }: CommandPalettePro
                   <CommandItem
                     key={note.id}
                     value={`recent ${note.title} ${note.folder_path}`}
-                    onSelect={() =>
+                    onSelect={() => {
+                      track('search_result_opened', { kind: 'note' })
                       handleSelect(() => void navigate({ to: '/notes', search: { note: note.id } }))
-                    }
+                    }}
                   >
                     <StickyNote className="text-domain-notes size-4" />
                     <span className="min-w-0 flex-1 truncate">{note.title || 'Untitled note'}</span>

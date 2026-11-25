@@ -703,6 +703,28 @@ class ProblemReport(Base):
     )
 
 
+class AnalyticsEvent(Base):
+    """Privacy-friendly product analytics event.
+
+    Deliberately minimal: no IP address, user agent, referrer, or free-text
+    content. ``properties_json`` is constrained at the API edge to IDs, enums,
+    and counts so the table cannot become a shadow copy of user content.
+    """
+
+    __tablename__ = "analytics_events"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    name = Column(String(64), nullable=False)
+    properties_json = Column(Text, nullable=True)
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_analytics_events_user_created", "user_id", "created_at"),
+        Index("idx_analytics_events_name_created", "name", "created_at"),
+    )
+
+
 class ServiceHeartbeat(Base):
     """Last-seen timestamp for a background component (worker, digest job)."""
 

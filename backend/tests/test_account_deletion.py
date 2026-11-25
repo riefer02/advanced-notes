@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from app.services.models import MealEntryMetadata, NoteMetadata
 
 
@@ -38,6 +40,7 @@ def _seed_account(storage, user_id: str) -> dict:
     storage.create_user_profile(user_id, "Delete User", email="delete@example.com")
     storage.update_user_profile_avatar(user_id, f"avatars/{user_id}/avatar.webp")
     storage.get_user_settings(user_id)
+    storage.record_analytics_events(user_id, [{"name": "account_test", "properties": None}])
     return {"note_id": note_id, "vinyl_id": vinyl_id}
 
 
@@ -76,6 +79,8 @@ def test_delete_account_purges_all_user_data(client, app):
     assert storage.get_user_profile("u1") is None
     assert storage.list_vinyl_records("u1") == []
     assert storage.list_audio_clips_for_note("u1", seeded["note_id"]) == []
+    analytics = storage.get_analytics_summary("u1", since=datetime(2000, 1, 1))
+    assert analytics["total_events"] == 0
 
     # Another account is untouched.
     assert storage.get_user_profile("u2") is not None

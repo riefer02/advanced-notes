@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .account import AccountStorageMixin
+from .analytics import AnalyticsStorageMixin
 from .audio import AudioStorageMixin
 from .embeddings import EmbeddingStorageMixin
 from .engine import StorageEngine
@@ -18,6 +19,7 @@ from .vinyl import VinylStorageMixin
 
 class NoteStorage(
     AccountStorageMixin,
+    AnalyticsStorageMixin,
     NoteStorageMixin,
     AudioStorageMixin,
     EmbeddingStorageMixin,
@@ -38,6 +40,7 @@ class NoteStorage(
 
     Composed from feature-specific mixins for maintainability:
     - AccountStorageMixin: storage-key inventory and full account purge
+    - AnalyticsStorageMixin: self-hosted product analytics events
     - NoteStorageMixin: Note CRUD, folders, tags, search
     - AudioStorageMixin: Audio clip lifecycle
     - EmbeddingStorageMixin: Embeddings, semantic search, hybrid retrieval

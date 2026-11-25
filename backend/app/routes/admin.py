@@ -181,3 +181,37 @@ def retry_outbox():
     )
 
     return jsonify({"requeued": requeued, "reclaimed": reclaimed})
+
+
+@bp.get("/admin/analytics/summary")
+@require_auth
+@require_admin
+def analytics_summary():
+    """Aggregate product analytics for the admin.
+
+    Only totals by event name, per-day counts, and a distinct-user count are
+    exposed. Properties and per-user activity are never returned.
+    """
+    raw_days = request.args.get("days", "30")
+    try:
+        days = int(raw_days)
+    except (TypeError, ValueError):
+        return api_error("days must be an integer", 400)
+    if days < 1 or days > 365:
+        return api_error("days must be between 1 and 365", 400)
+
+    svc = get_services()
+    today = datetime.now(UTC).replace(tzinfo=None).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    since = today - timedelta(days=days - 1)
+    summary = svc.storage.get_admin_analytics_summary(since=since, days=days)
+
+    return jsonify(
+        {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "days": days,
+            "since": since.isoformat(),
+            **summary,
+        }
+    )

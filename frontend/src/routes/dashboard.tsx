@@ -29,6 +29,7 @@ import { useNotes } from '../hooks/useNotes'
 import { useMyProfile, useUpdateProfile } from '../hooks/useProfile'
 import { useTodos } from '../hooks/useTodos'
 import { formatAge, formatShortDate, pluralize } from '../lib/format'
+import { track } from '../lib/analytics'
 import type { DashboardStats, MealEntry, MealType, Note } from '../lib/api'
 
 export const Route = createFileRoute('/dashboard')({
@@ -185,6 +186,10 @@ function DashboardPage() {
   const { user } = useUser()
   const statsQuery = useDashboardStats()
   const { openAsk } = useAppShell()
+
+  useEffect(() => {
+    track('dashboard_viewed')
+  }, [])
 
   const firstName = user?.firstName || 'there'
   const today = new Date().toLocaleDateString('en-US', {
