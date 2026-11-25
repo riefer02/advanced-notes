@@ -18,6 +18,7 @@ import { queryKeys } from '../lib/queryKeys'
 function invalidateVinylQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.vinyl.all })
   queryClient.invalidateQueries({ queryKey: queryKeys.vinyl.statsPrefix })
+  queryClient.invalidateQueries({ queryKey: queryKeys.libraryPrefix })
 }
 
 function invalidateDeletedVinylQueries(queryClient: QueryClient, recordId: string) {

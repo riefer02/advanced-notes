@@ -26,6 +26,7 @@ function invalidateNoteQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.notes.searchPrefix })
   queryClient.invalidateQueries({ queryKey: queryKeys.tags.all })
   queryClient.invalidateQueries({ queryKey: queryKeys.dashboard })
+  queryClient.invalidateQueries({ queryKey: queryKeys.libraryPrefix })
 }
 
 // ============================================================================

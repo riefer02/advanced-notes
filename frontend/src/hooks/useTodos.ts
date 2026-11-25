@@ -30,6 +30,7 @@ interface TodosParams {
 function invalidateTodoQueries(queryClient: QueryClient, updatedTodo: Todo) {
   queryClient.setQueryData(queryKeys.todos.detail(updatedTodo.id), updatedTodo)
   queryClient.invalidateQueries({ queryKey: queryKeys.todos.all })
+  queryClient.invalidateQueries({ queryKey: queryKeys.libraryPrefix })
   if (updatedTodo.note_id) {
     queryClient.invalidateQueries({ queryKey: queryKeys.todos.forNote(updatedTodo.note_id) })
   }
@@ -41,6 +42,7 @@ function invalidateTodoQueries(queryClient: QueryClient, updatedTodo: Todo) {
 function invalidateDeletedTodoQueries(queryClient: QueryClient, todoId: string) {
   queryClient.removeQueries({ queryKey: queryKeys.todos.detail(todoId) })
   queryClient.invalidateQueries({ queryKey: queryKeys.todos.all })
+  queryClient.invalidateQueries({ queryKey: queryKeys.libraryPrefix })
   queryClient.invalidateQueries({ queryKey: queryKeys.todos.forNotePrefix })
 }
 
@@ -67,6 +69,7 @@ export function useCreateTodo() {
       createTodo(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.todos.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.libraryPrefix })
     },
   })
 }
@@ -130,6 +133,7 @@ export function useAcceptNoteTodos() {
       acceptNoteTodos(noteId, todoIds),
     onSuccess: (_data, { noteId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.todos.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.libraryPrefix })
       queryClient.invalidateQueries({ queryKey: queryKeys.todos.forNote(noteId) })
     },
   })

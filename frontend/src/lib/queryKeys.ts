@@ -62,6 +62,8 @@ export const queryKeys = {
   settings: ['userSettings'] as const,
   usage: ['usage'] as const,
   dashboard: ['dashboardStats'] as const,
+  library: (limit?: number) => ['library', limit] as const,
+  libraryPrefix: ['library'] as const,
   digests: (limit?: number, offset?: number) => ['digests', limit, offset] as const,
   digestsPrefix: ['digests'] as const,
   askHistory: (limit?: number, offset?: number) => ['ask-history', limit, offset] as const,

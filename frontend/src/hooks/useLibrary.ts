@@ -1,12 +1,18 @@
 import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 
-import type { MealEntry, Note, Todo, VinylRecord } from '../lib/api'
-import { useMeals } from './useMeals'
-import { useNotes } from './useNotes'
-import { useTodos } from './useTodos'
-import { useVinylRecords } from './useVinyl'
+import {
+  fetchLibrary,
+  type LibraryApiItem,
+  type LibraryKind,
+  type MealEntry,
+  type Note,
+  type Todo,
+  type VinylRecord,
+} from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 
-export type LibraryKind = 'note' | 'meal' | 'vinyl' | 'todo'
+export type { LibraryKind }
 
 export type LibraryItem =
   | { kind: 'note'; id: string; timestamp: string; note: Note }
@@ -19,75 +25,42 @@ function timestampValue(value: string): number {
   return Number.isNaN(parsed) ? 0 : parsed
 }
 
-/** Newest first across every captured object type. */
+/** Defensive sort; the API already returns newest first. */
 export function mergeLibraryItems(items: LibraryItem[]): LibraryItem[] {
   return [...items].sort((a, b) => timestampValue(b.timestamp) - timestampValue(a.timestamp))
 }
 
+function toLibraryItem(item: LibraryApiItem): LibraryItem {
+  switch (item.kind) {
+    case 'note':
+      return { kind: 'note', id: item.id, timestamp: item.timestamp, note: item.data }
+    case 'meal':
+      return { kind: 'meal', id: item.id, timestamp: item.timestamp, meal: item.data }
+    case 'vinyl':
+      return { kind: 'vinyl', id: item.id, timestamp: item.timestamp, record: item.data }
+    case 'todo':
+      return { kind: 'todo', id: item.id, timestamp: item.timestamp, todo: item.data }
+  }
+}
+
 export function useLibrary(limit = 25) {
-  const notesQuery = useNotes(undefined, limit)
-  const mealsQuery = useMeals({
-    start_date: '1900-01-01',
-    end_date: '2100-12-31',
-    limit,
+  const query = useQuery({
+    queryKey: queryKeys.library(limit),
+    queryFn: () => fetchLibrary({ limit }),
+    staleTime: 15_000,
   })
-  const vinylQuery = useVinylRecords({ limit })
-  const todosQuery = useTodos({ limit })
 
-  const items = useMemo(() => {
-    const merged: LibraryItem[] = []
+  const items = useMemo(
+    () => mergeLibraryItems((query.data?.items ?? []).map(toLibraryItem)),
+    [query.data]
+  )
 
-    for (const note of notesQuery.data?.notes ?? []) {
-      merged.push({
-        kind: 'note',
-        id: note.id,
-        timestamp: note.updated_at || note.created_at,
-        note,
-      })
-    }
-
-    for (const meal of mealsQuery.data?.meals ?? []) {
-      merged.push({
-        kind: 'meal',
-        id: meal.id,
-        timestamp: meal.created_at,
-        meal,
-      })
-    }
-
-    for (const record of vinylQuery.data?.records ?? []) {
-      merged.push({
-        kind: 'vinyl',
-        id: record.id,
-        timestamp: record.created_at,
-        record,
-      })
-    }
-
-    for (const todo of todosQuery.data?.todos ?? []) {
-      if (todo.status === 'suggested') continue
-      merged.push({
-        kind: 'todo',
-        id: todo.id,
-        timestamp: todo.created_at,
-        todo,
-      })
-    }
-
-    return mergeLibraryItems(merged)
-  }, [notesQuery.data, mealsQuery.data, vinylQuery.data, todosQuery.data])
-
-  const queries = [notesQuery, mealsQuery, vinylQuery, todosQuery]
-  const isLoading = queries.some((query) => query.isLoading)
-  const allFailed = queries.every((query) => query.isError)
-  const hasError = queries.some((query) => query.isError)
-  const hasMore =
-    (notesQuery.data?.notes.length ?? 0) >= limit ||
-    (mealsQuery.data?.meals.length ?? 0) >= limit ||
-    (vinylQuery.data?.records.length ?? 0) >= limit ||
-    (todosQuery.data?.todos.length ?? 0) >= limit
-
-  const refetch = () => Promise.all(queries.map((query) => query.refetch()))
-
-  return { items, isLoading, allFailed, hasError, hasMore, refetch }
+  return {
+    items,
+    isLoading: query.isLoading,
+    allFailed: query.isError && !query.data,
+    hasError: query.isError,
+    hasMore: query.data?.has_more ?? false,
+    refetch: query.refetch,
+  }
 }
