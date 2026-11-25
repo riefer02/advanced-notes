@@ -1,7 +1,20 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Cookie, Moon, Plus, Sun, Sunrise, UtensilsCrossed, X } from 'lucide-react'
-import { useCreateMeal } from '../hooks/useMeals'
-import type { MealEntry, MealType } from '../lib/api'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import {
+  Camera,
+  Check,
+  Cookie,
+  ImagePlus,
+  Loader2,
+  Moon,
+  Plus,
+  Sun,
+  Sunrise,
+  UtensilsCrossed,
+  X,
+} from 'lucide-react'
+import { useCreateMeal, useExtractMealPhoto } from '../hooks/useMeals'
+import type { MealEntry, MealPhotoExtraction, MealType } from '../lib/api'
+import { compressImage } from '../lib/image-compression'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,14 +62,18 @@ interface MealComposerProps {
   calendarOwner?: string
   /** Date the composer opens with, e.g. from the day panel. */
   initialDate?: string
+  /** The Meals page opened the composer through the Photo capture mode. */
+  photoMode?: boolean
 }
 
 export default function MealComposer({
   onMealCreated,
   calendarOwner,
   initialDate,
+  photoMode = false,
 }: MealComposerProps) {
   const createMeal = useCreateMeal(calendarOwner)
+  const extractPhoto = useExtractMealPhoto()
 
   const [mealType, setMealType] = useState<MealType>(defaultMealType)
   const [mealDate, setMealDate] = useState(() => initialDate || todayIso())
@@ -68,10 +85,24 @@ export default function MealComposer({
   const [itemPortion, setItemPortion] = useState('')
   const nextItemKey = useRef(1)
 
+  // Photo scan state: an object URL preview, plus the last extraction summary.
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const [scanSummary, setScanSummary] = useState<{ count: number; confidence: number } | null>(null)
+
   // The day panel can ask the composer to open on a different date.
   useEffect(() => {
     if (initialDate) setMealDate(initialDate)
   }, [initialDate])
+
+  // Revoke the previous (or final) object URL; the preview is replaced often.
+  useEffect(() => {
+    return () => {
+      if (photoPreview) URL.revokeObjectURL(photoPreview)
+    }
+  }, [photoPreview])
 
   const addItem = () => {
     const name = itemName.trim()
@@ -88,7 +119,82 @@ export default function MealComposer({
     setItems((current) => current.filter((item) => item.key !== key))
   }
 
+  const applyPhotoExtraction = (extraction: MealPhotoExtraction) => {
+    if (MEAL_TYPES.some((type) => type.value === extraction.meal_type)) {
+      setMealType(extraction.meal_type)
+    }
+    if (extraction.meal_date) setMealDate(extraction.meal_date)
+    setMealTime(extraction.meal_time ?? '')
+
+    const extractedItems = extraction.items
+      .map((item) => ({ name: item.name.trim(), portion: (item.portion ?? '').trim() }))
+      .filter((item) => item.name)
+
+    if (extractedItems.length > 0) {
+      setItems(extractedItems.map((item) => ({ key: nextItemKey.current++, ...item })))
+      setItemName('')
+      setItemPortion('')
+    }
+
+    setScanSummary({ count: extractedItems.length, confidence: extraction.confidence })
+  }
+
+  const handlePhotoSelect = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget
+    const file = input.files?.[0]
+    // Reset the input so choosing the same file again still fires onChange.
+    input.value = ''
+    if (!file || extractPhoto.isPending) return
+
+    setPhotoError(null)
+    setScanSummary(null)
+    extractPhoto.reset()
+
+    if (!file.type.startsWith('image/')) {
+      setPhotoError('Choose an image file (JPEG, PNG, WebP, or HEIC).')
+      return
+    }
+
+    // Shrink phone photos before upload; HEIC that cannot be decoded is sent
+    // as-is and the server decides whether it can read it.
+    let upload = file
+    try {
+      const compressed = await compressImage(file, { maxDimension: 1600, quality: 0.82 })
+      upload = compressed.file
+    } catch {
+      upload = file
+    }
+
+    setPhotoPreview(URL.createObjectURL(upload))
+
+    if (upload.size > 6 * 1024 * 1024) {
+      setPhotoError('That photo is larger than 6 MB. Choose a smaller one.')
+      return
+    }
+
+    try {
+      const extraction = await extractPhoto.mutateAsync(upload)
+      applyPhotoExtraction(extraction)
+    } catch {
+      // The mutation error renders inline below.
+    }
+  }
+
+  const clearPhoto = () => {
+    setPhotoPreview(null)
+    setPhotoError(null)
+    setScanSummary(null)
+    extractPhoto.reset()
+  }
+
   const canSave = items.length > 0 && !!mealDate && !createMeal.isPending
+  const photoErrorMessage =
+    photoError ??
+    (extractPhoto.isError
+      ? extractPhoto.error instanceof Error
+        ? extractPhoto.error.message
+        : 'Something went wrong while reading the photo.'
+      : null)
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -109,6 +215,7 @@ export default function MealComposer({
       setItemName('')
       setItemPortion('')
       setNote('')
+      clearPhoto()
       onMealCreated?.(meal)
     } catch {
       // The mutation error renders below.
@@ -135,6 +242,117 @@ export default function MealComposer({
         Add what you ate. No microphone needed — useful for quick entries, restaurants, and
         backfilling a day.
       </p>
+
+      <section
+        aria-label="Scan a meal photo"
+        className={
+          photoMode
+            ? 'border-line-strong bg-surface rounded-xl border border-dashed p-4'
+            : 'border-line bg-surface-muted rounded-lg border p-3'
+        }
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <Camera
+            className={`shrink-0 ${photoMode ? 'text-brand size-5' : 'text-domain-meals size-4'}`}
+            aria-hidden
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-ink text-[13px] font-medium">
+              {photoMode ? 'Scan a meal or receipt' : 'Scan a photo'}
+            </p>
+            <p className="text-ink-subtle text-xs">
+              {photoMode
+                ? "We'll fill in the meal type and items, then you review and save."
+                : 'Fill in the form from a photo of your plate or receipt.'}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => photoInputRef.current?.click()}
+              disabled={extractPhoto.isPending}
+            >
+              <ImagePlus />
+              {photoPreview ? 'Replace' : 'Choose'}
+            </Button>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              onClick={() => cameraInputRef.current?.click()}
+              disabled={extractPhoto.isPending}
+              aria-label="Take a photo"
+            >
+              <Camera />
+            </Button>
+          </div>
+        </div>
+
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handlePhotoSelect}
+          className="hidden"
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handlePhotoSelect}
+          className="hidden"
+        />
+
+        {photoPreview && (
+          <div className="border-line bg-surface-sunken relative mt-3 overflow-hidden rounded-lg border">
+            <img
+              src={photoPreview}
+              alt="Selected meal photo preview"
+              className="h-36 w-full object-cover sm:h-44"
+            />
+            {extractPhoto.isPending && (
+              <div
+                role="status"
+                className="bg-scrim absolute inset-0 grid place-items-center gap-1 text-center"
+              >
+                <Loader2 className="size-5 animate-spin text-white" aria-hidden />
+                <span className="text-xs font-medium text-white">Reading photo…</span>
+              </div>
+            )}
+            {!extractPhoto.isPending && (
+              <button
+                type="button"
+                onClick={clearPhoto}
+                aria-label="Remove photo"
+                className="border-line bg-surface text-ink-subtle hover:text-ink absolute top-2 right-2 grid size-7 place-items-center rounded-full border transition-colors"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {scanSummary && !extractPhoto.isPending && (
+          <p className="text-positive mt-2 flex items-center gap-1.5 text-xs" aria-live="polite">
+            <Check className="size-3.5" aria-hidden />
+            {scanSummary.count > 0
+              ? `Found ${scanSummary.count} ${scanSummary.count === 1 ? 'item' : 'items'} · ${Math.round(
+                  scanSummary.confidence * 100
+                )}% confident — review below.`
+              : 'No items were recognized — add them below.'}
+          </p>
+        )}
+
+        {photoErrorMessage && (
+          <Alert variant="destructive" className="mt-3">
+            <AlertTitle>Could not read that photo</AlertTitle>
+            <AlertDescription>{photoErrorMessage}</AlertDescription>
+          </Alert>
+        )}
+      </section>
 
       <div>
         <span className="section-label">Meal type</span>

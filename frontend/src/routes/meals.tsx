@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { CalendarDays, ChevronRight, Mic, UtensilsCrossed } from 'lucide-react'
+import { CalendarDays, Camera, ChevronRight, Mic, UtensilsCrossed } from 'lucide-react'
 import { useAuth } from '@clerk/clerk-react'
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import MealCalendar from '../components/MealCalendar'
@@ -83,7 +83,7 @@ function MealsPage() {
   )
 
   // Capture panel mode and the date the typed composer opens with.
-  const [captureMode, setCaptureMode] = useState<'speak' | 'type'>('speak')
+  const [captureMode, setCaptureMode] = useState<'speak' | 'type' | 'photo'>('speak')
   const [composerDate, setComposerDate] = useState(() => deepLinkDate || todayIso())
   // Forces the composer to remount when "Add a meal for this day" reuses a date.
   const [composerKey, setComposerKey] = useState(0)
@@ -262,6 +262,19 @@ function MealsPage() {
                   <UtensilsCrossed className="size-3.5" aria-hidden />
                   Type
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setCaptureMode('photo')}
+                  aria-pressed={captureMode === 'photo'}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    captureMode === 'photo'
+                      ? 'bg-brand-soft text-brand shadow-card'
+                      : 'text-ink-muted hover:text-ink hover:bg-surface-muted'
+                  }`}
+                >
+                  <Camera className="size-3.5" aria-hidden />
+                  Photo
+                </button>
               </div>
 
               {captureMode === 'speak' ? (
@@ -272,6 +285,7 @@ function MealsPage() {
                   initialDate={composerDate}
                   onMealCreated={handleTypedMealCreated}
                   calendarOwner={calendarOwner}
+                  photoMode={captureMode === 'photo'}
                 />
               )}
 

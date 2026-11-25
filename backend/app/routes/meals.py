@@ -1,13 +1,18 @@
+import base64
 import hashlib
 
 from flask import Blueprint, g, jsonify, request
 
 from ..auth import require_auth
+from ..config import Config
+from ..services import meal_vision
 from ..services.container import get_services
 from ..services.embeddings import vector_to_json, vector_to_pg_literal
+from ..services.file_validation import image_matches_declared_type, normalize_mime
 from ..services.resilience import require_external, with_fallback
 from ._helpers import (
     _AudioTranscriptionError,
+    _maybe_send_cost_alert,
     _transcribe_audio_clip,
     api_error,
     api_error_from_exception,
@@ -19,6 +24,7 @@ from ._helpers import (
 bp = Blueprint("meals", __name__)
 
 _MEAL_TYPES = {"breakfast", "lunch", "dinner", "snack"}
+_ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp", "image/heic"}
 
 
 def _normalize_meal_time(value) -> str | None:
@@ -264,6 +270,96 @@ def transcribe_meal():
                     "confidence": extraction_result.confidence,
                     "reasoning": extraction_result.reasoning,
                 },
+            }
+        )
+
+    except Exception as e:
+        return api_error_from_exception(e)
+
+
+@bp.post("/meals/extract-photo")
+@require_auth
+@require_quota("ai_calls")
+def extract_meal_photo():
+    """Extract a meal preview from a photo without saving anything.
+
+    The client reviews and edits the preview, then saves with POST /api/meals.
+    The uploaded image is forwarded to the vision model in memory and is never
+    persisted.
+    """
+    from datetime import date
+
+    user_id = g.user_id
+    svc = get_services()
+
+    upload = request.files.get("file")
+    if not upload:
+        return api_error("'file' is required", 400)
+
+    mime = normalize_mime(upload.content_type) or "image/jpeg"
+    if mime not in _ALLOWED_IMAGE_MIMES:
+        return api_error(f"Unsupported image type: {mime}", 400)
+
+    raw = upload.read(Config.MAX_IMAGE_BYTES + 1)
+    if len(raw) > Config.MAX_IMAGE_BYTES:
+        return api_error("Image too large (max 6MB)", 413)
+    if not raw:
+        return api_error("Empty file", 400)
+    if not image_matches_declared_type(raw, mime):
+        return api_error("File content does not match its declared image type", 400)
+
+    image_data_url = f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
+    current_date = date.today().isoformat()
+
+    try:
+        vision = require_external(
+            meal_vision.get_meal_vision_service,
+            service="meal photo extraction",
+        )
+        result = require_external(
+            lambda: vision.extract(image_data_url, current_date),
+            service="meal photo extraction",
+        )
+
+        svc.usage_tracking.record_usage(
+            user_id=user_id,
+            service_type="meal_photo_extraction",
+            model=vision.model,
+            endpoint="/api/meals/extract-photo",
+        )
+        _maybe_send_cost_alert(svc)
+
+        # Normalize model output so the editable form always receives a valid
+        # date/time. An unreadable value falls back to the capture defaults.
+        try:
+            meal_date = date.fromisoformat((result.meal_date or "").strip()).isoformat()
+        except ValueError:
+            meal_date = current_date
+        try:
+            meal_time = _normalize_meal_time(result.meal_time)
+        except (TypeError, ValueError):
+            meal_time = None
+
+        items = []
+        for item in result.items:
+            name = item.name.strip()
+            if not name:
+                continue
+            items.append(
+                {
+                    "name": name,
+                    "portion": (item.portion or "").strip() or None,
+                }
+            )
+
+        return jsonify(
+            {
+                "meal_type": result.meal_type.value,
+                "meal_date": meal_date,
+                "meal_time": meal_time,
+                "items": items,
+                "confidence": result.confidence,
+                "reasoning": result.reasoning,
             }
         )
 

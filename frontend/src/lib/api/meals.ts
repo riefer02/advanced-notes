@@ -75,6 +75,16 @@ export interface MealSearchResponse {
   meals: MealEntry[]
 }
 
+/** Preview returned by photo extraction; nothing is saved until createMeal. */
+export interface MealPhotoExtraction {
+  meal_type: MealType
+  meal_date: string
+  meal_time: string | null
+  items: Array<{ name: string; portion: string | null }>
+  confidence: number
+  reasoning: string
+}
+
 export interface MealsCalendarEntry {
   id: string
   meal_type: MealType
@@ -113,6 +123,16 @@ export async function createMeal(
     body: data,
     params: calendarOwner ? { calendar_owner: calendarOwner } : undefined,
   })
+}
+
+/**
+ * Ask the backend to read a photo of a meal or receipt. Returns an editable
+ * preview; the caller saves it through `createMeal`.
+ */
+export async function extractMealPhoto(file: File): Promise<MealPhotoExtraction> {
+  const formData = new FormData()
+  formData.append('file', file, file.name || 'meal-photo')
+  return apiUpload<MealPhotoExtraction>('/api/meals/extract-photo', formData)
 }
 
 export async function fetchMeals(params: {
