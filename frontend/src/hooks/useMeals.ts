@@ -23,6 +23,7 @@ function invalidateMealQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.meals.all })
   queryClient.invalidateQueries({ queryKey: queryKeys.meals.detailPrefix })
   queryClient.invalidateQueries({ queryKey: queryKeys.meals.calendarPrefix })
+  queryClient.invalidateQueries({ queryKey: queryKeys.libraryPrefix })
 }
 
 function invalidateDeletedMealQueries(queryClient: QueryClient) {
@@ -133,6 +134,7 @@ export function useAddMealItem() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.meals.detailPrefix })
       queryClient.invalidateQueries({ queryKey: queryKeys.meals.calendarPrefix })
+      queryClient.invalidateQueries({ queryKey: queryKeys.libraryPrefix })
     },
   })
 }
@@ -165,6 +167,7 @@ export function useDeleteMealItem() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.meals.detailPrefix })
       queryClient.invalidateQueries({ queryKey: queryKeys.meals.calendarPrefix })
+      queryClient.invalidateQueries({ queryKey: queryKeys.libraryPrefix })
     },
   })
 }
