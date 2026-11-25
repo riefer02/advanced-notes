@@ -9,6 +9,7 @@ import { APP_ROUTES } from './nav-items'
 import { DesktopSidebar, MobileDrawer } from './Navigation'
 import { AppHeader } from './AppHeader'
 import { AskSlideOver } from './AskSlideOver'
+import { OfflineQueueBanner } from '../OfflineQueueBanner'
 
 interface AppShellContextValue {
   openAsk: () => void
@@ -86,6 +87,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <AskSlideOver isOpen={showAsk} onClose={() => setShowAsk(false)} />
+
+      <OfflineQueueBanner />
 
       <CommandPalette
         isOpen={commandPaletteOpen}

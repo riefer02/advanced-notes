@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { CheckCircle2, Lightbulb, Loader2, Mic, Upload } from 'lucide-react'
+import { useAuth } from '@clerk/clerk-react'
+import { CheckCircle2, CloudOff, Lightbulb, Loader2, Mic, Upload } from 'lucide-react'
 import { useTranscribeAudio } from '../hooks/useNotes'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
+import { useOfflineQueue } from '../hooks/useOfflineQueue'
+import { audioFilename, isNetworkUnreachableError } from '../lib/offline-queue'
 import type { TranscriptionResponse } from '../lib/api'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
@@ -12,13 +15,56 @@ interface AudioUploaderProps {
 }
 
 export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioUploaderProps) {
+  const { userId } = useAuth()
+  const { isOnline, enqueueAudio, persistence } = useOfflineQueue(userId)
   const [lastResult, setLastResult] = useState<TranscriptionResponse | null>(null)
   const [lastBlob, setLastBlob] = useState<Blob | null>(null)
+  const [lastFilename, setLastFilename] = useState<string | null>(null)
   const [lastBlobUrl, setLastBlobUrl] = useState<string | null>(null)
+  const [offlineSaved, setOfflineSaved] = useState(false)
+  const [queueError, setQueueError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Use TanStack Query mutation
   const transcribeMutation = useTranscribeAudio()
+
+  const queueBlob = async (blob: Blob, filename: string) => {
+    try {
+      await enqueueAudio({
+        blob,
+        filename,
+        mimeType: blob.type || 'audio/webm',
+      })
+      setOfflineSaved(true)
+      setQueueError(null)
+      transcribeMutation.reset()
+    } catch (error) {
+      setQueueError(
+        error instanceof Error ? error.message : 'Could not save this recording on this device.'
+      )
+    }
+  }
+
+  const transcribeOrQueue = (blob: Blob, filename: string) => {
+    setLastResult(null)
+    setOfflineSaved(false)
+    setQueueError(null)
+
+    if (!isOnline) {
+      void queueBlob(blob, filename)
+      return
+    }
+
+    transcribeMutation.mutate(blob, {
+      onError: (error) => {
+        // Only connection failures are safe to retain locally. Auth, quota,
+        // and validation errors must stay visible instead of being retried.
+        if (isNetworkUnreachableError(error)) {
+          void queueBlob(blob, filename)
+        }
+      },
+    })
+  }
 
   const {
     isRecording,
@@ -30,7 +76,9 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
   } = useAudioRecorder((audioBlob) => {
     // Keep the blob so a failed transcription can be retried without re-recording.
     setLastBlob(audioBlob)
-    transcribeMutation.mutate(audioBlob)
+    const filename = audioFilename(audioBlob.type)
+    setLastFilename(filename)
+    transcribeOrQueue(audioBlob, filename)
   })
 
   // When transcription succeeds, notify the NotesPanel
@@ -64,8 +112,15 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
     // Allow selecting the same file again after a failure.
     event.target.value = ''
     if (!file) return
+    const filename = file.name || audioFilename(file.type)
     setLastBlob(file)
-    transcribeMutation.mutate(file)
+    setLastFilename(filename)
+    transcribeOrQueue(file, filename)
+  }
+
+  const retryLastBlob = () => {
+    if (!lastBlob) return
+    transcribeOrQueue(lastBlob, lastFilename || audioFilename(lastBlob.type))
   }
 
   return (
@@ -114,7 +169,10 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
           {!isRecording && (
             <p className="text-ink-subtle flex items-start gap-1.5 text-xs">
               <Lightbulb className="text-ink-subtle mt-0.5 size-3.5 shrink-0" aria-hidden />
-              <span>Record a thought, or upload an existing audio file (MP3, WAV, M4A, WebM).</span>
+              <span>
+                Record a thought, or upload an existing audio file (MP3, WAV, M4A, WebM).
+                {!isOnline && ' Offline recordings are saved on this device.'}
+              </span>
             </p>
           )}
         </div>
@@ -141,6 +199,26 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
         </div>
       )}
 
+      {offlineSaved && (
+        <Alert variant="success">
+          <AlertTitle>Recording saved offline</AlertTitle>
+          <AlertDescription>
+            <p>
+              It will be transcribed and added to your notes when you reconnect.
+              {persistence === 'memory' &&
+                " This browser can't persist it across reloads, so keep this tab open."}
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {queueError && (
+        <Alert variant="destructive">
+          <AlertTitle>Could not save recording</AlertTitle>
+          <AlertDescription>{queueError}</AlertDescription>
+        </Alert>
+      )}
+
       {transcribeMutation.isError && (
         <Alert variant="destructive">
           <AlertTitle>Transcription failed</AlertTitle>
@@ -152,17 +230,13 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
             </p>
             {lastBlob && (
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => transcribeMutation.mutate(lastBlob)}
-                >
+                <Button size="sm" variant="outline" onClick={retryLastBlob}>
                   Retry transcription
                 </Button>
                 {lastBlobUrl && (
                   <a
                     href={lastBlobUrl}
-                    download={`chisos-recording-${Date.now()}.webm`}
+                    download={lastFilename || 'chisos-recording.webm'}
                     className="text-sm underline"
                   >
                     Download recording
@@ -203,6 +277,13 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
             ✓ Saved and organized automatically — it is already in your notes list.
           </p>
         </div>
+      )}
+
+      {!isOnline && !offlineSaved && (
+        <p className="text-ink-subtle flex items-center gap-1.5 text-xs">
+          <CloudOff className="size-3.5 shrink-0" aria-hidden />
+          You're offline. Recordings are kept on this device and transcribed when you reconnect.
+        </p>
       )}
     </div>
   )

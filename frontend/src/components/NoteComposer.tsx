@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useAuth } from '@clerk/clerk-react'
 import type { FolderNode, Note } from '../lib/api'
+import { isNetworkUnreachableError } from '../lib/offline-queue'
 import { useCreateNote, useFolderTree } from '../hooks/useNotes'
+import { useOfflineQueue } from '../hooks/useOfflineQueue'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -69,10 +71,13 @@ export default function NoteComposer({ onCreated }: NoteComposerProps) {
   const [folder, setFolder] = useState(draft?.folder ?? 'inbox')
   const [tagsText, setTagsText] = useState(draft?.tags ?? '')
   const [savedNote, setSavedNote] = useState<Note | null>(null)
+  const [queuedOffline, setQueuedOffline] = useState(false)
+  const [queueError, setQueueError] = useState<string | null>(null)
 
   const contentRef = useRef<HTMLTextAreaElement>(null)
   const createNote = useCreateNote()
   const { data: folderTree } = useFolderTree()
+  const { isOnline, enqueueNote, persistence } = useOfflineQueue(userId)
   const folderOptions = collectFolderPaths(folderTree)
 
   useEffect(() => {
@@ -99,11 +104,44 @@ export default function NoteComposer({ onCreated }: NoteComposerProps) {
     (value: T) => {
       setter(value)
       setSavedNote(null)
+      setQueuedOffline(false)
+      setQueueError(null)
     }
+
+  const queueDraft = async (): Promise<boolean> => {
+    try {
+      await enqueueNote({
+        title: title.trim() || undefined,
+        content: content.trim(),
+        folder_path: folder.trim() || 'inbox',
+        tags: parseTags(tagsText),
+      })
+      setQueuedOffline(true)
+      setQueueError(null)
+      setSavedNote(null)
+      createNote.reset()
+      setTitle('')
+      setContent('')
+      setTagsText('')
+      window.localStorage.removeItem(draftKey)
+      contentRef.current?.focus()
+      return true
+    } catch (error) {
+      setQueueError(
+        error instanceof Error ? error.message : 'Could not save this note on this device.'
+      )
+      return false
+    }
+  }
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     if (!content.trim() || createNote.isPending) return
+
+    if (!isOnline) {
+      await queueDraft()
+      return
+    }
 
     try {
       const note = await createNote.mutateAsync({
@@ -113,14 +151,20 @@ export default function NoteComposer({ onCreated }: NoteComposerProps) {
         tags: parseTags(tagsText),
       })
       setSavedNote(note)
+      setQueuedOffline(false)
       setTitle('')
       setContent('')
       setTagsText('')
       window.localStorage.removeItem(draftKey)
       onCreated?.(note)
       contentRef.current?.focus()
-    } catch {
-      // createNote.isError renders the message below.
+    } catch (error) {
+      // A dropped connection is the one failure we can absorb: keep the note
+      // on this device instead of leaving it only in the form. Validation,
+      // auth, and quota errors still render through createNote.isError.
+      if (isNetworkUnreachableError(error)) {
+        await queueDraft()
+      }
     }
   }
 
@@ -142,7 +186,9 @@ export default function NoteComposer({ onCreated }: NoteComposerProps) {
         <div>
           <h2 className="text-ink text-[15px] font-semibold tracking-[-0.015em]">Write a note</h2>
           <p className="text-sm text-ink-muted">
-            Type it yourself. It lands in your notes immediately — no audio needed.
+            {isOnline
+              ? 'Type it yourself. It lands in your notes immediately — no audio needed.'
+              : 'Offline — this note is saved on this device and synced when you reconnect.'}
           </p>
         </div>
         <span className="rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-medium text-ink-muted">
@@ -201,6 +247,25 @@ export default function NoteComposer({ onCreated }: NoteComposerProps) {
         </div>
       </div>
 
+      {queuedOffline && (
+        <Alert variant="success">
+          <AlertTitle>Saved on this device — will sync when online.</AlertTitle>
+          {persistence === 'memory' && (
+            <AlertDescription>
+              This browser can't persist captures across reloads, so keep this tab open until the
+              connection returns.
+            </AlertDescription>
+          )}
+        </Alert>
+      )}
+
+      {queueError && (
+        <Alert variant="destructive">
+          <AlertTitle>Could not save note</AlertTitle>
+          <AlertDescription>{queueError}</AlertDescription>
+        </Alert>
+      )}
+
       {createNote.isError && (
         <Alert variant="destructive">
           <AlertTitle>Could not save note</AlertTitle>
@@ -221,9 +286,11 @@ export default function NoteComposer({ onCreated }: NoteComposerProps) {
 
       <div className="border-line flex items-center justify-between gap-3 border-t pt-4">
         <Button type="submit" disabled={!canSave} loading={createNote.isPending}>
-          Save note
+          {isOnline ? 'Save note' : 'Save offline'}
         </Button>
-        <span className="text-xs text-ink-subtle">⌘/Ctrl + Enter</span>
+        <span className="text-xs text-ink-subtle">
+          {isOnline ? '⌘/Ctrl + Enter' : 'Saved on this device'}
+        </span>
       </div>
     </form>
   )
