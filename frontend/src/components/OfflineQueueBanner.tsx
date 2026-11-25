@@ -41,7 +41,7 @@ export function OfflineQueueBanner() {
 
   const hasPending = pendingCount > 0
   const successVisible = showSuccess && !hasPending && isOnline
-  const visible = !isOnline || hasPending || successVisible
+  const visible = hasPending || successVisible
 
   if (!visible || (dismissed && !hasPending)) return null
 

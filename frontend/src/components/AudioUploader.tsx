@@ -37,6 +37,7 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
       })
       setOfflineSaved(true)
       setQueueError(null)
+      transcribeMutation.reset()
     } catch (error) {
       setQueueError(
         error instanceof Error ? error.message : 'Could not save this recording on this device.'

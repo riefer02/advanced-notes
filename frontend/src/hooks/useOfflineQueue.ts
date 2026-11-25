@@ -80,6 +80,8 @@ function invalidateReplayedQueries(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.folders.all })
   void queryClient.invalidateQueries({ queryKey: queryKeys.tags.all })
   void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.todos.all })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.libraryPrefix })
 }
 
 async function replayAudio(payload: OfflineAudioPayload): Promise<void> {
