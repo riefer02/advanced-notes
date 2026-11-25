@@ -57,6 +57,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <AppShellContext.Provider value={appShellCtx}>
       <div className="bg-background flex min-h-screen">
+        <a
+          href="#main-content"
+          className="bg-surface text-ink border-line focus-visible:ring-ring sr-only z-[100] rounded-lg border px-4 py-2 text-sm font-medium focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus-visible:ring-2 focus-visible:outline-none"
+        >
+          Skip to content
+        </a>
         <DesktopSidebar pathname={pathname} pendingCount={pendingCount} />
         <MobileDrawer
           isOpen={isDrawerOpen}
@@ -73,7 +79,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             onOpenAsk={() => setShowAsk(true)}
           />
-          <main className="flex-1 min-h-0">{children}</main>
+          <main id="main-content" tabIndex={-1} className="flex-1 min-h-0">
+            {children}
+          </main>
         </div>
       </div>
 

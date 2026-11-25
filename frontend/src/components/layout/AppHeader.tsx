@@ -29,7 +29,7 @@ export function AppHeader({
         <button
           type="button"
           onClick={onOpenDrawer}
-          className="text-ink-muted hover:bg-surface-muted hover:text-ink focus-visible:ring-ring grid size-8 place-items-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none lg:hidden"
+          className="text-ink-muted hover:bg-surface-muted hover:text-ink focus-visible:ring-ring grid size-10 place-items-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none lg:hidden"
         >
           <span className="sr-only">Open menu</span>
           <Menu className="size-4.5" aria-hidden="true" />
@@ -45,8 +45,10 @@ export function AppHeader({
           variant="ghost"
           size="icon-sm"
           onClick={onOpenCommandPalette}
-          className="sm:hidden"
+          className="size-10 sm:hidden"
           aria-label="Search"
+          aria-haspopup="dialog"
+          aria-keyshortcuts="Meta+K Control+K"
         >
           <Search className="size-4" />
         </Button>
@@ -56,6 +58,8 @@ export function AppHeader({
           size="sm"
           onClick={onOpenCommandPalette}
           className="text-ink-subtle hidden gap-2 sm:flex"
+          aria-haspopup="dialog"
+          aria-keyshortcuts="Meta+K Control+K"
         >
           <Search className="size-3.5" />
           <span className="text-xs font-normal">Search</span>
@@ -70,7 +74,7 @@ export function AppHeader({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="sm" aria-label="Quick actions">
+            <Button size="sm" aria-label="Quick actions" className="h-10 sm:h-8">
               <Plus className="size-3.5" />
               <span className="hidden sm:inline">New</span>
             </Button>

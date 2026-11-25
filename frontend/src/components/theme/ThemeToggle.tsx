@@ -29,6 +29,7 @@ export function ThemeToggle() {
           size="icon-sm"
           aria-label={`Theme: ${theme}. Change theme`}
           title="Change theme"
+          className="size-10 sm:size-8"
         >
           <ActiveIcon className="size-4" />
         </Button>
