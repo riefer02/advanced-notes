@@ -579,6 +579,19 @@ The JSON payload includes profile, settings, folders, tags, notes (active, archi
 
 **Response**: a `application/json` or `application/zip` attachment named `chisos-export-YYYY-MM-DD.*`.
 
+### DELETE `/account`
+
+Permanently delete the signed-in account's app data.
+
+**Body**
+```json
+{ "confirm": "DELETE" }
+```
+
+Deletes notes, revisions, transcripts, audio metadata, embeddings, todos, meals, vinyl records/images/tracks, folders, tags, digests, Ask history, feedback/problem reports, usage counters, friendships, shares, profile, and settings. S3 objects are deleted first; if that fails the request returns `503` and the database purge is not attempted. When `CLERK_SECRET_KEY` is configured, the Clerk user is deleted best-effort after the purge.
+
+**Response**: `{"deleted": true, "clerk_deleted": true|false, "purged": {…}, "storage_objects": N}`.
+
 ## Utility
 
 ### GET `/health`
