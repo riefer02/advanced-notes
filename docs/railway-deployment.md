@@ -73,6 +73,8 @@
 | `FLASK_ENV`            | `production`                       | Flask environment                         |
 | `APP_ENV`              | `production`                       | Preferred env label; enables prod guards  |
 | `CLERK_DOMAIN`         | `your-instance.clerk.accounts.dev` | JWT issuer/JWKS host (required)           |
+| `CLERK_SECRET_KEY`     | `sk_live_...`                      | Optional; enables Clerk user deletion after account purge |
+| `MEAL_VISION_MODEL`    | `gpt-4.1-mini`                     | Optional; meal photo extraction model     |
 | `FRONTEND_URL`         | `https://your-frontend-domain.com` | For CORS (your custom domain)             |
 | `DATABASE_URL`         | (auto-set)                         | PostgreSQL connection (reference from DB) |
 | `ADMIN_EMAILS`         | `you@example.com`                  | Admin alert recipients (comma-separated)  |

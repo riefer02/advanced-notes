@@ -1,6 +1,6 @@
 # Chisos Improvement Roadmap
 
-**Last updated:** 2026-11-10
+**Last updated:** 2026-11-25
 **Owner:** Andrew (administrator)
 **Working agreement:** one shippable slice per PR, verified against the checklist at the bottom. Dates are estimates, not promises. Anything not marked **Done** is not done, no matter how small.
 
@@ -22,19 +22,23 @@ Three rules for every feature:
 
 | Area | State | Honest read |
 |---|---|---|
-| Audio capture + transcription | ✅ Done | Strong, bounded, retryable |
+| Audio capture + transcription | ✅ Done | Bounded, retryable; offline notes queue now included |
+| Photo meal capture | ✅ Done (2026-11-25) | Vision preview in Meals → Photo; review before save |
 | Manual typed notes | ✅ Done (2026-11-10) | `POST /api/notes`, Write tab, drafts, upload, retry |
+| Unified Library | ✅ Done (2026-11-25) | One timeline for notes, meals, vinyl, tasks; `/api/library` |
 | Admin communication | ✅ Core done (2026-11-10) | Durable reports, ops events, readiness, daily digest, `/admin` |
 | Migration reproducibility | ✅ Done (2026-11-10) | Clean SQLite up/down in CI |
 | Production DB safety | ✅ Done (2026-11-10) | Refuses SQLite in production |
-| Note history / undo | ✅ Done (2026-11-10) | Per-edit snapshots + restore |
+| Note history / undo | ✅ Done (2026-11-10) | Per-edit snapshots + restore; dirty guard + local drafts |
 | Soft delete / archive / pin | ✅ Done (2026-11-10) | Trash, Archived, Pin; automatic retention purge still pending |
-| Search at scale | ✅ Done (2026-11-10) | Postgres GIN, SQLite sanitized FTS, HNSW, transcripts |
-| Tags/folders model | ✅ Done (2026-11-10) | Normalized tags + folder entities with rename |
+| Search at scale | ✅ Done (2026-11-10) | Postgres GIN, SQLite FTS, HNSW, unified `/api/library` feed |
+| Tags/folders model | ✅ Done (2026-11-10) | Normalized tags/folders; tag results now paginate |
+| Usage / quotas | ✅ Done (2026-11-25) | Settings usage card, 80% warning, humanized 429s |
+| Product analytics | 🟡 Partial (2026-11-25) | Self-hosted events + admin aggregate; no retention or admin UI |
+| Account export / deletion | 🟡 Partial (2026-11-25) | JSON + Markdown ZIP and full purge; audio/PDF not in export |
+| Mobile / quick capture | 🟡 Partial (2026-11-25) | Installable PWA + offline notes; offline meals/vinyl, share target pending |
 | Backups + restore drill | ❌ Not started | Unverified; treat as no backup |
 | External uptime + Sentry | ❌ Not started | Out-of-band alerting still missing |
-| Mobile/quick capture everywhere | ❌ Not started | Web only |
-| Export / data portability | ❌ Not started | Lock-in risk |
 
 ---
 
@@ -83,12 +87,12 @@ Three rules for every feature:
 - [x] Archive + pin (`archived_at`, `pinned_at`) and Active/Archived/Trash filters
 - [x] Permanent delete from Trash (audio + vectors + revisions) with confirmation
 - [x] Tests: revision created on update, restore round-trip, soft-deleted note invisible everywhere, purge works
-- [ ] Autosave + unsaved-change guard in `NoteDetail`
+- [x] Autosave + unsaved-change guard in `NoteDetail` (2026-11-25)
 - [ ] Automatic purge after a retention window (daily job)
 
 **Exit criteria:** an accidental edit or delete is recoverable from the UI without database access. ✅
 
-### Phase 4 — Search and schema correctness · **In progress (started 2026-11-10)**
+### Phase 4 — Search and schema correctness · **Core done 2026-11-25**
 - [x] Postgres generated `search_vector` + GIN + `websearch_to_tsquery`
 - [x] SQLite FTS query sanitization (no more 500 on quotes/operators)
 - [x] Stop hardcoding `'english'` (`simple` default; per-language config is a follow-up)
@@ -104,26 +108,31 @@ Three rules for every feature:
 
 **Exit criteria:** tag click and folder rename are index-backed; a 10k-note account searches in under 200 ms locally.
 
-### Phase 5 — Capture and navigation UX · **Week 3 (Nov 24–28)**
+### Phase 5 — Capture and navigation UX · **Core done 2026-11-25**
 - [ ] Quick-capture hotkey (`n` / `⌘⇧N`) from anywhere
 - [ ] Mobile share target / email-in / file import
 - [ ] Inbox + weekly triage (AI suggests, human confirms, undo)
-- [ ] Notes list: pagination or infinite scroll, j/k navigation, multi-select bulk actions
-- [ ] SlideOver focus trap + restore + `aria-labelledby`
-- [ ] Replace `confirm()`/`alert()` with toasts + inline confirmation
-- [ ] Offline banner from `navigator.onLine`; don't show infinite skeletons
+- [x] Notes list: pagination or infinite scroll (2026-11-25)
+- [ ] j/k navigation and multi-select bulk actions
+- [x] SlideOver focus trap + restore + `aria-labelledby`
+- [x] Replace `confirm()`/`alert()` with inline confirmation (2026-11-25)
+- [ ] Toast-based undo for destructive actions
+- [x] Offline banner from `navigator.onLine`; don't show infinite skeletons
+- [x] Offline notes queue with per-user IndexedDB replay (2026-11-25)
 - [ ] `vite:preloadError` reload for post-deploy tabs
-- [ ] Move notes state into search params (`?note=&tag=&q=&compose=1`)
+- [x] Move note/query state into search params (`?note=&q=&compose=1`) (2026-11-25)
+- [ ] Move tag/folder selection into search params
 - [ ] Remove dead design-system components or adopt them; unify page shell
-- [ ] Dark mode either supported end-to-end or the `.dark` block deleted
+- [x] Dark mode supported end-to-end
+- [x] Unified Library + primary-nav collapse (2026-11-25)
 
 **Exit criteria:** a keyboard-only user can capture, find, edit, and file a note; a phone user can capture and open the result in one tap.
 
-### Phase 6 — Trust, privacy, portability · **Week 4 (Dec 1–5)**
-- [ ] One-click Markdown + JSON export (notes, transcripts, tags, todos, meals, vinyl)
+### Phase 6 — Trust, privacy, portability · **Core done 2026-11-25**
+- [x] One-click Markdown + JSON export (2026-11-25; audio binaries excluded)
 - [ ] Audio retention controls (keep audio / transcript only / auto-purge N days)
 - [ ] Consent-first recording UX (disclosure + spoken consent line + consent log)
-- [ ] Account deletion request path that purges notes, audio, embeddings, shares
+- [x] Account deletion path that purges notes, audio, embeddings, shares, analytics (2026-11-25)
 - [ ] Subprocessor + privacy page in docs
 - [ ] Optional BYOK AI key per user
 - [ ] Per-note "never send to AI" toggle
@@ -134,8 +143,8 @@ Three rules for every feature:
 - [ ] Timestamped citations + audio deep links in Ask answers
 - [ ] Hybrid retrieval (BM25 + vectors + RRF) with reranker
 - [ ] Speaker-labeled transcripts (with realistic expectations) + action items → todos
-- [ ] Typed-object queries across todos/meals/vinyl
-- [ ] Useful daily note / home surface
+- [x] Typed-object feed across notes/meals/vinyl/todos (`/api/library`, 2026-11-25)
+- [x] Useful daily note / home surface (2026-11-25)
 - [ ] Backlinks / auto-linked entities (people, records, meals)
 - [ ] Prompt-injection defenses for ingested content (fencing, provenance tags)
 - [ ] AI eval set + faithfulness/context-precision tracking
@@ -152,12 +161,28 @@ Three rules for every feature:
 - [ ] JWKS unknown-`kid` throttle + negative cache
 - [ ] `ProxyFix` / correct client IP behind Railway
 - [ ] Structured JSON logging + request IDs on every response
-- [ ] Retention/pruning for `token_usage`, `ask_history`, `ops_events`, sent emails
+- [ ] Retention/pruning for `token_usage`, `ask_history`, `ops_events`, `analytics_events`, sent emails
 - [ ] S3 lifecycle rules + orphan sweeper
 - [ ] Idempotency keys for user-facing POSTs
 - [ ] Two replicas + zero-downtime deploy + single worker/leader lock
 
 ---
+
+### Phase 8 — Product polish + capture expansion · **Done 2026-11-25**
+- [x] Product design audit fixes (search, dirty edits, digest JSON, share context)
+- [x] Unified Library timeline + Today/Library nav
+- [x] Photo-based meal capture
+- [x] Offline notes queue (typed + audio) with per-user replay
+- [x] Settings usage/quota card and humanized 429s
+- [x] Account JSON/Markdown ZIP export and full account purge
+- [x] Self-hosted analytics ingestion + admin aggregate summary
+- [x] Tag-result pagination and server-side meal search
+- [ ] Offline meals/vinyl + idempotency keys
+- [ ] Analytics retention and `/admin` analytics surface
+- [ ] Library cursor pagination / SQL UNION at scale
+- [ ] Audio binaries and PDF in the account export
+
+**Exit criteria:** the new surfaces are in production, but the next slice is offline breadth and analytics operations.
 
 ## Backlog by audit severity
 
@@ -183,7 +208,7 @@ Three rules for every feature:
 | Embedding uniqueness + ANN + hash reuse | ✅ Done (2026-11-10) |
 | Quota counters | ✅ Done (2026-11-10) |
 | Outbox reclaim / dead letter | ✅ Reclaim + admin retry (2026-11-10); dead-letter alert pending |
-| Backups + restore drill | ❌ Before Phase 4 |
+| Backups + restore drill | ❌ Before any destructive migration |
 | Migrations single-runner | ✅ Done (advisory lock) |
 | Structured logging + request IDs | ❌ Ongoing |
 | Lazy OpenAI clients (don't block boot) | ❌ Ongoing |
@@ -192,16 +217,16 @@ Three rules for every feature:
 ### P2
 | Item | Status |
 |---|---|
-| Pagination / virtualization | ❌ Phase 5 |
-| Focus management / keyboard rows | ❌ Phase 5 |
-| Toasts instead of native dialogs | ❌ Phase 5 |
-| Offline handling | ❌ Phase 5 |
-| Export | ❌ Phase 6 |
-| Design-token cleanup / dark mode | ❌ Phase 5 |
-| Nav simplification | ❌ Phase 5 |
-| Retention/pruning | ❌ Ongoing |
-| `jobs` table | ❌ Ongoing |
-| Transcript entity | ❌ Phase 4 |
+| Pagination / virtualization | ✅ Notes/tags/digests/ask (2026-11-25); library cursor pending |
+| Focus management / keyboard rows | ✅ Drawers + rows (2026-11-25); j/k pending |
+| Toasts instead of native dialogs | 🟡 ConfirmDialog shipped; undo toasts pending |
+| Offline handling | 🟡 Notes queue + banner (2026-11-25); meals/vinyl pending |
+| Export | 🟡 JSON + Markdown ZIP (audio/PDF pending) |
+| Design-token cleanup / dark mode | ✅ Done |
+| Nav simplification | ✅ Today/Library IA (2026-11-25) |
+| Retention/pruning | ❌ Ongoing (analytics, token usage, Ask history) |
+| `jobs` table + idempotency keys | ❌ Ongoing |
+| Transcript entity | ✅ Done (2026-11-10) |
 
 ---
 
@@ -214,8 +239,8 @@ Three rules for every feature:
 - **No mixed PRs.** Reliability and product changes ship separately.
 
 **Definition of done (every slice)**
-1. Backend tests pass (`450+` today); CI gate is ≥50%, target stays ≥80%.
-2. Frontend lint, format, tests, and production build pass.
+1. Backend tests pass (`524` today); CI gate is ≥50%, target stays ≥80%.
+2. Frontend lint, format, tests (`75` today), and production build pass.
 3. Migration verified `upgrade head` **and** `downgrade` on SQLite; Postgres CI job green.
 4. New env vars documented in `.env.example` and `docs/railway-deployment.md`.
 5. `/api/health/ready` is 200 after deploy.
@@ -261,10 +286,10 @@ cd frontend && pnpm run lint && pnpm run format:check && pnpm run test:run && pn
 
 Not the most features. The most **trustworthy capture and recall**:
 
-- Capture works offline, on a phone, with a mic, a keyboard, or a file.
+- Capture works offline for notes on a phone, with a mic or keyboard; meals/vinyl next.
 - Nothing is lost: drafts, revisions, soft delete, durable reports.
 - Every answer points at the exact note and timestamp it came from.
 - The owner knows within minutes when something breaks.
-- A user can export everything and leave.
+- A user can export their notes, tasks, meals, and records and delete the account.
 
 That is the bar. Everything above is sequenced to reach it, with the trust work first.

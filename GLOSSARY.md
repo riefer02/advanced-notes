@@ -54,6 +54,18 @@ individually extracted items (`name`, `portion`, `confidence`).
 ### VinylRecord / VinylImage / VinylTrack
 A record in the vinyl library, its S3-backed cover/photo images, and its track listing.
 
+### LibraryItem
+A unified feed row for the Library page: `kind` (`note` | `meal` | `vinyl` | `todo`), `id`,
+`timestamp`, and the domain DTO in `data`. Served by `GET /api/library`.
+
+### AnalyticsEvent
+Self-hosted product event (`name`, small JSON properties, timestamp, user id). No IP,
+user agent, referrer, or free-text content. See `docs/analytics.md`.
+
+### OfflineQueueItem
+A typed note or audio Blob saved in IndexedDB under a Clerk user id when the browser is
+offline. Replayed serially on reconnect; removed only after server acceptance.
+
 ### UserProfile
 Display identity for sharing: `display_name`, unique `username`, `email`, bio, avatar, and
 `discoverable` (whether other users can find them).
@@ -83,6 +95,10 @@ Generates vector embeddings for semantic search using the OpenAI API, stored in
 
 ### AICategorizationService
 Uses GPT to suggest folder paths and tags, and to extract todos from transcriptions.
+
+### MealVisionService
+Vision extraction for meal/receipt photos. Returns a preview only; the user reviews and saves
+through `POST /api/meals`.
 
 ### AskService
 Hybrid retrieval service combining filters, full-text search, and semantic search to answer

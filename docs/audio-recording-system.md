@@ -134,6 +134,19 @@ const getSupportedMimeType = (): string => {
    - Logs blob size and type on stop
    - Logs errors with full context
 
+### Offline capture queue
+
+**Location:** `frontend/src/lib/offline-queue.ts`, `frontend/src/hooks/useOfflineQueue.ts`
+
+Typed notes and audio blobs are written to IndexedDB when the browser is offline (or when an upload fails with a connection error), keyed by Clerk user id. A banner reports pending/syncing/error state and offers Retry.
+
+- Replay is serial and per-user; items are removed only after the server accepts them.
+- Replay runs on app mount and when `online` fires; there is no background sync after the tab closes.
+- The queue falls back to memory if IndexedDB is unavailable, and says so in the UI.
+- Successful replay invalidates notes/folders/tags/search/dashboard/library/todos.
+- Account deletion clears that user's local queue and drafts after the server purge.
+- Current scope: notes and audio. Offline meals/vinyl and server-side idempotency are follow-ups.
+
 ### Recording Flow
 
 1. **Start Recording**
@@ -174,7 +187,7 @@ const getSupportedMimeType = (): string => {
 
 ## API Client
 
-**Location:** `frontend/src/lib/api.ts`
+**Location:** `frontend/src/lib/api/` (`core.ts` + feature modules)
 
 ### Format-Aware Upload
 
@@ -468,9 +481,9 @@ print(f"Creating temp file with extension: {extension}")
    - Mono vs stereo selection
 
 3. **Offline Support**
-   - Queue recordings when offline
-   - Upload when connection restored
-   - IndexedDB storage for pending uploads
+   - ✅ Notes and audio queue in IndexedDB; replay on reconnect
+   - [ ] Offline meals/vinyl and server-side idempotency keys
+   - [ ] Background sync while the tab is closed
 
 4. **Real-Time Transcription**
    - Use a Realtime transcription session with `gpt-live-transcribe`

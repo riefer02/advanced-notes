@@ -362,7 +362,14 @@ See [Railway Deployment](./docs/railway-deployment.md) for the full setup.
 - ✅ Sharing: friends, shared vinyl libraries, collaborative meal calendars
 - ✅ SQLite (dev) / PostgreSQL (prod) with FTS and vector search
 - ✅ REST API covering notes, folders, tags, search, todos, meals, vinyl, sharing, and admin
-- ✅ Split-pane layout with folder navigation
+- ✅ Unified Library timeline with notes, meals, vinyl, and tasks + `/api/library`
+- ✅ Split-pane capture and folder navigation
+- ✅ Photo-based meal capture with review before save
+- ✅ Offline notes queue (typed + audio) with per-user replay
+- ✅ Installable PWA with offline status
+- ✅ Self-hosted product analytics (events + admin aggregate summary)
+- ✅ Account JSON/Markdown ZIP export and full account deletion
+- ✅ Usage/quota UI and humanized 429s
 - ✅ TanStack Query + TanStack Router
 - ✅ Keyboard navigation and accessibility
 - ✅ CORS configured for local and deployed origins
@@ -378,9 +385,12 @@ Tracked with exit criteria in the [roadmap](./docs/roadmap.md):
 - [ ] External uptime monitoring and error reporting (Sentry)
 - [ ] Realtime transcription with WebSocket (`gpt-live-transcribe`)
 - [ ] Speaker diarization (deferred: no non-deprecated OpenAI model as of Oct 2026)
-- [ ] Bulk operations (move, delete, export)
-- [ ] One-click export as Markdown/JSON/PDF
-- [ ] Mobile/quick capture everywhere
+- [ ] Offline capture for meals/vinyl + idempotency keys
+- [ ] Analytics retention job and an admin analytics surface
+- [ ] Library cursor pagination / SQL UNION at scale
+- [ ] Audio and PDF in the account export
+- [ ] Bulk note operations (move, delete, per-note export)
+- [ ] Quick-capture hotkey and mobile share target
 - [ ] Real-time collaboration
 
 ---

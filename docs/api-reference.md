@@ -482,6 +482,66 @@ Full-text search across all notes (uses SQLite FTS5).
 
 ---
 
+## Library
+
+### GET `/library`
+
+One feed for the unified Library page: notes, meals, vinyl records, and non-suggested tasks, newest first.
+
+**Query params**
+- `limit` — 1–100 (default 25).
+- `type` — optional `note`, `meal`, `vinyl`, or `todo`.
+
+**Response**
+```json
+{
+  "items": [{ "kind": "note", "id": "…", "timestamp": "…", "data": { } }],
+  "counts": { "note": 25, "meal": 12, "vinyl": 3, "todo": 8 },
+  "limit": 25,
+  "has_more": true
+}
+```
+
+The server currently issues one indexed query per domain and merges in memory. Cursor pagination / SQL UNION is a scale follow-up.
+
+---
+
+## Meals
+
+### POST `/meals`
+
+Create a typed meal without audio or AI extraction. Optional `?calendar_owner=` for a shared calendar with edit permission.
+
+```json
+{
+  "meal_type": "dinner",
+  "meal_date": "2026-02-03",
+  "meal_time": "19:30",
+  "transcription": "optional note",
+  "items": [{ "name": "Pasta", "portion": "1 bowl" }]
+}
+```
+
+At least one item or note is required. Returns the saved meal (201).
+
+### POST `/meals/extract-photo`
+
+Preview a meal from a photo. Multipart `file`; JPEG/PNG/WebP/HEIC, max 6MB. Requires the `ai_calls` quota. Nothing is saved.
+
+Returns `{meal_type, meal_date, meal_time, items, confidence, reasoning}` for review; save with `POST /meals`.
+
+### GET `/meals/search?q=…&limit=20`
+
+Search the signed-in user's meals by transcript or food-item name. `q` must be at least 2 characters; `limit` is 1–50.
+
+**Response**: `{ "query": "…", "meals": [ … ] }`.
+
+### POST `/meals/transcribe?meal_date=YYYY-MM-DD`
+
+Transcribe audio and extract a meal. An explicit `meal_date` wins over dates inferred from the transcript. Requires `AUDIO_CLIPS_ENABLED` and the `transcription` quota.
+
+---
+
 ## Ask Notes (AI)
 
 ### POST `/ask`
@@ -558,6 +618,12 @@ returns one event including the traceback.
 Queues a test email through the same outbox/SES path. Returns
 `{"queued": bool, "email_configured": bool, "recipients": int}`.
 
+### GET `/admin/analytics/summary`
+
+Admin-only aggregate analytics for the last `days=1..365` (default 30): total events, distinct users, counts by event name, and daily counts. No per-user or property drill-down.
+
+**Response**: `{generated_at, days, since, total_events, unique_users, by_name: [{name, count}], daily: [{date, count}]}`.
+
 ### POST `/admin/outbox/retry`
 
 Requeues failed emails and reclaims rows stranded in `sending` by a crashed
@@ -565,6 +631,18 @@ worker. Body is optional: `{"limit": 100, "include_stuck": true}`. Returns
 `{"requeued": int, "reclaimed": int}`.
 
 ---
+
+## Product analytics
+
+### POST `/analytics/events`
+
+Batch product events for the signed-in user. Events are stored without IP, user agent, referrer, or free-text content.
+
+```json
+{ "events": [{ "name": "search_opened", "properties": { "kind": "note" } }] }
+```
+
+1–50 events; names are lowercase snake_case or dot-separated (≤64 chars); properties are JSON objects ≤2KB / 20 keys. Returns `202 {"accepted": N}`.
 
 ## Data export
 
@@ -588,7 +666,7 @@ Permanently delete the signed-in account's app data.
 { "confirm": "DELETE" }
 ```
 
-Deletes notes, revisions, transcripts, audio metadata, embeddings, todos, meals, vinyl records/images/tracks, folders, tags, digests, Ask history, feedback/problem reports, usage counters, friendships, shares, profile, and settings. S3 objects are deleted first; if that fails the request returns `503` and the database purge is not attempted. When `CLERK_SECRET_KEY` is configured, the Clerk user is deleted best-effort after the purge.
+Deletes notes, revisions, transcripts, audio metadata, embeddings, todos, meals, vinyl records/images/tracks, folders, tags, digests, Ask history, analytics events, feedback/problem reports, usage counters, friendships, shares, profile, and settings. S3 objects are deleted first; if that fails the request returns `503` and the database purge is not attempted. When `CLERK_SECRET_KEY` is configured, the Clerk user is deleted best-effort after the purge.
 
 **Response**: `{"deleted": true, "clerk_deleted": true|false, "purged": {…}, "storage_objects": N}`.
 

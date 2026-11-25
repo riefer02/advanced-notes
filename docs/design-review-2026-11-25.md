@@ -4,7 +4,7 @@
 **Reviewer:** Product design audit (live production + source)  
 **Scope:** `chisos.xyz` as Andrew (real data: 49 notes, 17 active todos, 1 vinyl record), desktop 1456×756 and mobile 390×844, plus the frontend code and the 2026-11-10 roadmap.
 
-> **Implementation status (2026-11-25):** The P0 defects and most P1/P2 items are implemented on `feat/product-design-fixes`. Deliberately deferred: the unified Library IA, photo-based meal capture, an offline capture queue (installability only), full-account export, product analytics, and tag-result pagination. Each is called out in the PR.
+> **Implementation status (2026-11-25):** The P0 defects, the unified Library IA, photo meal capture, offline notes queue, account export/deletion, usage/quota UI, tag pagination, and self-hosted analytics are implemented and merged. Remaining follow-ups: offline meals/vinyl and idempotency, analytics retention/admin UI, audio/PDF export, and Library cursor pagination.
 
 ---
 

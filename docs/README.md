@@ -15,7 +15,9 @@ Complete documentation for the Chisos advanced notes project.
 - **[REST API Reference](./api-reference.md)** - Complete API endpoint documentation
 - **[Roadmap & Status](./roadmap.md)** - What is done, what is next, and when
 - **[Sharing Architecture](./sharing-architecture.md)** - Profiles, friendships, and resource sharing
-- **[Audio Recording System](./audio-recording-system.md)** - Browser recording, transcription, and playback
+- **[Audio Recording System](./audio-recording-system.md)** - Browser recording, offline queue, transcription, and playback
+- **[Unified Library](./library.md)** - The Today/Library IA, timeline filters, and `/api/library`
+- **[Product Analytics](./analytics.md)** - Self-hosted events, privacy rules, and the admin summary
 - **[S3 Storage Patterns](./audio-clips-s3.md)** - Audio clips, avatars, and vinyl images in S3
 - **[Authentication Flow](./authentication-flow-explained.md)** - How Clerk JWTs reach the backend
 - **[Clerk Setup](./clerk-authentication-setup.md)** - Initial Clerk configuration

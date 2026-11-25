@@ -31,6 +31,21 @@ OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 # Below this threshold, suggestions require manual confirmation
 ```
 
+
+### Optional: account deletion and meal photos
+
+Account deletion purges all app data even without Clerk credentials. To also delete the Clerk identity, set:
+
+```bash
+CLERK_SECRET_KEY=sk_test_...
+```
+
+Meal photo capture defaults to the same vision model as vinyl extraction. Override it without changing code:
+
+```bash
+MEAL_VISION_MODEL=gpt-4.1-mini
+```
+
 ---
 
 ## Optional: Audio clips (S3 object storage)
