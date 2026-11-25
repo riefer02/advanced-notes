@@ -58,7 +58,7 @@ function LandingPage() {
 
             <p className="text-ink-muted mx-auto max-w-2xl text-xl leading-relaxed">
               Voice notes, meal tracking, task management, and a vinyl collection — all powered by
-              AI. Speak it, snap it, or type it. Chisos handles the rest.
+              AI. Speak it, type it, or snap your records. Chisos handles the rest.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-8">
@@ -108,7 +108,7 @@ function LandingPage() {
                   </svg>
                 }
                 title="Voice Notes & Transcription"
-                description="Record your thoughts and get instant AI transcription powered by OpenAI Whisper. Automatic tagging, categorization, and smart organization."
+                description="Record your thoughts and get instant AI transcription powered by OpenAI gpt-transcribe. Automatic tagging, categorization, and smart organization."
                 color="blue"
               />
 
@@ -285,6 +285,9 @@ function LandingPage() {
                 Get Started Free
               </Button>
             </Link>
+            <p className="mt-4 text-xs text-white/75">
+              Free to start: 100 transcription minutes and 500 AI calls per month.
+            </p>
           </div>
         </section>
 
