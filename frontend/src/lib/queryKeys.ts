@@ -59,6 +59,7 @@ export const queryKeys = {
   },
   userSearch: (query: string) => ['userSearch', query] as const,
   settings: ['userSettings'] as const,
+  usage: ['usage'] as const,
   dashboard: ['dashboardStats'] as const,
   digests: (limit?: number, offset?: number) => ['digests', limit, offset] as const,
   digestsPrefix: ['digests'] as const,
