@@ -14,7 +14,8 @@ export const queryKeys = {
     audioPrefix: ['noteAudio'] as const,
     search: (query: string) => ['search', query] as const,
     searchPrefix: ['search'] as const,
-    byTag: (tag: string | null, limit?: number) => ['notes', 'tag', tag, limit] as const,
+    byTag: (tag: string | null, limit?: number, offset = 0) =>
+      ['notes', 'tag', tag, limit, offset] as const,
   },
   folders: { all: ['folders'] as const },
   tags: { all: ['tags'] as const },

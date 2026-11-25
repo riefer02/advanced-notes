@@ -319,12 +319,26 @@ export async function fetchTags(): Promise<string[]> {
   return data.tags
 }
 
+export interface TagNotesResponse {
+  tag: string
+  notes: Note[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export async function fetchNotesByTagPage(
+  tag: string,
+  limit = 50,
+  offset = 0
+): Promise<TagNotesResponse> {
+  return apiRequest<TagNotesResponse>('GET', `/api/tags/${encodeURIComponent(tag)}/notes`, {
+    params: { limit, offset },
+  })
+}
+
 export async function fetchNotesByTag(tag: string, limit = 50): Promise<Note[]> {
-  const data = await apiRequest<{ notes: Note[] }>(
-    'GET',
-    `/api/tags/${encodeURIComponent(tag)}/notes`,
-    { params: { limit } }
-  )
+  const data = await fetchNotesByTagPage(tag, limit)
   return data.notes
 }
 

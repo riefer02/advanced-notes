@@ -16,7 +16,7 @@ import {
   useDeleteNote,
   useNote,
   useNotes,
-  useNotesByTag,
+  useNotesByTagPage,
   usePinNote,
   usePurgeNote,
   useRestoreNote,
@@ -25,9 +25,6 @@ import {
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { pluralize } from '../lib/format'
 import type { NoteView } from '../lib/api'
-
-// Mirrors the backend caps (search: 50 results, tag lookup: 50 notes).
-const TAG_RESULT_CAP = 50
 
 interface NotesPanelProps {
   focusNoteId?: string | null
@@ -105,7 +102,7 @@ export default function NotesPanel({
   const { data: browseCount } = useNotes(undefined, 1, 0, isBrowsing, view)
   const { data: folderCount } = useNotes(selectedFolder ?? undefined, 1, 0, !!selectedFolder, view)
   const { data: searchResults } = useSearchNotes(debouncedSearch)
-  const { data: tagResults } = useNotesByTag(selectedTag, TAG_RESULT_CAP)
+  const { data: tagPage } = useNotesByTagPage(selectedTag, 1, 0)
 
   // `null` while the count is unresolved — never flash "0 notes".
   const noteCount = debouncedSearch
@@ -113,8 +110,8 @@ export default function NotesPanel({
       ? searchResults.length
       : null
     : selectedTag
-      ? tagResults
-        ? tagResults.length
+      ? tagPage
+        ? tagPage.total
         : null
       : selectedFolder
         ? (folderCount?.total ?? null)

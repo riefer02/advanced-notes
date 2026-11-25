@@ -530,14 +530,25 @@ def get_tags():
 @bp.get("/tags/<tag>/notes")
 @require_auth
 def get_notes_by_tag(tag: str):
-    """Get all notes with a specific tag (user-scoped)."""
+    """Get a page of notes with a specific tag (user-scoped)."""
     user_id = g.user_id
     svc = get_services()
 
     try:
-        notes = svc.storage.get_notes_by_tag(user_id, tag)
+        limit, offset = parse_pagination(default_limit=50, max_limit=100)
+        notes, total = svc.storage.get_notes_by_tag_page(
+            user_id, tag, limit=limit, offset=offset
+        )
 
-        return jsonify({"tag": tag, "notes": [note.model_dump() for note in notes]})
+        return jsonify(
+            {
+                "tag": tag,
+                "notes": [note.model_dump() for note in notes],
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
+        )
 
     except Exception as e:
         return api_error_from_exception(e)

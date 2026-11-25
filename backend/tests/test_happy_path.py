@@ -1155,6 +1155,7 @@ def test_get_notes_by_tag(client, storage):
     assert data["tag"] == "python"
     assert len(data["notes"]) == 1
     assert data["notes"][0]["title"] == "Py"
+    assert data["total"] == 1
 
 
 # ============================================================================

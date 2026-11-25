@@ -6,7 +6,7 @@ import calendar
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, or_
 
 from ...database import MealEmbedding as MealEmbeddingORM
 from ...database import MealEntry as MealEntryORM
@@ -230,6 +230,50 @@ class MealStorageMixin:
                     items_map.setdefault(item.meal_entry_id, []).append(item)
 
             return [_meal_entry_to_dto(e, items_map.get(e.id, [])) for e in entries]
+
+    def search_meals(
+        self,
+        user_id: str,
+        query: str,
+        limit: int = 20,
+    ) -> list[MealEntryDTO]:
+        """Search a user's meals by transcript or food-item name."""
+        needle = query.strip().lower()
+        if not needle:
+            return []
+
+        pattern = f"%{needle}%"
+        with self._session_scope() as session:
+            item_meal_ids = session.query(MealItemORM.meal_entry_id).filter(
+                MealItemORM.user_id == user_id,
+                func.lower(MealItemORM.name).like(pattern),
+            )
+            entries = (
+                session.query(MealEntryORM)
+                .filter(
+                    MealEntryORM.user_id == user_id,
+                    or_(
+                        func.lower(MealEntryORM.transcription).like(pattern),
+                        MealEntryORM.id.in_(item_meal_ids),
+                    ),
+                )
+                .order_by(desc(MealEntryORM.meal_date), desc(MealEntryORM.created_at))
+                .limit(max(1, min(limit, 50)))
+                .all()
+            )
+
+            entry_ids = [entry.id for entry in entries]
+            items_map: dict[str, list[MealItemORM]] = {}
+            if entry_ids:
+                all_items = (
+                    session.query(MealItemORM)
+                    .filter(MealItemORM.meal_entry_id.in_(entry_ids))
+                    .all()
+                )
+                for item in all_items:
+                    items_map.setdefault(item.meal_entry_id, []).append(item)
+
+            return [_meal_entry_to_dto(entry, items_map.get(entry.id, [])) for entry in entries]
 
     def get_meals_calendar(
         self, user_id: str, year: int, month: int

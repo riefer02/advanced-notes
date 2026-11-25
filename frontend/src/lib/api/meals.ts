@@ -70,6 +70,11 @@ export interface MealsResponse {
   offset: number
 }
 
+export interface MealSearchResponse {
+  query: string
+  meals: MealEntry[]
+}
+
 export interface MealsCalendarEntry {
   id: string
   meal_type: MealType
@@ -119,6 +124,12 @@ export async function fetchMeals(params: {
   calendar_owner?: string
 }): Promise<MealsResponse> {
   return apiRequest<MealsResponse>('GET', '/api/meals', { params })
+}
+
+export async function searchMeals(query: string, limit = 20): Promise<MealSearchResponse> {
+  return apiRequest<MealSearchResponse>('GET', '/api/meals/search', {
+    params: { q: query, limit },
+  })
 }
 
 export async function fetchMealsCalendar(

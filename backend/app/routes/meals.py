@@ -322,6 +322,30 @@ def list_meals():
         return api_error_from_exception(e)
 
 
+@bp.get("/meals/search")
+@require_auth
+def search_meals():
+    """Search the signed-in user's meals by transcript or food item."""
+    user_id = g.user_id
+    svc = get_services()
+
+    try:
+        query = (request.args.get("q") or "").strip()
+        if len(query) < 2:
+            return api_error("Query parameter 'q' must be at least 2 characters", 400)
+
+        limit_raw = request.args.get("limit", "20")
+        try:
+            limit = max(1, min(int(limit_raw), 50))
+        except (TypeError, ValueError):
+            return api_error("'limit' must be an integer", 400)
+
+        meals = svc.storage.search_meals(user_id, query, limit=limit)
+        return jsonify({"query": query, "meals": [meal.model_dump() for meal in meals]})
+    except Exception as e:
+        return api_error_from_exception(e)
+
+
 @bp.get("/meals/calendar")
 @require_auth
 def get_meals_calendar():

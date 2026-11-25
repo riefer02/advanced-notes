@@ -781,7 +781,14 @@ class NoteStorageMixin:
             )
         return sorted(names)
 
-    def get_notes_by_tag(self, user_id: str, tag: str, limit: int = 50) -> list[NoteDTO]:
+    def get_notes_by_tag_page(
+        self,
+        user_id: str,
+        tag: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[NoteDTO], int]:
+        """Return one tag page plus the true total for pagination."""
         name_norm = tag.strip().lower()
         with self._session_scope() as session:
             normalized_notes = (
@@ -818,8 +825,14 @@ class NoteStorageMixin:
             merged.values(),
             key=lambda note: note.updated_at or datetime.min,
             reverse=True,
-        )[:limit]
-        return [_note_to_dto(note) for note in ordered]
+        )
+        total = len(ordered)
+        page = ordered[max(0, offset) : max(0, offset) + max(1, limit)]
+        return [_note_to_dto(note) for note in page], total
+
+    def get_notes_by_tag(self, user_id: str, tag: str, limit: int = 50) -> list[NoteDTO]:
+        notes, _ = self.get_notes_by_tag_page(user_id, tag, limit=limit)
+        return notes
 
     def get_note_count(
         self,
