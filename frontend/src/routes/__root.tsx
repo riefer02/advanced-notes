@@ -3,7 +3,7 @@ import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { QueryClient } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { AppShell } from '../components/layout/AppShell'
-import { NAV_ITEMS } from '../components/layout/nav-items'
+import { APP_ROUTES } from '../components/layout/nav-items'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { RequireAuth } from '../components/RequireAuth'
 import { OutageBanner } from '../components/OutageBanner'
@@ -21,7 +21,7 @@ function RootComponent() {
   // Admin is an authenticated app route but deliberately absent from the
   // sidebar; the API enforces ADMIN_USER_IDS.
   const isAppRoute =
-    pathname.startsWith('/admin') || NAV_ITEMS.some((item) => pathname.startsWith(item.to))
+    pathname.startsWith('/admin') || APP_ROUTES.some((item) => pathname.startsWith(item.to))
 
   return (
     <>

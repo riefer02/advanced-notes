@@ -296,6 +296,25 @@ function LibraryPage() {
               )
             })}
           </div>
+
+          <div className="text-ink-subtle flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+            <span className="text-ink-subtle">Manage:</span>
+            {(filter === 'all' || filter === 'note') && (
+              <Link to="/notes" className="hover:text-ink underline-offset-2 hover:underline">
+                Notes manager
+              </Link>
+            )}
+            {(filter === 'all' || filter === 'meal') && (
+              <Link to="/meals" className="hover:text-ink underline-offset-2 hover:underline">
+                Meal calendar
+              </Link>
+            )}
+            {(filter === 'all' || filter === 'vinyl') && (
+              <Link to="/vinyl" className="hover:text-ink underline-offset-2 hover:underline">
+                Vinyl collection
+              </Link>
+            )}
+          </div>
         </div>
 
         {allFailed ? (

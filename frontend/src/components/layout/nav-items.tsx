@@ -1,14 +1,11 @@
 import {
   CheckCircle2,
-  Disc3,
   FileText,
   LayoutDashboard,
   Library,
   MessageCircle,
   Settings,
-  StickyNote,
   Users,
-  UtensilsCrossed,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -32,11 +29,16 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard', label: 'Today', icon: LayoutDashboard },
   { to: '/library', label: 'Library', icon: Library },
   { to: '/summaries', label: 'Summaries', icon: FileText },
-  { to: '/notes', label: 'Notes', icon: StickyNote },
   { to: '/todos', label: 'Todos', icon: CheckCircle2 },
-  { to: '/meals', label: 'Meals', icon: UtensilsCrossed },
-  { to: '/vinyl', label: 'Vinyl', icon: Disc3 },
   { to: '/friends', label: 'Friends', icon: Users },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/feedback', label: 'Feedback', icon: MessageCircle },
+]
+
+/** Routes that still use the app shell even when they are not in the sidebar. */
+export const APP_ROUTES: { to: NavItem['to']; label: string }[] = [
+  ...NAV_ITEMS.map(({ to, label }) => ({ to, label })),
+  { to: '/notes', label: 'Notes' },
+  { to: '/meals', label: 'Meals' },
+  { to: '/vinyl', label: 'Vinyl' },
 ]

@@ -5,7 +5,7 @@ import { CommandPalette } from '../CommandPalette'
 import { useFriendRequests } from '../../hooks/useFriends'
 import { useReceivedShares } from '../../hooks/useSharing'
 
-import { NAV_ITEMS } from './nav-items'
+import { APP_ROUTES } from './nav-items'
 import { DesktopSidebar, MobileDrawer } from './Navigation'
 import { AppHeader } from './AppHeader'
 import { AskSlideOver } from './AskSlideOver'
@@ -37,7 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     (friendRequestsData?.requests?.length ?? 0) + (receivedSharesData?.received?.length ?? 0)
 
   const activeItem = useMemo(() => {
-    return NAV_ITEMS.find((i) => pathname === i.to || pathname.startsWith(`${i.to}/`))
+    return APP_ROUTES.find((i) => pathname === i.to || pathname.startsWith(`${i.to}/`))
   }, [pathname])
 
   // Cmd+K / Ctrl+K to open command palette
