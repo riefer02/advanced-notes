@@ -10,6 +10,7 @@ import {
   updateMealItem,
   deleteMealItem,
   transcribeMeal,
+  extractMealPhoto,
   type CreateMealInput,
   type MealType,
 } from '../lib/api'
@@ -89,6 +90,16 @@ export function useCreateMeal(calendarOwner?: string) {
   return useMutation({
     mutationFn: (data: CreateMealInput) => createMeal(data, calendarOwner),
     onSuccess: () => invalidateMealQueries(queryClient),
+  })
+}
+
+/**
+ * Extract an editable meal preview from a photo. This does not create a meal,
+ * so there is nothing to invalidate.
+ */
+export function useExtractMealPhoto() {
+  return useMutation({
+    mutationFn: (file: File) => extractMealPhoto(file),
   })
 }
 

@@ -16,7 +16,13 @@ from sqlalchemy.exc import IntegrityError
 from ..database import TokenUsage, UsageCounter, UsageQuota, get_session
 
 # Quota "AI calls" currently counts these service types (unchanged behavior).
-AI_CALL_SERVICE_TYPES = ("categorization", "chat", "summarization")
+AI_CALL_SERVICE_TYPES = (
+    "categorization",
+    "chat",
+    "summarization",
+    "meal_photo_extraction",
+    "vinyl_extraction",
+)
 
 # Cost estimates per model (USD)
 # These are approximate and should be updated as pricing changes.
