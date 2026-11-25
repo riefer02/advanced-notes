@@ -11,7 +11,9 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useAuth } from '@clerk/clerk-react'
 import { deleteAccount } from '@/lib/api'
+import { clearQueueForUser } from '@/lib/offline-queue'
 
 interface DeleteAccountDialogProps {
   open: boolean
@@ -20,6 +22,7 @@ interface DeleteAccountDialogProps {
 }
 
 export function DeleteAccountDialog({ open, onOpenChange, onDeleted }: DeleteAccountDialogProps) {
+  const { userId } = useAuth()
   const [confirmation, setConfirmation] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,6 +45,19 @@ export function DeleteAccountDialog({ open, onOpenChange, onDeleted }: DeleteAcc
     setError(null)
     try {
       await deleteAccount()
+      // The server purge is done; remove any device-local captures/drafts so a
+      // deleted account leaves no queued notes behind in this browser.
+      try {
+        if (userId) {
+          await clearQueueForUser(userId)
+          window.localStorage.removeItem(`chisos:note-draft:${userId}`)
+        }
+        for (const key of Object.keys(window.localStorage)) {
+          if (key.startsWith('chisos:note-edit-draft:')) window.localStorage.removeItem(key)
+        }
+      } catch {
+        // Signing out still matters more than local cleanup.
+      }
       reset()
       onOpenChange(false)
       onDeleted()
