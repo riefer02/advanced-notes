@@ -121,7 +121,8 @@ function SettingsPage() {
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = filename ?? `chisos-export.${format}`
+      const stamp = new Date().toISOString().slice(0, 10)
+      anchor.download = filename ?? `chisos-export-${stamp}.${format}`
       document.body.appendChild(anchor)
       anchor.click()
       anchor.remove()

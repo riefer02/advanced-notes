@@ -37,9 +37,19 @@ def create_app(*, services: Services | None = None, testing: bool = False):
 
     # In development, allow all origins for easier testing
     if os.getenv("FLASK_ENV") == "development":
-        CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+        CORS(
+            app,
+            resources={r"/*": {"origins": "*"}},
+            supports_credentials=True,
+            expose_headers=["Content-Disposition"],
+        )
     else:
-        CORS(app, origins=allowed_origins, supports_credentials=True)
+        CORS(
+            app,
+            origins=allowed_origins,
+            supports_credentials=True,
+            expose_headers=["Content-Disposition"],
+        )
 
     # Attach dependency container for routes/services.
     #
