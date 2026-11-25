@@ -3,6 +3,7 @@ import {
   Disc3,
   FileText,
   LayoutDashboard,
+  Library,
   MessageCircle,
   Settings,
   StickyNote,
@@ -14,6 +15,7 @@ import {
 export type NavItem = {
   to:
     | '/dashboard'
+    | '/library'
     | '/summaries'
     | '/notes'
     | '/todos'
@@ -27,7 +29,8 @@ export type NavItem = {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/dashboard', label: 'Today', icon: LayoutDashboard },
+  { to: '/library', label: 'Library', icon: Library },
   { to: '/summaries', label: 'Summaries', icon: FileText },
   { to: '/notes', label: 'Notes', icon: StickyNote },
   { to: '/todos', label: 'Todos', icon: CheckCircle2 },

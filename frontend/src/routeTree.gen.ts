@@ -15,6 +15,7 @@ import { Route as SummariesRouteImport } from './routes/summaries'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as NotesRouteImport } from './routes/notes'
 import { Route as MealsRouteImport } from './routes/meals'
+import { Route as LibraryRouteImport } from './routes/library'
 import { Route as FriendsRouteImport } from './routes/friends'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as DesignRouteImport } from './routes/design'
@@ -52,6 +53,11 @@ const NotesRoute = NotesRouteImport.update({
 const MealsRoute = MealsRouteImport.update({
   id: '/meals',
   path: '/meals',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LibraryRoute = LibraryRouteImport.update({
+  id: '/library',
+  path: '/library',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FriendsRoute = FriendsRouteImport.update({
@@ -102,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/design': typeof DesignRoute
   '/feedback': typeof FeedbackRoute
   '/friends': typeof FriendsRoute
+  '/library': typeof LibraryRoute
   '/meals': typeof MealsRoute
   '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
@@ -118,6 +125,7 @@ export interface FileRoutesByTo {
   '/design': typeof DesignRoute
   '/feedback': typeof FeedbackRoute
   '/friends': typeof FriendsRoute
+  '/library': typeof LibraryRoute
   '/meals': typeof MealsRoute
   '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
@@ -135,6 +143,7 @@ export interface FileRoutesById {
   '/design': typeof DesignRoute
   '/feedback': typeof FeedbackRoute
   '/friends': typeof FriendsRoute
+  '/library': typeof LibraryRoute
   '/meals': typeof MealsRoute
   '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
@@ -153,6 +162,7 @@ export interface FileRouteTypes {
     | '/design'
     | '/feedback'
     | '/friends'
+    | '/library'
     | '/meals'
     | '/notes'
     | '/settings'
@@ -169,6 +179,7 @@ export interface FileRouteTypes {
     | '/design'
     | '/feedback'
     | '/friends'
+    | '/library'
     | '/meals'
     | '/notes'
     | '/settings'
@@ -185,6 +196,7 @@ export interface FileRouteTypes {
     | '/design'
     | '/feedback'
     | '/friends'
+    | '/library'
     | '/meals'
     | '/notes'
     | '/settings'
@@ -202,6 +214,7 @@ export interface RootRouteChildren {
   DesignRoute: typeof DesignRoute
   FeedbackRoute: typeof FeedbackRoute
   FriendsRoute: typeof FriendsRoute
+  LibraryRoute: typeof LibraryRoute
   MealsRoute: typeof MealsRoute
   NotesRoute: typeof NotesRoute
   SettingsRoute: typeof SettingsRoute
@@ -254,6 +267,13 @@ declare module '@tanstack/react-router' {
       path: '/meals'
       fullPath: '/meals'
       preLoaderRoute: typeof MealsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/library': {
+      id: '/library'
+      path: '/library'
+      fullPath: '/library'
+      preLoaderRoute: typeof LibraryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/friends': {
@@ -322,6 +342,7 @@ const rootRouteChildren: RootRouteChildren = {
   DesignRoute: DesignRoute,
   FeedbackRoute: FeedbackRoute,
   FriendsRoute: FriendsRoute,
+  LibraryRoute: LibraryRoute,
   MealsRoute: MealsRoute,
   NotesRoute: NotesRoute,
   SettingsRoute: SettingsRoute,
