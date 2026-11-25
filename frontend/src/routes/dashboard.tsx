@@ -590,7 +590,7 @@ function StatsGrid({ stats }: { stats: DashboardStats }) {
           accent="vinyl"
           label="Records"
           value={stats.vinyl.total_records}
-          meta={`${stats.vinyl.total_artists} artists`}
+          meta={pluralize(stats.vinyl.total_artists, 'artist')}
         />
       </Link>
     </div>

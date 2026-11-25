@@ -21,7 +21,7 @@ import {
   useRestoreNoteRevision,
   useUpdateNote,
 } from '../hooks/useNotes'
-import { formatDateTime } from '../lib/format'
+import { formatDateTime, pluralize } from '../lib/format'
 import { copyText, downloadText, noteFilename, noteToMarkdown } from '../lib/note-export'
 import { clearNoteEditDraft, loadNoteEditDraft, saveNoteEditDraft } from './noteEditDraft'
 import SuggestedTodos from './SuggestedTodos'
@@ -251,7 +251,9 @@ export default function NoteDetail({
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <MetaBar>
               <MetaItem icon={Calendar}>{formatDateTime(current.created_at)}</MetaItem>
-              {current.word_count > 0 && <MetaItem>{current.word_count} words</MetaItem>}
+              {current.word_count > 0 && (
+                <MetaItem>{pluralize(current.word_count, 'word')}</MetaItem>
+              )}
               <MetaItem icon={Folder} className="max-w-full">
                 {current.folder_path}
               </MetaItem>
@@ -500,7 +502,8 @@ export default function NoteDetail({
                         v{revision.version} · {formatDateTime(revision.created_at)}
                       </p>
                       <p className="text-ink-subtle mt-0.5 truncate text-[11px]">
-                        {revision.title} · {revision.word_count} words · {revision.edit_source}
+                        {revision.title} · {pluralize(revision.word_count, 'word')} ·{' '}
+                        {revision.edit_source}
                       </p>
                     </div>
                     <Button

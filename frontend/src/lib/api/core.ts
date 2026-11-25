@@ -2,7 +2,7 @@
  * Core API utilities: auth, request helpers, and shared constants.
  */
 
-import { formatShortDate } from '../format'
+import { formatUtcDate } from '../format'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
@@ -49,7 +49,7 @@ function formatQuotaAmount(value: number): string {
 }
 
 function quotaMessage(quota: QuotaInfo): string {
-  const resets = formatShortDate(quota.resets_at) || 'the start of next month'
+  const resets = formatUtcDate(quota.resets_at) || 'the start of next month'
   return `Monthly quota exceeded: ${formatQuotaAmount(quota.used)}/${formatQuotaAmount(quota.limit)} ${quota.unit}. Resets ${resets}.`
 }
 
