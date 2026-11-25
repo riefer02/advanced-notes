@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { formatShortDate } from '@/lib/format'
+import { formatUtcDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/settings')({
@@ -483,7 +483,7 @@ function UsageCard() {
               unit="calls"
             />
             <div className="text-ink-subtle flex flex-wrap items-center gap-2 text-xs">
-              <span>Resets {formatShortDate(data.period_end)}</span>
+              <span>Resets {formatUtcDate(data.period_end)}</span>
               <span aria-hidden>·</span>
               <Badge variant="neutral" className="capitalize">
                 {data.tier}

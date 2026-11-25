@@ -314,7 +314,7 @@ function NoteItem({ note, isSelected, onClick, onTagClick }: NoteItemProps) {
         {note.word_count > 0 && (
           <>
             <span aria-hidden className="bg-line-strong size-0.5 rounded-full" />
-            <span className="tabular-nums">{note.word_count} words</span>
+            <span className="tabular-nums">{pluralize(note.word_count, 'word')}</span>
           </>
         )}
         {note.tags?.slice(0, 3).map((tag) => (

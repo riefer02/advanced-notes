@@ -116,7 +116,7 @@ export function CommandPalette({ isOpen, onClose, onOpenAsk }: CommandPalettePro
       />
       <CommandList>
         {!isSearching && <CommandEmpty>No pages or actions found.</CommandEmpty>}
-        {isSearching && isFetching && (
+        {isSearching && isFetching && !hasContentResults && (
           <div className="text-ink-subtle flex items-center gap-2 px-4 py-3 text-[13px]">
             <Search className="size-3.5 animate-pulse" />
             Searching your library…
