@@ -13,6 +13,8 @@ import {
 import * as api from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
 
+const TAG_PAGE_SIZE = 50
+
 // ============================================================================
 // Invalidation Helpers
 // ============================================================================
@@ -153,6 +155,31 @@ export function useNotesByTag(tag: string | null, limit = 50, enabled = true) {
     queryFn: () => (tag ? api.fetchNotesByTag(tag, limit) : Promise.resolve([])),
     enabled: !!tag && enabled,
     staleTime: 10000, // Consider stale after 10 seconds
+  })
+}
+
+/** A single tag page (used for a true count). */
+export function useNotesByTagPage(tag: string | null, limit = 1, offset = 0, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.notes.byTag(tag, limit, offset),
+    queryFn: () => api.fetchNotesByTagPage(tag!, limit, offset),
+    enabled: !!tag && enabled,
+    staleTime: 10000,
+  })
+}
+
+/** Paginated tag results, matching the browse list's load-more behavior. */
+export function useNotesByTagInfinite(tag: string | null, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.notes.byTag(tag, TAG_PAGE_SIZE), 'infinite'],
+    queryFn: ({ pageParam }) => api.fetchNotesByTagPage(tag!, TAG_PAGE_SIZE, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      const nextOffset = lastPage.offset + lastPage.notes.length
+      return lastPage.notes.length > 0 && nextOffset < lastPage.total ? nextOffset : undefined
+    },
+    enabled: !!tag && enabled,
+    staleTime: 10000,
   })
 }
 

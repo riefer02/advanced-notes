@@ -818,3 +818,33 @@ class TestMealCounts:
 
         counts = storage.get_meal_counts("meal-counts-user", 2026, 2)
         assert counts is not None
+
+
+class TestMealSearch:
+    def test_search_matches_transcription(self, client, auth_headers, sample_meal):
+        response = client.get("/api/meals/search?q=sandwich", headers=auth_headers)
+        assert response.status_code == 200
+        meals = response.get_json()["meals"]
+        assert len(meals) == 1
+        assert meals[0]["id"] == sample_meal
+
+    def test_search_matches_food_item_name(self, client, auth_headers, sample_meal):
+        response = client.get("/api/meals/search?q=chips", headers=auth_headers)
+        assert response.status_code == 200
+        assert response.get_json()["meals"][0]["id"] == sample_meal
+
+    def test_search_is_user_scoped_and_empty_for_no_match(self, client, auth_headers, sample_meal):
+        response = client.get("/api/meals/search?q=zzz", headers=auth_headers)
+        assert response.status_code == 200
+        assert response.get_json()["meals"] == []
+
+        response = client.get(
+            "/api/meals/search?q=sandwich",
+            headers={"X-Test-User-Id": "another-user"},
+        )
+        assert response.status_code == 200
+        assert response.get_json()["meals"] == []
+
+    def test_search_requires_two_characters(self, client, auth_headers):
+        response = client.get("/api/meals/search?q=a", headers=auth_headers)
+        assert response.status_code == 400

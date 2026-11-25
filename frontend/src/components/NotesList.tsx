@@ -1,13 +1,12 @@
 import { useMemo } from 'react'
 import { ChevronRight, FileText, Pin } from 'lucide-react'
-import { useNotesInfinite, useSearchNotes, useNotesByTag } from '../hooks/useNotes'
+import { useNotesInfinite, useNotesByTagInfinite, useSearchNotes } from '../hooks/useNotes'
 import { formatShortDate, pluralize } from '../lib/format'
 import type { Note, NoteView } from '../lib/api'
 import { Button } from '@/components/ui/button'
 
-// The backend hard-caps search at 50 results and tag lookups at 50 notes.
+// Search is hard-capped by the backend; tag results paginate.
 const SEARCH_RESULT_CAP = 50
-const TAG_RESULT_CAP = 50
 
 // Define NoteItemData locally but export for usage if needed (though Note is usually enough)
 export type NoteItemData = Note & {
@@ -46,10 +45,10 @@ export default function NotesList({
 
   const notesQuery = useNotesInfinite(folder, view, !isSearchMode && !isTagMode)
   const searchQueryHook = useSearchNotes(searchQuery || '')
-  const tagQueryHook = useNotesByTag(tag || null, TAG_RESULT_CAP, isTagMode)
+  const tagQueryHook = useNotesByTagInfinite(tag || null, isTagMode)
   const { isLoading: notesLoading, error: notesError } = notesQuery
   const { data: searchResults, isLoading: searchLoading, error: searchError } = searchQueryHook
-  const { data: tagResults, isLoading: tagLoading, error: tagError } = tagQueryHook
+  const { isLoading: tagLoading, error: tagError } = tagQueryHook
 
   const isLoading = isSearchMode ? searchLoading : isTagMode ? tagLoading : notesLoading
   const error = isSearchMode ? searchError : isTagMode ? tagError : notesError
@@ -67,6 +66,19 @@ export default function NotesList({
     }
     return merged
   }, [notesQuery.data])
+
+  const tagNotes = useMemo(() => {
+    const seen = new Set<string>()
+    const merged: NoteItemData[] = []
+    for (const page of tagQueryHook.data?.pages ?? []) {
+      for (const note of page.notes) {
+        if (seen.has(note.id)) continue
+        seen.add(note.id)
+        merged.push(note)
+      }
+    }
+    return merged
+  }, [tagQueryHook.data])
 
   if (isLoading) {
     return (
@@ -110,10 +122,11 @@ export default function NotesList({
   const notes: NoteItemData[] = isSearchMode
     ? (searchResults || []).map((sr) => ({ ...sr.note, snippet: sr.snippet, rank: sr.rank }))
     : isTagMode
-      ? tagResults || []
+      ? tagNotes
       : pageNotes
 
   const total = notesQuery.data?.pages[0]?.total
+  const tagTotal = tagQueryHook.data?.pages[0]?.total
 
   if (notes.length === 0) {
     return (
@@ -154,13 +167,23 @@ export default function NotesList({
               ? `Showing first ${SEARCH_RESULT_CAP} matches — refine your search to narrow the list.`
               : pluralize(notes.length, 'match', 'matches')
             : isTagMode
-              ? notes.length >= TAG_RESULT_CAP
-                ? `Showing first ${TAG_RESULT_CAP} notes with #${tag}.`
+              ? tagTotal != null && notes.length < tagTotal
+                ? `Showing ${notes.length} of ${pluralize(tagTotal, 'note')} with #${tag}`
                 : pluralize(notes.length, 'note')
               : total != null && notes.length < total
                 ? `Showing ${notes.length} of ${pluralize(total, 'note')}`
                 : `Showing ${pluralize(notes.length, 'note')}`}
         </p>
+        {isTagMode && tagQueryHook.hasNextPage && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void tagQueryHook.fetchNextPage()}
+            loading={tagQueryHook.isFetchingNextPage}
+          >
+            Load more
+          </Button>
+        )}
         {!isSearchMode && !isTagMode && notesQuery.hasNextPage && (
           <Button
             variant="outline"
