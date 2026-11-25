@@ -23,6 +23,7 @@ Complete documentation for the Chisos advanced notes project.
 
 ### Development
 - **[Design System](./design-system.md)** - Tokens, detail-card primitives, density rules, light/dark themes, and the dev-only `/design` preview
+- **[Product Design Review (2026-11-25)](./design-review-2026-11-25.md)** - Live-app UX audit, prioritized findings, and a suggested fix sequence
 - **[Contributing Guide](./contributing.md)** - Conventions, commands, code organization, debugging, and CI details
 - **[Glossary](../GLOSSARY.md)** - Project-specific terms (notes, folders, tags, sharing, services)
 

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { CheckCircle2 } from 'lucide-react'
+import { Bug, CheckCircle2, Lightbulb, MessageCircle } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { DetailCard } from '@/components/ui/detail'
 import { PageHeader } from '@/components/ui/page-header'
@@ -82,9 +82,9 @@ function FeedbackPage() {
             <span className="section-label mb-2 block">Feedback type</span>
             <div className="grid gap-2 sm:grid-cols-3">
               {[
-                { value: 'bug', label: 'Bug Report', icon: '🐛' },
-                { value: 'feature', label: 'Feature Request', icon: '💡' },
-                { value: 'general', label: 'General Feedback', icon: '💬' },
+                { value: 'bug', label: 'Bug Report', icon: Bug },
+                { value: 'feature', label: 'Feature Request', icon: Lightbulb },
+                { value: 'general', label: 'General Feedback', icon: MessageCircle },
               ].map((option) => (
                 <button
                   key={option.value}
@@ -97,7 +97,7 @@ function FeedbackPage() {
                       : 'border-line bg-surface text-ink hover:border-line-strong'
                   }`}
                 >
-                  <span className="mb-1 block text-lg">{option.icon}</span>
+                  <option.icon className="mb-1.5 size-4" aria-hidden />
                   <span className="block text-[13px] font-medium">{option.label}</span>
                 </button>
               ))}

@@ -1,6 +1,13 @@
-import { ChevronRight, Pin } from 'lucide-react'
-import { useNotes, useSearchNotes, useNotesByTag } from '../hooks/useNotes'
+import { useMemo } from 'react'
+import { ChevronRight, FileText, Pin } from 'lucide-react'
+import { useNotesInfinite, useSearchNotes, useNotesByTag } from '../hooks/useNotes'
+import { formatShortDate, pluralize } from '../lib/format'
 import type { Note, NoteView } from '../lib/api'
+import { Button } from '@/components/ui/button'
+
+// The backend hard-caps search at 50 results and tag lookups at 50 notes.
+const SEARCH_RESULT_CAP = 50
+const TAG_RESULT_CAP = 50
 
 // Define NoteItemData locally but export for usage if needed (though Note is usually enough)
 export type NoteItemData = Note & {
@@ -16,6 +23,10 @@ interface NotesListProps {
   onTagClick?: (tag: string) => void
   onNoteSelect: (note: NoteItemData) => void
   selectedNoteId?: string | null
+  /** Clears search/tag/folder filters (and returns to the active view). */
+  onBrowseAll?: () => void
+  /** Opens the capture panel; a real next action instead of instructions. */
+  onCreateNote?: (mode: 'record' | 'write') => void
 }
 
 export default function NotesList({
@@ -26,20 +37,36 @@ export default function NotesList({
   onTagClick,
   onNoteSelect,
   selectedNoteId,
+  onBrowseAll,
+  onCreateNote,
 }: NotesListProps) {
-  // Use exactly one source: search, tag, or the folder/browse list.
+  // Use exactly one source: search, tag, or the paginated folder/browse list.
   const isSearchMode = !!searchQuery?.trim()
   const isTagMode = !!tag && !isSearchMode
 
-  const notesQuery = useNotes(folder, 50, 0, !isSearchMode && !isTagMode, view)
+  const notesQuery = useNotesInfinite(folder, view, !isSearchMode && !isTagMode)
   const searchQueryHook = useSearchNotes(searchQuery || '')
-  const tagQueryHook = useNotesByTag(tag || null, 50, isTagMode)
-  const { data: notesData, isLoading: notesLoading, error: notesError } = notesQuery
+  const tagQueryHook = useNotesByTag(tag || null, TAG_RESULT_CAP, isTagMode)
+  const { isLoading: notesLoading, error: notesError } = notesQuery
   const { data: searchResults, isLoading: searchLoading, error: searchError } = searchQueryHook
   const { data: tagResults, isLoading: tagLoading, error: tagError } = tagQueryHook
 
   const isLoading = isSearchMode ? searchLoading : isTagMode ? tagLoading : notesLoading
   const error = isSearchMode ? searchError : isTagMode ? tagError : notesError
+
+  // Pages can overlap when a new note shifts offsets; dedupe by id.
+  const pageNotes = useMemo(() => {
+    const seen = new Set<string>()
+    const merged: NoteItemData[] = []
+    for (const page of notesQuery.data?.pages ?? []) {
+      for (const note of page.notes) {
+        if (seen.has(note.id)) continue
+        seen.add(note.id)
+        merged.push(note)
+      }
+    }
+    return merged
+  }, [notesQuery.data])
 
   if (isLoading) {
     return (
@@ -70,6 +97,11 @@ export default function NotesList({
               ? 'Failed to load notes by tag'
               : 'Failed to load notes'}
         </p>
+        {onBrowseAll && (
+          <Button variant="outline" size="sm" className="mt-3" onClick={onBrowseAll}>
+            Back to all notes
+          </Button>
+        )}
       </div>
     )
   }
@@ -79,74 +111,130 @@ export default function NotesList({
     ? (searchResults || []).map((sr) => ({ ...sr.note, snippet: sr.snippet, rank: sr.rank }))
     : isTagMode
       ? tagResults || []
-      : notesData?.notes || []
+      : pageNotes
+
+  const total = notesQuery.data?.pages[0]?.total
 
   if (notes.length === 0) {
     return (
-      <div className="border-line bg-surface-muted/40 rounded-xl border border-dashed p-8 text-center">
-        <svg
-          className="text-line-strong mx-auto size-10"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-          />
-        </svg>
-        <h3 className="text-ink mt-3 text-sm font-semibold">
-          {isSearchMode
-            ? 'No results found'
-            : isTagMode
-              ? 'No notes with this tag yet'
-              : view === 'trash'
-                ? 'Trash is empty'
-                : view === 'archived'
-                  ? 'No archived notes'
-                  : 'No notes yet'}
-        </h3>
-        <p className="text-ink-muted mx-auto mt-1.5 max-w-sm text-[13px] leading-5">
-          {isSearchMode
-            ? 'Try adjusting your search terms or browse all notes'
-            : isTagMode
-              ? 'Create notes with this tag by recording audio or writing a note'
-              : view === 'trash'
-                ? 'Notes you delete appear here and can be restored or purged.'
-                : view === 'archived'
-                  ? 'Archive a note to keep it out of the active list without deleting it.'
-                  : 'Record a voice note or write one yourself — both are organized with AI-powered tagging'}
-        </p>
-        {!isSearchMode && !isTagMode && view === 'active' && (
-          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <p className="text-ink-subtle text-xs">
-              Use the <span className="text-ink font-medium">Record / Upload</span> or{' '}
-              <span className="text-ink font-medium">Write</span> tab in the Capture panel to create
-              your first note.
-            </p>
-          </div>
-        )}
-      </div>
+      <EmptyNotes
+        isSearchMode={isSearchMode}
+        isTagMode={isTagMode}
+        searchQuery={searchQuery?.trim()}
+        tag={tag}
+        view={view}
+        onBrowseAll={onBrowseAll}
+        onCreateNote={onCreateNote}
+      />
     )
   }
 
   return (
-    <div
-      role="list"
-      aria-label={isSearchMode ? 'Search results' : 'Notes list'}
-      className="space-y-1.5"
-    >
-      {notes.map((note) => (
-        <NoteItem
-          key={note.id}
-          note={note}
-          isSelected={selectedNoteId === note.id}
-          onClick={() => onNoteSelect(note)}
-          onTagClick={onTagClick}
-        />
-      ))}
+    <div className="space-y-2">
+      <div
+        role="list"
+        aria-label={isSearchMode ? 'Search results' : 'Notes list'}
+        className="space-y-1.5"
+      >
+        {notes.map((note) => (
+          <NoteItem
+            key={note.id}
+            note={note}
+            isSelected={selectedNoteId === note.id}
+            onClick={() => onNoteSelect(note)}
+            onTagClick={onTagClick}
+          />
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <p className="text-ink-subtle text-[11px] leading-4" aria-live="polite">
+          {isSearchMode
+            ? notes.length >= SEARCH_RESULT_CAP
+              ? `Showing first ${SEARCH_RESULT_CAP} matches — refine your search to narrow the list.`
+              : pluralize(notes.length, 'match', 'matches')
+            : isTagMode
+              ? notes.length >= TAG_RESULT_CAP
+                ? `Showing first ${TAG_RESULT_CAP} notes with #${tag}.`
+                : pluralize(notes.length, 'note')
+              : total != null && notes.length < total
+                ? `Showing ${notes.length} of ${pluralize(total, 'note')}`
+                : `Showing ${pluralize(notes.length, 'note')}`}
+        </p>
+        {!isSearchMode && !isTagMode && notesQuery.hasNextPage && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void notesQuery.fetchNextPage()}
+            loading={notesQuery.isFetchingNextPage}
+          >
+            Load more
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function EmptyNotes({
+  isSearchMode,
+  isTagMode,
+  searchQuery,
+  tag,
+  view,
+  onBrowseAll,
+  onCreateNote,
+}: {
+  isSearchMode: boolean
+  isTagMode: boolean
+  searchQuery?: string
+  tag?: string | null
+  view: NoteView
+  onBrowseAll?: () => void
+  onCreateNote?: (mode: 'record' | 'write') => void
+}) {
+  const title = isSearchMode
+    ? 'No results found'
+    : isTagMode
+      ? 'No notes with this tag yet'
+      : view === 'trash'
+        ? 'Trash is empty'
+        : view === 'archived'
+          ? 'No archived notes'
+          : 'No notes yet'
+
+  const description = isSearchMode
+    ? searchQuery
+      ? `Nothing matches “${searchQuery}”. Try a shorter phrase, or search all notes.`
+      : 'Try a shorter phrase, or browse all notes.'
+    : isTagMode
+      ? `Nothing is tagged #${tag} yet. Browse all notes to pick another tag.`
+      : view === 'trash'
+        ? 'Notes you delete appear here and can be restored or purged.'
+        : view === 'archived'
+          ? 'Archive a note to keep it out of the active list without deleting it.'
+          : 'Record a thought or write it down — folders and tags are organized for you.'
+
+  return (
+    <div className="border-line bg-surface-muted/40 rounded-xl border border-dashed p-8 text-center">
+      <FileText className="text-line-strong mx-auto size-10" aria-hidden />
+      <h3 className="text-ink mt-3 text-sm font-semibold">{title}</h3>
+      <p className="text-ink-muted mx-auto mt-1.5 max-w-sm text-[13px] leading-5">{description}</p>
+
+      {(isSearchMode || isTagMode || view !== 'active') && onBrowseAll ? (
+        <Button variant="outline" size="sm" className="mt-4" onClick={onBrowseAll}>
+          {view === 'active' ? 'Show all notes' : 'Back to active notes'}
+        </Button>
+      ) : onCreateNote ? (
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <Button size="sm" onClick={() => onCreateNote('write')}>
+            Write a note
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => onCreateNote('record')}>
+            Record audio
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -214,7 +302,7 @@ function NoteItem({ note, isSelected, onClick, onTagClick }: NoteItemProps) {
         </button>
 
         <ChevronRight
-          className={`text-line-strong mt-0.5 size-4 shrink-0 transition-opacity ${
+          className={`text-line-strong mt-0.5 size-4 shrink-0 transition-opacity max-sm:opacity-100 ${
             isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
           }`}
           aria-hidden
@@ -222,12 +310,7 @@ function NoteItem({ note, isSelected, onClick, onTagClick }: NoteItemProps) {
       </div>
 
       <div className="text-ink-subtle mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-4">
-        <span>
-          {new Date(note.updated_at || note.created_at).toLocaleDateString(undefined, {
-            month: 'short',
-            day: 'numeric',
-          })}
-        </span>
+        <span>{formatShortDate(note.updated_at || note.created_at)}</span>
         {note.word_count > 0 && (
           <>
             <span aria-hidden className="bg-line-strong size-0.5 rounded-full" />
@@ -241,7 +324,7 @@ function NoteItem({ note, isSelected, onClick, onTagClick }: NoteItemProps) {
               event.stopPropagation()
               onTagClick?.(tag)
             }}
-            className="hover:text-brand focus-visible:ring-ring max-w-28 truncate rounded transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            className="hover:text-brand focus-visible:ring-ring max-w-28 truncate rounded transition-colors focus-visible:ring-2 focus-visible:outline-none max-sm:inline-flex max-sm:min-h-9 max-sm:items-center"
           >
             #{tag}
           </button>

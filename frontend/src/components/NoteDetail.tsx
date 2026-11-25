@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import {
   Archive,
   ArchiveRestore,
   Calendar,
+  Copy,
+  Download,
   Folder,
+  History,
   Pencil,
   Pin,
   PinOff,
@@ -18,6 +21,9 @@ import {
   useRestoreNoteRevision,
   useUpdateNote,
 } from '../hooks/useNotes'
+import { formatDateTime } from '../lib/format'
+import { copyText, downloadText, noteFilename, noteToMarkdown } from '../lib/note-export'
+import { clearNoteEditDraft, loadNoteEditDraft, saveNoteEditDraft } from './noteEditDraft'
 import SuggestedTodos from './SuggestedTodos'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -37,6 +43,11 @@ interface NoteDetailProps {
   onRestore?: () => void
   onPurge?: () => void
   onUpdated?: (note: Note) => void
+  /**
+   * Notifies the host drawer when the edit form differs from the saved note,
+   * so it can guard close/backdrop/Escape instead of losing work.
+   */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 function tagsToInput(tags: string[]): string {
@@ -55,18 +66,6 @@ function inputToTags(value: string): string[] {
     })
 }
 
-function formatTimestamp(value: string): string {
-  const date = new Date(value)
-  const includeYear = date.getFullYear() !== new Date().getFullYear()
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    ...(includeYear ? { year: 'numeric' } : {}),
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
-
 export default function NoteDetail({
   note,
   view = 'active',
@@ -76,6 +75,7 @@ export default function NoteDetail({
   onRestore,
   onPurge,
   onUpdated,
+  onDirtyChange,
 }: NoteDetailProps) {
   const [current, setCurrent] = useState(note)
   const [isEditing, setIsEditing] = useState(false)
@@ -85,6 +85,8 @@ export default function NoteDetail({
   const [folderPath, setFolderPath] = useState(note.folder_path)
   const [tagsText, setTagsText] = useState(tagsToInput(note.tags))
   const [showHistory, setShowHistory] = useState(false)
+  const [restoredDraftAt, setRestoredDraftAt] = useState<string | null>(null)
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
 
   const updateNote = useUpdateNote()
   const restoreRevision = useRestoreNoteRevision()
@@ -97,19 +99,94 @@ export default function NoteDetail({
     setCurrent(note)
   }, [note])
 
+  // The saved values that "dirty" is measured against.
+  const saved = useMemo(
+    () => ({
+      title: current.title,
+      summary: current.summary ?? '',
+      content: current.content,
+      folderPath: current.folder_path,
+      tagsText: tagsToInput(current.tags),
+    }),
+    [current]
+  )
+
+  const isDirty =
+    isEditing &&
+    (title !== saved.title ||
+      summary !== saved.summary ||
+      content !== saved.content ||
+      folderPath !== saved.folderPath ||
+      tagsText !== saved.tagsText)
+
+  const onDirtyChangeRef = useRef(onDirtyChange)
+  onDirtyChangeRef.current = onDirtyChange
+
+  useEffect(() => {
+    onDirtyChangeRef.current?.(isDirty)
+  }, [isDirty])
+
+  // Keep a debounced local draft while editing. It is a safety net only —
+  // saving to the server stays an explicit action.
+  useEffect(() => {
+    if (!isEditing) return
+
+    if (!isDirty) {
+      clearNoteEditDraft(current.id)
+      return
+    }
+
+    const handle = window.setTimeout(() => {
+      saveNoteEditDraft(current.id, {
+        title,
+        summary,
+        content,
+        folderPath,
+        tagsText,
+      })
+    }, 500)
+
+    return () => window.clearTimeout(handle)
+  }, [isEditing, isDirty, current.id, title, summary, content, folderPath, tagsText])
+
   const beginEdit = () => {
+    updateNote.reset()
+
+    const draft = loadNoteEditDraft(current.id)
+    if (draft) {
+      setTitle(draft.title)
+      setSummary(draft.summary)
+      setContent(draft.content)
+      setFolderPath(draft.folderPath)
+      setTagsText(draft.tagsText)
+      setRestoredDraftAt(draft.savedAt || 'unknown')
+    } else {
+      setTitle(current.title)
+      setSummary(current.summary ?? '')
+      setContent(current.content)
+      setFolderPath(current.folder_path)
+      setTagsText(tagsToInput(current.tags))
+      setRestoredDraftAt(null)
+    }
+
+    setIsEditing(true)
+  }
+
+  const cancelEdit = () => {
+    clearNoteEditDraft(current.id)
+    setRestoredDraftAt(null)
+    updateNote.reset()
+    setIsEditing(false)
+  }
+
+  const discardRestoredDraft = () => {
+    clearNoteEditDraft(current.id)
+    setRestoredDraftAt(null)
     setTitle(current.title)
     setSummary(current.summary ?? '')
     setContent(current.content)
     setFolderPath(current.folder_path)
     setTagsText(tagsToInput(current.tags))
-    updateNote.reset()
-    setIsEditing(true)
-  }
-
-  const cancelEdit = () => {
-    updateNote.reset()
-    setIsEditing(false)
   }
 
   const handleSave = async () => {
@@ -129,6 +206,8 @@ export default function NoteDetail({
           tags: inputToTags(tagsText),
         },
       })
+      clearNoteEditDraft(current.id)
+      setRestoredDraftAt(null)
       setCurrent(updated)
       onUpdated?.(updated)
       setIsEditing(false)
@@ -150,6 +229,16 @@ export default function NoteDetail({
     }
   }
 
+  const handleCopyMarkdown = async () => {
+    const copied = await copyText(noteToMarkdown(current))
+    setCopyState(copied ? 'copied' : 'error')
+    if (copied) window.setTimeout(() => setCopyState('idle'), 2000)
+  }
+
+  const handleDownloadMarkdown = () => {
+    downloadText(noteFilename(current), noteToMarkdown(current))
+  }
+
   const hasSnippet = !!note.snippet
 
   return (
@@ -161,7 +250,7 @@ export default function NoteDetail({
           </h2>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <MetaBar>
-              <MetaItem icon={Calendar}>{formatTimestamp(current.created_at)}</MetaItem>
+              <MetaItem icon={Calendar}>{formatDateTime(current.created_at)}</MetaItem>
               {current.word_count > 0 && <MetaItem>{current.word_count} words</MetaItem>}
               <MetaItem icon={Folder} className="max-w-full">
                 {current.folder_path}
@@ -184,6 +273,7 @@ export default function NoteDetail({
               <Button
                 variant="ghost"
                 size="sm"
+                className="max-sm:size-9"
                 onClick={() => onPin(!current.pinned_at)}
                 aria-pressed={!!current.pinned_at}
               >
@@ -195,7 +285,12 @@ export default function NoteDetail({
               </Button>
             )}
             {!isTrash && onArchive && (
-              <Button variant="ghost" size="sm" onClick={() => onArchive(!current.archived_at)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="max-sm:size-9"
+                onClick={() => onArchive(!current.archived_at)}
+              >
                 {current.archived_at ? <ArchiveRestore /> : <Archive />}
                 <span className="hidden lg:inline">
                   {current.archived_at ? 'Unarchive' : 'Archive'}
@@ -206,7 +301,7 @@ export default function NoteDetail({
               </Button>
             )}
             {!isTrash && (
-              <Button variant="outline" size="sm" onClick={beginEdit}>
+              <Button variant="outline" size="sm" className="max-sm:h-9" onClick={beginEdit}>
                 <Pencil />
                 Edit
               </Button>
@@ -217,6 +312,22 @@ export default function NoteDetail({
 
       {isEditing ? (
         <div className="space-y-4">
+          {restoredDraftAt && (
+            <div
+              role="status"
+              className="border-line bg-surface-muted text-ink-muted flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs leading-5"
+            >
+              <span className="flex items-center gap-1.5">
+                <History className="text-ink-subtle size-3.5 shrink-0" aria-hidden />
+                Restored an unsaved draft
+                {restoredDraftAt !== 'unknown' && ` saved ${formatDateTime(restoredDraftAt)}`}.
+              </span>
+              <Button size="xs" variant="ghost" onClick={discardRestoredDraft}>
+                Discard draft
+              </Button>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="note-title">Title</Label>
             <Input
@@ -277,17 +388,22 @@ export default function NoteDetail({
             </p>
           )}
 
-          <div className="border-line flex items-center justify-end gap-2 border-t pt-4">
-            <Button variant="ghost" onClick={cancelEdit} disabled={updateNote.isPending}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSave}
-              loading={updateNote.isPending}
-              disabled={!title.trim() || !content.trim() || !folderPath.trim()}
-            >
-              Save changes
-            </Button>
+          <div className="border-line flex flex-wrap items-center justify-between gap-2 border-t pt-4">
+            <span className="text-ink-subtle text-xs">
+              {isDirty ? 'Kept as a local draft until you save.' : 'No unsaved changes.'}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={cancelEdit} disabled={updateNote.isPending}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSave}
+                loading={updateNote.isPending}
+                disabled={!title.trim() || !content.trim() || !folderPath.trim()}
+              >
+                Save changes
+              </Button>
+            </div>
           </div>
         </div>
       ) : (
@@ -336,6 +452,21 @@ export default function NoteDetail({
             </div>
           </div>
 
+          <div className="border-line flex flex-wrap items-center gap-2 border-t pt-4">
+            <Button variant="ghost" size="sm" onClick={() => void handleCopyMarkdown()}>
+              <Copy />
+              {copyState === 'copied'
+                ? 'Copied'
+                : copyState === 'error'
+                  ? 'Copy failed'
+                  : 'Copy Markdown'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleDownloadMarkdown}>
+              <Download />
+              Download .md
+            </Button>
+          </div>
+
           {!isTrash && <SuggestedTodos noteId={current.id} />}
 
           {!isTrash && (
@@ -366,7 +497,7 @@ export default function NoteDetail({
                   >
                     <div className="min-w-0">
                       <p className="text-ink text-xs font-medium">
-                        v{revision.version} · {formatTimestamp(revision.created_at)}
+                        v{revision.version} · {formatDateTime(revision.created_at)}
                       </p>
                       <p className="text-ink-subtle mt-0.5 truncate text-[11px]">
                         {revision.title} · {revision.word_count} words · {revision.edit_source}

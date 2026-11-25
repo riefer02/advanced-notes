@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
+import { Disc3, Plus, Search } from 'lucide-react'
 import { useVinylRecords, useVinylStats } from '../hooks/useVinyl'
 import type { VinylRecord } from '../lib/api'
+import { pluralize } from '../lib/format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/ui/page-header'
@@ -62,27 +64,19 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord, owner }: Vin
         title="Vinyl Collection"
         description={
           stats
-            ? `${stats.total_records} records · ${stats.total_artists} artists`
+            ? `${pluralize(stats.total_records, 'record')} · ${pluralize(stats.total_artists, 'artist')}`
             : 'Your records, catalogued.'
         }
         actions={
           !isSharedView && (
             <>
               <Button variant="outline" size="sm" asChild>
-                <Link to="/friends" search={{ tab: 'shares' }}>
+                <Link to="/friends" search={{ tab: 'shares', resource: 'vinyl_library' }}>
                   Share
                 </Link>
               </Button>
               <Button size="sm" onClick={onAddRecord}>
-                <svg
-                  className="size-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
+                <Plus />
                 Add record
               </Button>
             </>
@@ -204,7 +198,11 @@ export default function VinylLibrary({ onSelectRecord, onAddRecord, owner }: Vin
       {/* Empty State */}
       {!isLoading && !error && records.length === 0 && (
         <div className="py-16 text-center">
-          <div className="text-4xl mb-3">{hasFilters ? '🔍' : '💿'}</div>
+          {hasFilters ? (
+            <Search className="text-line-strong mx-auto mb-3 size-8" aria-hidden />
+          ) : (
+            <Disc3 className="text-line-strong mx-auto mb-3 size-8" aria-hidden />
+          )}
           <p className="text-ink text-sm font-medium">
             {hasFilters ? 'No records match your filters' : 'No records yet'}
           </p>

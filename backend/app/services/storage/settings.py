@@ -159,6 +159,13 @@ class SettingsStorageMixin:
                 for d in digests
             ]
 
+    def count_digests(self, user_id: str) -> int:
+        """Total digests for pagination; the list page alone is not a count."""
+        with self._session_scope() as session:
+            return int(
+                session.query(DigestORM).filter(DigestORM.user_id == user_id).count()
+            )
+
     def get_digest(self, user_id: str, digest_id: str) -> DigestDTO | None:
         with self._session_scope() as session:
             d = (
@@ -236,6 +243,13 @@ class SettingsStorageMixin:
                 )
                 for r in rows
             ]
+
+    def count_ask_history(self, user_id: str) -> int:
+        """Total ask-history rows for pagination."""
+        with self._session_scope() as session:
+            return int(
+                session.query(AskHistoryORM).filter(AskHistoryORM.user_id == user_id).count()
+            )
 
     def get_ask_history(self, user_id: str, ask_id: str) -> AskHistoryDTO | None:
         with self._session_scope() as session:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -933,3 +934,64 @@ def test_caught_500_queues_a_structured_admin_alert(client, app, monkeypatch):  
     assert recorded["user_id"] == "user-a"
     assert "secret detail" in recorded["error_message"]
     assert "traceback_text" in recorded
+
+
+def test_ask_history_includes_cited_note_titles(client, app):  # noqa: ANN001
+    """Ask history should resolve cited note IDs to titles for the UI."""
+    svc = app.extensions["services"]
+    note_id = svc.storage.save_note(
+        user_id="user-a",
+        content="I ate salmon and broccoli.",
+        metadata=NoteMetadata(title="Salmon dinner", folder_path="meals", tags=["food"]),
+    )
+    ask_id = svc.storage.save_ask_history(
+        user_id="user-a",
+        query="What did I eat?",
+        query_plan_json="{}",
+        answer_markdown="You ate salmon.",
+        cited_note_ids_json=json.dumps([note_id]),
+    )
+
+    resp = client.get("/api/ask-history", headers={"X-Test-User-Id": "user-a"})
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    item = next(i for i in payload["items"] if i["id"] == ask_id)
+    assert item["cited_notes"] == [{"id": note_id, "title": "Salmon dinner"}]
+    assert payload["total"] >= 1
+
+    resp = client.get(f"/api/ask-history/{ask_id}", headers={"X-Test-User-Id": "user-a"})
+    assert resp.status_code == 200
+    assert resp.get_json()["cited_notes"] == [{"id": note_id, "title": "Salmon dinner"}]
+
+
+def test_ask_history_tolerates_malformed_citations(client, app):  # noqa: ANN001
+    """Malformed citation JSON should not break the history endpoints."""
+    svc = app.extensions["services"]
+    ask_id = svc.storage.save_ask_history(
+        user_id="user-a",
+        query="Broken entry",
+        query_plan_json="{}",
+        answer_markdown="Answer.",
+        cited_note_ids_json="not-json",
+    )
+
+    resp = client.get(f"/api/ask-history/{ask_id}", headers={"X-Test-User-Id": "user-a"})
+    assert resp.status_code == 200
+    assert resp.get_json()["cited_notes"] == []
+
+    # Citations from another user's notes are never resolved.
+    other_note_id = svc.storage.save_note(
+        user_id="user-b",
+        content="Private",
+        metadata=NoteMetadata(title="Private note", folder_path="x", tags=[]),
+    )
+    foreign_ask_id = svc.storage.save_ask_history(
+        user_id="user-a",
+        query="Foreign citation",
+        query_plan_json="{}",
+        answer_markdown="Answer.",
+        cited_note_ids_json=json.dumps([other_note_id]),
+    )
+    resp = client.get(f"/api/ask-history/{foreign_ask_id}", headers={"X-Test-User-Id": "user-a"})
+    assert resp.status_code == 200
+    assert resp.get_json()["cited_notes"] == [{"id": other_note_id, "title": None}]

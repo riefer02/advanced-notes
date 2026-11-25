@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   useShares,
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { DetailCard } from '@/components/ui/detail'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Select,
   SelectContent,
@@ -22,10 +23,34 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-export default function ShareManager({ currentUserId }: { currentUserId: string }) {
-  const { data: sharesData, isLoading: loadingShares } = useShares()
-  const { data: receivedData, isLoading: loadingReceived } = useReceivedShares()
-  const { data: friendsData } = useFriends()
+type ShareResourceType = 'vinyl_library' | 'meal_calendar'
+
+export default function ShareManager({
+  currentUserId,
+  resource,
+}: {
+  currentUserId: string
+  resource?: ShareResourceType
+}) {
+  const {
+    data: sharesData,
+    isLoading: loadingShares,
+    isError: sharesError,
+    error: sharesErrorValue,
+    refetch: refetchShares,
+  } = useShares()
+  const {
+    data: receivedData,
+    isError: receivedError,
+    error: receivedErrorValue,
+    refetch: refetchReceived,
+  } = useReceivedShares()
+  const {
+    data: friendsData,
+    isLoading: friendsLoading,
+    isError: friendsError,
+    refetch: refetchFriends,
+  } = useFriends()
 
   const myShares = sharesData?.owned ?? []
   const sharedWithMe = sharesData?.received ?? []
@@ -35,10 +60,28 @@ export default function ShareManager({ currentUserId }: { currentUserId: string 
   return (
     <div className="space-y-6">
       {/* Pending Share Invitations */}
+      {receivedError && (
+        <Alert variant="destructive" className="flex items-center justify-between">
+          <AlertDescription className="text-[13px]">
+            Couldn’t load pending invitations
+            {receivedErrorValue?.message ? `: ${receivedErrorValue.message}` : '.'}
+          </AlertDescription>
+          <Button variant="ghost" size="sm" className="ml-3" onClick={() => void refetchReceived()}>
+            Retry
+          </Button>
+        </Alert>
+      )}
       {received.length > 0 && <PendingShareInvitations shares={received} />}
 
       {/* Create New Share */}
-      <CreateShareSection friends={friends} currentUserId={currentUserId} />
+      <CreateShareSection
+        friends={friends}
+        currentUserId={currentUserId}
+        initialResource={resource ?? 'vinyl_library'}
+        friendsLoading={friendsLoading}
+        friendsError={friendsError}
+        onRetryFriends={() => void refetchFriends()}
+      />
 
       {/* My Active Shares */}
       <SharesList
@@ -46,6 +89,10 @@ export default function ShareManager({ currentUserId }: { currentUserId: string 
         description="Resources you've shared with others"
         shares={myShares}
         isLoading={loadingShares}
+        isError={sharesError}
+        errorMessage={sharesErrorValue?.message}
+        onRetry={() => void refetchShares()}
+        emptyMessage="Nothing shared yet. Use the form above to share your vinyl library or meal calendar."
         showRecipient
         currentUserId={currentUserId}
       />
@@ -55,7 +102,11 @@ export default function ShareManager({ currentUserId }: { currentUserId: string 
         title="Shared With Me"
         description="Resources others have shared with you"
         shares={sharedWithMe}
-        isLoading={loadingReceived}
+        isLoading={loadingShares}
+        isError={sharesError}
+        errorMessage={sharesErrorValue?.message}
+        onRetry={() => void refetchShares()}
+        emptyMessage="Nothing shared with you yet. When a friend shares something, it appears here."
         showOwner
         currentUserId={currentUserId}
       />
@@ -66,6 +117,7 @@ export default function ShareManager({ currentUserId }: { currentUserId: string 
 function PendingShareInvitations({ shares }: { shares: ResourceShare[] }) {
   const acceptShare = useAcceptShare()
   const declineShare = useDeclineShare()
+  const actionError = acceptShare.error ?? declineShare.error
 
   return (
     <div>
@@ -100,6 +152,11 @@ function PendingShareInvitations({ shares }: { shares: ResourceShare[] }) {
           </Alert>
         ))}
       </div>
+      {actionError && (
+        <p className="text-destructive mt-2 text-xs" role="status">
+          {actionError.message}
+        </p>
+      )}
     </div>
   )
 }
@@ -107,14 +164,28 @@ function PendingShareInvitations({ shares }: { shares: ResourceShare[] }) {
 function CreateShareSection({
   friends,
   currentUserId,
+  initialResource,
+  friendsLoading,
+  friendsError,
+  onRetryFriends,
 }: {
   friends: Friendship[]
   currentUserId: string
+  initialResource: ShareResourceType
+  friendsLoading: boolean
+  friendsError: boolean
+  onRetryFriends: () => void
 }) {
   const createShare = useCreateShare()
   const [selectedFriend, setSelectedFriend] = useState('')
-  const [resourceType, setResourceType] = useState('vinyl_library')
+  const [resourceType, setResourceType] = useState<ShareResourceType>(initialResource)
   const [permission, setPermission] = useState<'view' | 'edit'>('view')
+  const [sharedWith, setSharedWith] = useState<string | null>(null)
+
+  // The route can hand over a different resource while this component stays mounted.
+  useEffect(() => {
+    setResourceType(initialResource)
+  }, [initialResource])
 
   const friendOptions = friends.map((f) => {
     const profile = f.requester_id === currentUserId ? f.addressee_profile : f.requester_profile
@@ -122,13 +193,24 @@ function CreateShareSection({
     return { userId, displayName: profile?.display_name ?? 'Unknown' }
   })
 
+  const selectedFriendName = friendOptions.find((f) => f.userId === selectedFriend)?.displayName
+  const resourceLabel = formatResourceType(resourceType)
+  const permissionLabel = permission === 'view' ? 'view only' : 'can edit'
+
+  const confirmation = selectedFriendName
+    ? `Share your ${resourceLabel} with ${selectedFriendName} — ${permissionLabel}.`
+    : `Choose a friend to share your ${resourceLabel} — ${permissionLabel}.`
+
   const handleCreate = () => {
     if (!selectedFriend) return
+    const recipientName = selectedFriendName
+    setSharedWith(null)
     createShare.mutate(
       { shared_with_id: selectedFriend, resource_type: resourceType, permission },
       {
         onSuccess: () => {
           setSelectedFriend('')
+          setSharedWith(recipientName ?? null)
         },
       }
     )
@@ -138,10 +220,43 @@ function CreateShareSection({
     <div>
       <h3 className="section-label mb-2.5">Share something</h3>
       <DetailCard className="space-y-3 p-4">
+        {friendsError ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-destructive text-xs">Couldn’t load your friends.</p>
+            <Button variant="outline" size="sm" onClick={onRetryFriends}>
+              Retry
+            </Button>
+          </div>
+        ) : friendsLoading ? (
+          <p className="text-ink-subtle text-xs">Loading friends…</p>
+        ) : friendOptions.length === 0 ? (
+          <p className="text-ink-subtle text-xs">
+            Add a friend on the Friends tab before sharing anything.
+          </p>
+        ) : null}
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Select
+            value={resourceType}
+            onValueChange={(v) => {
+              setResourceType(v as ShareResourceType)
+              setSharedWith(null)
+            }}
+          >
+            <SelectTrigger aria-label="What to share">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="vinyl_library">Vinyl Library</SelectItem>
+              <SelectItem value="meal_calendar">Meal Calendar</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
             value={selectedFriend || '__none__'}
-            onValueChange={(v) => setSelectedFriend(v === '__none__' ? '' : v)}
+            onValueChange={(v) => {
+              setSelectedFriend(v === '__none__' ? '' : v)
+              setSharedWith(null)
+            }}
           >
             <SelectTrigger aria-label="Friend">
               <SelectValue placeholder="Select friend..." />
@@ -155,16 +270,13 @@ function CreateShareSection({
               ))}
             </SelectContent>
           </Select>
-          <Select value={resourceType} onValueChange={(v) => setResourceType(v)}>
-            <SelectTrigger aria-label="What to share">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="vinyl_library">Vinyl Library</SelectItem>
-              <SelectItem value="meal_calendar">Meal Calendar</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={permission} onValueChange={(v) => setPermission(v as 'view' | 'edit')}>
+          <Select
+            value={permission}
+            onValueChange={(v) => {
+              setPermission(v as 'view' | 'edit')
+              setSharedWith(null)
+            }}
+          >
             <SelectTrigger aria-label="Permission">
               <SelectValue />
             </SelectTrigger>
@@ -174,11 +286,24 @@ function CreateShareSection({
             </SelectContent>
           </Select>
         </div>
+
+        <p className="text-ink-muted text-[13px] leading-5" aria-live="polite">
+          {confirmation}
+        </p>
+
         <Button onClick={handleCreate} disabled={!selectedFriend || createShare.isPending}>
           {createShare.isPending ? 'Sharing...' : 'Share'}
         </Button>
+
         {createShare.isError && (
-          <p className="text-xs text-destructive">{createShare.error.message}</p>
+          <p className="text-xs text-destructive" role="status">
+            {createShare.error.message}
+          </p>
+        )}
+        {sharedWith && !createShare.isError && (
+          <p className="text-positive text-xs" role="status">
+            Shared your {resourceLabel} with {sharedWith}.
+          </p>
         )}
       </DetailCard>
     </div>
@@ -190,6 +315,10 @@ function SharesList({
   description,
   shares,
   isLoading,
+  isError,
+  errorMessage,
+  onRetry,
+  emptyMessage,
   showOwner,
   showRecipient,
   currentUserId,
@@ -198,31 +327,46 @@ function SharesList({
   description: string
   shares: ResourceShare[]
   isLoading: boolean
+  isError?: boolean
+  errorMessage?: string
+  onRetry?: () => void
+  emptyMessage: string
   showOwner?: boolean
   showRecipient?: boolean
   currentUserId: string
 }) {
   const revokeShare = useRevokeShare()
+  const [pendingRevoke, setPendingRevoke] = useState<ResourceShare | null>(null)
 
-  if (isLoading) {
-    return (
-      <div>
-        <h3 className="section-label">{title}</h3>
-        <p className="text-ink-subtle mt-1 mb-2.5 text-xs">{description}</p>
-        <div className="text-ink-subtle rounded-xl border border-dashed border-line px-4 py-6 text-center text-[13px]">
-          Loading shares…
-        </div>
-      </div>
-    )
-  }
+  const pendingIsOwned = pendingRevoke?.owner_id === currentUserId
+  const pendingRecipient = pendingRevoke
+    ? (pendingIsOwned ? pendingRevoke.shared_with_profile : pendingRevoke.owner_profile)
+        ?.display_name
+    : undefined
 
   return (
     <div>
       <h3 className="section-label">{title}</h3>
       <p className="text-ink-subtle mt-1 mb-2.5 text-xs">{description}</p>
-      {shares.length === 0 ? (
+
+      {isLoading ? (
+        <div className="text-ink-subtle rounded-xl border border-dashed border-line px-4 py-6 text-center text-[13px]">
+          Loading shares…
+        </div>
+      ) : isError ? (
+        <div className="border-line rounded-xl border border-dashed px-4 py-5 text-center">
+          <p className="text-destructive text-[13px]">
+            Couldn’t load this list{errorMessage ? `: ${errorMessage}` : '.'}
+          </p>
+          {onRetry && (
+            <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
+              Retry
+            </Button>
+          )}
+        </div>
+      ) : shares.length === 0 ? (
         <div className="text-ink-subtle border-line rounded-xl border border-dashed px-4 py-5 text-[13px]">
-          Nothing here yet.
+          {emptyMessage}
         </div>
       ) : (
         <div className="space-y-2">
@@ -238,14 +382,46 @@ function SharesList({
                 key={share.id}
                 share={share}
                 personProfile={person}
-                onRevoke={() => revokeShare.mutate(share.id)}
-                isRevoking={revokeShare.isPending}
+                onRevoke={() => setPendingRevoke(share)}
+                isRevoking={revokeShare.isPending && revokeShare.variables === share.id}
                 isOwner={share.owner_id === currentUserId}
               />
             )
           })}
         </div>
       )}
+
+      {revokeShare.isError && (
+        <p className="text-destructive mt-2 text-xs" role="status">
+          {revokeShare.error.message}
+        </p>
+      )}
+
+      <ConfirmDialog
+        open={!!pendingRevoke}
+        onOpenChange={(open) => {
+          if (!open) setPendingRevoke(null)
+        }}
+        title={pendingIsOwned ? 'Revoke this share?' : 'Leave this share?'}
+        description={
+          pendingRevoke
+            ? pendingIsOwned
+              ? `${pendingRecipient ?? 'This person'} will lose access to your ${formatResourceType(pendingRevoke.resource_type)}.`
+              : `Your access to this ${formatResourceType(pendingRevoke.resource_type)} will be removed.`
+            : undefined
+        }
+        confirmLabel={pendingIsOwned ? 'Revoke' : 'Leave'}
+        variant="destructive"
+        pending={revokeShare.isPending}
+        onConfirm={async () => {
+          if (!pendingRevoke) return
+          try {
+            await revokeShare.mutateAsync(pendingRevoke.id)
+          } catch {
+            // The mutation error is surfaced above the list.
+          }
+        }}
+      />
     </div>
   )
 }

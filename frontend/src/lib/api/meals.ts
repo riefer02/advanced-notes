@@ -41,6 +41,14 @@ export interface MealTranscriptionMeta {
   duration?: number
 }
 
+export interface CreateMealInput {
+  meal_type: MealType
+  meal_date: string
+  meal_time?: string
+  transcription?: string
+  items: Array<{ name: string; portion?: string }>
+}
+
 export interface MealTranscriptionResponse {
   text: string
   meta: MealTranscriptionMeta
@@ -81,12 +89,25 @@ export interface MealsCalendarResponse {
 
 export async function transcribeMeal(
   audioBlob: Blob,
-  calendarOwner?: string
+  calendarOwner?: string,
+  mealDate?: string
 ): Promise<MealTranscriptionResponse> {
-  const endpoint = calendarOwner
-    ? `/api/meals/transcribe?calendar_owner=${encodeURIComponent(calendarOwner)}`
-    : '/api/meals/transcribe'
+  const params = new URLSearchParams()
+  if (calendarOwner) params.set('calendar_owner', calendarOwner)
+  if (mealDate) params.set('meal_date', mealDate)
+  const query = params.toString()
+  const endpoint = query ? `/api/meals/transcribe?${query}` : '/api/meals/transcribe'
   return apiUpload<MealTranscriptionResponse>(endpoint, audioFormData(audioBlob, 'meal-recording'))
+}
+
+export async function createMeal(
+  data: CreateMealInput,
+  calendarOwner?: string
+): Promise<MealEntry> {
+  return apiRequest<MealEntry>('POST', '/api/meals', {
+    body: data,
+    params: calendarOwner ? { calendar_owner: calendarOwner } : undefined,
+  })
 }
 
 export async function fetchMeals(params: {

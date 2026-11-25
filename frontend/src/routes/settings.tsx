@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { ListChecks, Mic, Monitor, Moon, Palette, Sun, UserRound } from 'lucide-react'
+import { Gauge, ListChecks, Mic, Monitor, Moon, Palette, Sun, UserRound, X } from 'lucide-react'
 import { useUserSettings, useUpdateUserSettings } from '../hooks/useSettings'
 import { useMyProfile, useUpdateProfile } from '../hooks/useProfile'
+import { useUsage } from '../hooks/useUsage'
 import { useTheme, type Theme } from '../components/theme/ThemeProvider'
 import AvatarUploader from '../components/AvatarUploader'
 import UsernameInput from '../components/UsernameInput'
@@ -11,8 +12,18 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { Badge } from '@/components/ui/badge'
 import { DetailCard, DetailCardHeader } from '@/components/ui/detail'
 import { PageHeader } from '@/components/ui/page-header'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { formatShortDate } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -24,22 +35,63 @@ const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: 'system', label: 'System', icon: Monitor },
 ]
 
+/** Common spoken languages, stored as ISO 639-1 codes for the transcriber. */
+const LANGUAGE_OPTIONS: { code: string; name: string }[] = [
+  { code: 'en', name: 'English' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'it', name: 'Italian' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'sv', name: 'Swedish' },
+  { code: 'no', name: 'Norwegian' },
+  { code: 'da', name: 'Danish' },
+  { code: 'fi', name: 'Finnish' },
+  { code: 'pl', name: 'Polish' },
+  { code: 'tr', name: 'Turkish' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'uk', name: 'Ukrainian' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'he', name: 'Hebrew' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'bn', name: 'Bengali' },
+  { code: 'ta', name: 'Tamil' },
+  { code: 'th', name: 'Thai' },
+  { code: 'vi', name: 'Vietnamese' },
+  { code: 'id', name: 'Indonesian' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'zh', name: 'Chinese' },
+]
+
+const MAX_LANGUAGES = 5
+
+function languageName(code: string): string {
+  return LANGUAGE_OPTIONS.find((option) => option.code === code)?.name ?? code.toUpperCase()
+}
+
+function formatUsageAmount(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+}
+
 function SettingsPage() {
   const {
     data: settings,
     isLoading: settingsLoading,
     isError: settingsLoadFailed,
   } = useUserSettings()
-  const updateSettings = useUpdateUserSettings()
+  const updateAutoAccept = useUpdateUserSettings()
+  const updateLanguages = useUpdateUserSettings()
   const { data: profile, isLoading: profileLoading, isError: profileLoadFailed } = useMyProfile()
   const updateProfile = useUpdateProfile()
+  const updateDiscoverable = useUpdateProfile()
 
   const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
   const [bio, setBio] = useState('')
-  const [discoverable, setDiscoverable] = useState(true)
   const [hasChanges, setHasChanges] = useState(false)
-  const [languagesText, setLanguagesText] = useState('')
+  const [languages, setLanguages] = useState<string[]>([])
   const initializedRef = useRef(false)
   const settingsInitializedRef = useRef(false)
 
@@ -49,14 +101,13 @@ function SettingsPage() {
       setDisplayName(profile.display_name)
       setUsername(profile.username ?? '')
       setBio(profile.bio ?? '')
-      setDiscoverable(profile.discoverable)
       initializedRef.current = true
     }
   }, [profile])
 
   useEffect(() => {
     if (settings && !settingsInitializedRef.current) {
-      setLanguagesText((settings.transcription_languages ?? []).join(', '))
+      setLanguages(settings.transcription_languages ?? [])
       settingsInitializedRef.current = true
     }
   }, [settings])
@@ -67,31 +118,32 @@ function SettingsPage() {
     const changed =
       displayName !== profile.display_name ||
       username !== (profile.username ?? '') ||
-      bio !== (profile.bio ?? '') ||
-      discoverable !== profile.discoverable
+      bio !== (profile.bio ?? '')
     setHasChanges(changed)
     if (changed) {
       updateProfile.reset()
+      updateDiscoverable.reset()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayName, username, bio, discoverable, profile])
+  }, [displayName, username, bio, profile])
 
-  const handleAutoAcceptToggle = () => {
-    if (settings) {
-      updateSettings.mutate({ auto_accept_todos: !settings.auto_accept_todos })
-    }
+  const savedLanguages = settings?.transcription_languages ?? []
+  const hasLanguageChanges =
+    languages.length !== savedLanguages.length ||
+    languages.some((code) => !savedLanguages.includes(code))
+
+  const handleAddLanguage = (code: string) => {
+    setLanguages((current) =>
+      current.includes(code) || current.length >= MAX_LANGUAGES ? current : [...current, code]
+    )
+  }
+
+  const handleRemoveLanguage = (code: string) => {
+    setLanguages((current) => current.filter((language) => language !== code))
   }
 
   const handleSaveLanguages = () => {
-    const languages = Array.from(
-      new Set(
-        languagesText
-          .split(',')
-          .map((language) => language.trim().toLowerCase())
-          .filter(Boolean)
-      )
-    ).slice(0, 5)
-    updateSettings.mutate({ transcription_languages: languages })
+    updateLanguages.mutate({ transcription_languages: languages })
   }
 
   const handleDiscardProfile = () => {
@@ -99,7 +151,6 @@ function SettingsPage() {
     setDisplayName(profile.display_name)
     setUsername(profile.username ?? '')
     setBio(profile.bio ?? '')
-    setDiscoverable(profile.discoverable)
     updateProfile.reset()
   }
 
@@ -108,7 +159,6 @@ function SettingsPage() {
       display_name?: string
       username?: string | null
       bio?: string
-      discoverable?: boolean
     } = {}
 
     if (displayName !== profile?.display_name) data.display_name = displayName
@@ -116,7 +166,6 @@ function SettingsPage() {
       data.username = username || null
     }
     if (bio !== (profile?.bio ?? '')) data.bio = bio
-    if (discoverable !== profile?.discoverable) data.discoverable = discoverable
 
     updateProfile.mutate(data)
   }
@@ -176,13 +225,27 @@ function SettingsPage() {
                   />
                 </div>
 
-                <SettingRow
-                  id="discoverable-toggle"
-                  title="Discoverable"
-                  description="Allow other users to find you by name, username, or email."
-                  checked={discoverable}
-                  onCheckedChange={setDiscoverable}
-                />
+                <div>
+                  <SettingRow
+                    id="discoverable-toggle"
+                    title="Discoverable"
+                    description="Allow other users to find you by name, username, or email."
+                    checked={profile.discoverable}
+                    onCheckedChange={(checked) =>
+                      updateDiscoverable.mutate({ discoverable: checked })
+                    }
+                    disabled={updateDiscoverable.isPending}
+                  />
+                  <p className="text-ink-subtle mt-3 text-xs">This switch saves automatically.</p>
+                  {updateDiscoverable.isError && (
+                    <p className="text-destructive mt-1 text-xs">
+                      {updateDiscoverable.error?.message || 'Could not save that change.'}
+                    </p>
+                  )}
+                  {updateDiscoverable.isSuccess && (
+                    <p className="text-positive mt-1 text-xs">Saved.</p>
+                  )}
+                </div>
 
                 {updateProfile.isError && (
                   <p className="text-destructive text-[13px]">{updateProfile.error.message}</p>
@@ -222,6 +285,8 @@ function SettingsPage() {
           </div>
         </DetailCard>
 
+        <UsageCard />
+
         <DetailCard>
           <DetailCardHeader
             icon={ListChecks}
@@ -236,19 +301,25 @@ function SettingsPage() {
                 Could not load settings. Refresh the page to try again.
               </p>
             ) : (
-              <SettingRow
-                id="auto-accept-todos"
-                title="Auto-accept extracted todos"
-                description="Add extracted todos to your list immediately. When off, they appear as suggestions to review."
-                checked={settings?.auto_accept_todos ?? false}
-                onCheckedChange={() => handleAutoAcceptToggle()}
-                disabled={updateSettings.isPending}
-              />
-            )}
-            {updateSettings.isError && !settingsLoading && (
-              <p className="text-destructive mt-3 text-xs">
-                {updateSettings.error?.message || 'Could not save that change.'}
-              </p>
+              <>
+                <SettingRow
+                  id="auto-accept-todos"
+                  title="Auto-accept extracted todos"
+                  description="Add extracted todos to your list immediately. When off, they appear as suggestions to review."
+                  checked={settings?.auto_accept_todos ?? false}
+                  onCheckedChange={(checked) =>
+                    updateAutoAccept.mutate({ auto_accept_todos: checked })
+                  }
+                  disabled={updateAutoAccept.isPending}
+                />
+                <p className="text-ink-subtle mt-3 text-xs">This switch saves automatically.</p>
+                {updateAutoAccept.isError && (
+                  <p className="text-destructive mt-1 text-xs">
+                    {updateAutoAccept.error?.message || 'Could not save that change.'}
+                  </p>
+                )}
+                {updateAutoAccept.isSuccess && <p className="text-positive mt-1 text-xs">Saved.</p>}
+              </>
             )}
           </div>
         </DetailCard>
@@ -268,30 +339,74 @@ function SettingsPage() {
               </p>
             ) : settings ? (
               <>
-                <div className="space-y-1.5">
-                  <Label htmlFor="transcription-languages">Preferred languages</Label>
-                  <Input
-                    id="transcription-languages"
-                    value={languagesText}
-                    onChange={(event) => setLanguagesText(event.target.value)}
-                    placeholder="en, es, fr"
-                    maxLength={50}
-                  />
+                <div className="space-y-2">
+                  <Label htmlFor="add-language">Preferred languages</Label>
+                  {languages.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {languages.map((code) => (
+                        <span
+                          key={code}
+                          className="border-line bg-surface-muted text-ink inline-flex items-center gap-1 rounded-full border py-0.5 pr-1 pl-2.5 text-xs"
+                        >
+                          {languageName(code)}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveLanguage(code)}
+                            aria-label={`Remove ${languageName(code)}`}
+                            className="text-ink-subtle hover:text-ink hover:bg-surface-sunken focus-visible:ring-ring rounded-full p-0.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                          >
+                            <X className="size-3" aria-hidden />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-ink-subtle text-xs">Autodetect (default)</p>
+                  )}
+                  <Select
+                    value=""
+                    onValueChange={handleAddLanguage}
+                    disabled={languages.length >= MAX_LANGUAGES}
+                  >
+                    <SelectTrigger id="add-language" className="w-full sm:w-56">
+                      <SelectValue
+                        placeholder={
+                          languages.length >= MAX_LANGUAGES
+                            ? 'Maximum of 5 languages'
+                            : 'Add a language'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGE_OPTIONS.filter((option) => !languages.includes(option.code)).map(
+                        (option) => (
+                          <SelectItem key={option.code} value={option.code}>
+                            {option.name}
+                          </SelectItem>
+                        )
+                      )}
+                    </SelectContent>
+                  </Select>
                   <p className="text-ink-subtle text-xs leading-4">
-                    Comma-separated ISO codes. Leave empty to auto-detect.
+                    Up to 5 languages. Leave empty to detect the language automatically.
                   </p>
                 </div>
-                <div className="flex items-center justify-end gap-3">
-                  {updateSettings.isError && (
-                    <p className="text-destructive text-xs">
-                      {updateSettings.error?.message || 'Could not save.'}
-                    </p>
-                  )}
-                  {updateSettings.isSuccess && <p className="text-positive text-xs">Saved.</p>}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs">
+                    {updateLanguages.isError && (
+                      <p className="text-destructive">
+                        {updateLanguages.error?.message || 'Could not save.'}
+                      </p>
+                    )}
+                    {updateLanguages.isSuccess && !hasLanguageChanges && (
+                      <p className="text-positive">Saved.</p>
+                    )}
+                  </div>
                   <Button
                     size="sm"
                     onClick={handleSaveLanguages}
-                    loading={updateSettings.isPending}
+                    loading={updateLanguages.isPending}
+                    disabled={!hasLanguageChanges}
                   >
                     Save languages
                   </Button>
@@ -329,6 +444,93 @@ function SettingRow({
         <p className="text-ink-subtle mt-1 text-xs leading-5">{description}</p>
       </div>
       <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
+    </div>
+  )
+}
+
+function UsageCard() {
+  const { data, isLoading, error, refresh } = useUsage()
+
+  return (
+    <DetailCard>
+      <DetailCardHeader
+        icon={Gauge}
+        title="Usage"
+        subtitle="Transcription minutes and AI calls this month."
+      />
+      <div className="border-line space-y-4 border-t px-4 py-4">
+        {isLoading ? (
+          <div className="text-ink-subtle text-[13px]">Loading usage…</div>
+        ) : error ? (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-destructive text-[13px]">Could not load usage.</p>
+            <Button variant="ghost" size="xs" onClick={() => void refresh()}>
+              Try again
+            </Button>
+          </div>
+        ) : data ? (
+          <>
+            <UsageBar
+              label="Transcription"
+              used={data.transcription_minutes_used}
+              limit={data.transcription_minutes_limit}
+              unit="minutes"
+            />
+            <UsageBar
+              label="AI calls"
+              used={data.ai_calls_used}
+              limit={data.ai_calls_limit}
+              unit="calls"
+            />
+            <div className="text-ink-subtle flex flex-wrap items-center gap-2 text-xs">
+              <span>Resets {formatShortDate(data.period_end)}</span>
+              <span aria-hidden>·</span>
+              <Badge variant="neutral" className="capitalize">
+                {data.tier}
+              </Badge>
+            </div>
+          </>
+        ) : null}
+      </div>
+    </DetailCard>
+  )
+}
+
+function UsageBar({
+  label,
+  used,
+  limit,
+  unit,
+}: {
+  label: string
+  used: number
+  limit: number
+  unit: string
+}) {
+  const percent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0
+  const nearLimit = percent >= 80
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-ink text-[13px] font-medium">{label}</span>
+        <span className={cn('text-xs tabular-nums', nearLimit ? 'text-warning' : 'text-ink-muted')}>
+          {formatUsageAmount(used)} / {formatUsageAmount(limit)} {unit}
+        </span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={limit}
+        aria-valuenow={used}
+        className="bg-surface-muted h-1.5 overflow-hidden rounded-full"
+      >
+        <div
+          className={cn('h-full rounded-full', nearLimit ? 'bg-warning' : 'bg-brand')}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
     </div>
   )
 }

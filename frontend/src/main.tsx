@@ -49,6 +49,15 @@ declare module '@tanstack/react-router' {
   }
 }
 
+// Installable PWA. The worker is a network passthrough in this iteration; it
+// makes the app installable without introducing a stale-cache risk for
+// authenticated data.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js')
+  })
+}
+
 // Render the app
 const rootElement = document.getElementById('root')!
 if (!rootElement.innerHTML) {

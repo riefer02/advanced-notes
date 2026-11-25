@@ -18,6 +18,137 @@ from ._helpers import (
 
 bp = Blueprint("meals", __name__)
 
+_MEAL_TYPES = {"breakfast", "lunch", "dinner", "snack"}
+
+
+def _normalize_meal_time(value) -> str | None:
+    """Return a normalized HH:MM string, or None when the value is absent.
+
+    Raises ValueError for values that are present but malformed.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("meal_time must be a string")
+    raw = value.strip()
+    if not raw:
+        return None
+    parts = raw.split(":")
+    if len(parts) != 2:
+        raise ValueError("meal_time must use HH:MM")
+    hours, minutes = (int(part) for part in parts)
+    if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+        raise ValueError("meal_time must use HH:MM")
+    return f"{hours:02d}:{minutes:02d}"
+
+
+@bp.post("/meals")
+@require_auth
+def create_meal():
+    """Create a meal from a typed entry (no microphone required)."""
+    from datetime import date
+
+    user_id = g.user_id
+    svc = get_services()
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return api_error("No data provided", 400)
+
+    meal_type = data.get("meal_type")
+    meal_type = meal_type.strip().lower() if isinstance(meal_type, str) else ""
+    if meal_type not in _MEAL_TYPES:
+        return api_error("'meal_type' must be breakfast, lunch, dinner, or snack", 400)
+
+    raw_date = data.get("meal_date")
+    if not isinstance(raw_date, str) or not raw_date.strip():
+        return api_error("'meal_date' must be a valid ISO date (YYYY-MM-DD)", 400)
+    try:
+        meal_date = date.fromisoformat(raw_date.strip()).isoformat()
+    except ValueError:
+        return api_error("'meal_date' must be a valid ISO date (YYYY-MM-DD)", 400)
+
+    try:
+        meal_time = _normalize_meal_time(data.get("meal_time"))
+    except (TypeError, ValueError):
+        return api_error("'meal_time' must be a valid time (HH:MM)", 400)
+
+    transcription = data.get("transcription")
+    if transcription is not None and not isinstance(transcription, str):
+        return api_error("'transcription' must be a string", 400)
+    transcription = (transcription or "").strip()
+
+    raw_items = data.get("items", [])
+    if raw_items is None:
+        raw_items = []
+    if not isinstance(raw_items, list):
+        return api_error("'items' must be a list", 400)
+
+    items: list[dict] = []
+    for raw_item in raw_items:
+        if not isinstance(raw_item, dict):
+            return api_error("Each food item must be an object with a 'name'", 400)
+
+        name = raw_item.get("name")
+        name = name.strip() if isinstance(name, str) else ""
+        if not name:
+            return api_error("Each food item needs a non-empty 'name'", 400)
+
+        portion = raw_item.get("portion")
+        if portion is not None and not isinstance(portion, str):
+            return api_error("Food item 'portion' must be a string", 400)
+        items.append(
+            {
+                "name": name,
+                "portion": (portion or "").strip() or None,
+                "confidence": None,
+            }
+        )
+
+    if not items and not transcription:
+        return api_error("Add at least one food item or a note", 400)
+
+    # If adding to a shared calendar, verify edit permission (same rule as
+    # transcribe). Meals added there belong to the calendar's owner.
+    calendar_owner = request.args.get("calendar_owner")
+    if (
+        calendar_owner
+        and calendar_owner != user_id
+        and not svc.storage.has_access(user_id, calendar_owner, "meal_calendar", "edit")
+    ):
+        return api_error("Not authorized to add meals to this calendar", 403)
+
+    target_user_id = calendar_owner or user_id
+
+    # Keep the stored transcription meaningful for typed entries that only
+    # list items; the detail drawer renders it as the meal's summary.
+    if not transcription:
+        transcription = ", ".join(item["name"] for item in items)
+
+    from ..services.models import MealEntryMetadata
+
+    metadata = MealEntryMetadata(
+        meal_type=meal_type,
+        meal_date=meal_date,
+        meal_time=meal_time,
+        confidence=None,
+        model_version="manual",
+    )
+
+    try:
+        meal_id = svc.storage.save_meal_entry(
+            user_id=target_user_id,
+            transcription=transcription,
+            metadata=metadata,
+            food_items=items,
+        )
+        saved_meal = svc.storage.get_meal_entry(target_user_id, meal_id)
+        if not saved_meal:
+            return api_error("Meal could not be saved", 500)
+        return jsonify(saved_meal.model_dump()), 201
+    except Exception as e:
+        return api_error_from_exception(e)
+
 
 @bp.post("/meals/transcribe")
 @require_auth
@@ -42,6 +173,17 @@ def transcribe_meal():
     # Meals added to a shared calendar belong to that calendar's owner.
     target_user_id = calendar_owner or user_id
 
+    # An explicit capture date wins over anything the extractor infers from
+    # the transcript ("yesterday", "last Friday", ...).
+    requested_date = request.args.get("meal_date")
+    if requested_date:
+        try:
+            requested_date = date.fromisoformat(requested_date.strip()).isoformat()
+        except ValueError:
+            return api_error("'meal_date' must be a valid ISO date (YYYY-MM-DD)", 400)
+    else:
+        requested_date = None
+
     try:
         text, meta, audio_clip_id, audio_storage_key = _transcribe_audio_clip(
             user_id, svc, "/api/meals/transcribe"
@@ -52,13 +194,13 @@ def transcribe_meal():
         return api_error_from_exception(e)
 
     try:
-        current_date = date.today().isoformat()
+        current_date = requested_date or date.today().isoformat()
         extraction_result = require_external(
             lambda: svc.meal_extractor.extract(text, current_date),
             service="meal extraction",
         )
 
-        meal_date = extraction_result.meal_date or current_date
+        meal_date = requested_date or extraction_result.meal_date or current_date
 
         from ..services.models import MealEntryMetadata
 

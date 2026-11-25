@@ -4,6 +4,7 @@
 
 import {
   useQuery,
+  useInfiniteQuery,
   useMutation,
   useQueryClient,
   keepPreviousData,
@@ -56,6 +57,29 @@ export function useNotes(
     queryFn: () => api.fetchNotes(folder, limit, offset, view),
     enabled,
     staleTime: 10000, // Consider stale after 10 seconds
+  })
+}
+
+const NOTES_PAGE_SIZE = 50
+
+/**
+ * Paginated notes for the list view.
+ *
+ * The API caps `limit` at 100, so "load more" advances the offset instead of
+ * growing a single request past that ceiling. Pages are keyed under the notes
+ * root so existing mutations still invalidate the accumulated list.
+ */
+export function useNotesInfinite(folder?: string, view: api.NoteView = 'active', enabled = true) {
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.notes.all, 'infinite', view, folder, NOTES_PAGE_SIZE],
+    queryFn: ({ pageParam }) => api.fetchNotes(folder, NOTES_PAGE_SIZE, pageParam, view),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      const nextOffset = lastPage.offset + lastPage.notes.length
+      return lastPage.notes.length > 0 && nextOffset < lastPage.total ? nextOffset : undefined
+    },
+    enabled,
+    staleTime: 10000,
   })
 }
 

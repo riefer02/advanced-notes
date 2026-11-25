@@ -193,6 +193,8 @@ export interface AskHistoryItem {
   cited_note_ids_json: string
   source_scores_json: string | null
   created_at: string
+  /** Resolved by the backend for the history drawer. */
+  cited_notes?: { id: string; title: string | null }[]
 }
 
 export interface AskHistoryResponse {

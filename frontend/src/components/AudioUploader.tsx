@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { CheckCircle2, Lightbulb, Loader2, Mic, Upload } from 'lucide-react'
 import { useTranscribeAudio } from '../hooks/useNotes'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
 import type { TranscriptionResponse } from '../lib/api'
@@ -81,13 +82,7 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
                 disabled={transcribeMutation.isPending}
                 className="brand-gradient text-white hover:opacity-95"
               >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+                <Mic className="size-5" aria-hidden />
                 Start Recording
               </Button>
             ) : (
@@ -103,14 +98,7 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
                 onClick={() => fileInputRef.current?.click()}
                 disabled={transcribeMutation.isPending}
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                  />
-                </svg>
+                <Upload className="size-4" aria-hidden />
                 Upload audio
               </Button>
             )}
@@ -124,8 +112,9 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
             />
           </div>
           {!isRecording && (
-            <p className="text-xs text-ink-subtle">
-              💡 Record a thought, or upload an existing audio file (MP3, WAV, M4A, WebM).
+            <p className="text-ink-subtle flex items-start gap-1.5 text-xs">
+              <Lightbulb className="text-ink-subtle mt-0.5 size-3.5 shrink-0" aria-hidden />
+              <span>Record a thought, or upload an existing audio file (MP3, WAV, M4A, WebM).</span>
             </p>
           )}
         </div>
@@ -147,26 +136,7 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
 
       {transcribeMutation.isPending && (
         <div className="flex items-center space-x-2 text-brand" role="status">
-          <svg
-            className="animate-spin h-5 w-5"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            ></circle>
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
+          <Loader2 className="size-5 animate-spin" aria-hidden />
           <p className="font-medium">Transcribing audio...</p>
         </div>
       )}
@@ -207,13 +177,7 @@ export default function AudioUploader({ recordButtonRef, onNoteCreated }: AudioU
       {lastResult && (
         <div className="rounded-xl bg-linear-to-br from-positive-soft to-positive-soft/50 p-6 border-2 border-positive/25 shadow-xs">
           <div className="flex items-center gap-2 mb-3">
-            <svg className="h-5 w-5 text-positive" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <CheckCircle2 className="text-positive size-5" aria-hidden />
             <h2 className="text-lg font-semibold text-positive">Transcript ready!</h2>
           </div>
 

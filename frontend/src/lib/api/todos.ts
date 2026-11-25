@@ -49,6 +49,13 @@ export async function createTodo(data: {
   return apiRequest<Todo>('POST', '/api/todos', { body: data })
 }
 
+export async function updateTodo(
+  todoId: string,
+  data: { title?: string; description?: string }
+): Promise<Todo> {
+  return apiRequest<Todo>('PUT', `/api/todos/${todoId}`, { body: data })
+}
+
 export async function deleteTodo(todoId: string): Promise<void> {
   await apiRequest<{ success: boolean }>('DELETE', `/api/todos/${todoId}`)
 }

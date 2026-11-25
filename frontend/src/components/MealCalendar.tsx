@@ -12,6 +12,7 @@ interface MealCalendarProps {
   onSelectDate: (date: string) => void
   selectedDate: string | null
   calendarOwner?: string
+  onToday?: () => void
 }
 
 const MEAL_TYPE_COLORS: Record<MealType, string> = {
@@ -46,6 +47,7 @@ export default function MealCalendar({
   onSelectDate,
   selectedDate,
   calendarOwner,
+  onToday,
 }: MealCalendarProps) {
   const { data, isLoading } = useMealsCalendar(year, month, calendarOwner)
 
@@ -94,6 +96,11 @@ export default function MealCalendar({
           <h2 className="text-ink text-[15px] font-semibold tracking-[-0.015em]">
             {MONTH_NAMES[month - 1]} {year}
           </h2>
+          {onToday && (
+            <Button variant="ghost" size="xs" onClick={onToday}>
+              Today
+            </Button>
+          )}
           {isLoading && (
             <Loader2 className="text-ink-subtle size-3.5 animate-spin" aria-label="Loading meals" />
           )}

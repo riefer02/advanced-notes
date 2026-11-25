@@ -187,7 +187,7 @@ def list_digests():
         return jsonify(
             {
                 "digests": [d.model_dump() for d in digests],
-                "total": len(digests),
+                "total": svc.storage.count_digests(user_id),
                 "limit": limit,
                 "offset": offset,
             }
@@ -229,6 +229,44 @@ def delete_digest(digest_id: str):
 # ============================================================================
 
 
+def _parse_cited_note_ids(raw: str | None) -> list[str]:
+    """Return the cited note IDs from stored JSON, ignoring malformed rows."""
+    try:
+        parsed = _json.loads(raw or "[]")
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [note_id for note_id in parsed if isinstance(note_id, str) and note_id]
+
+
+def _serialize_ask_history(svc, user_id: str, items: list) -> list[dict]:
+    """Add human-readable cited note titles to ask history payloads.
+
+    The stored JSON only keeps IDs, so the UI showed "Note a1b2c3d4". Resolve
+    all cited IDs in one storage call; a missing note (deleted or invisible)
+    keeps ``title=None`` and the client falls back to the short ID.
+    """
+    cited_ids_by_item = {item.id: _parse_cited_note_ids(item.cited_note_ids_json) for item in items}
+    unique_ids = list(
+        dict.fromkeys(note_id for ids in cited_ids_by_item.values() for note_id in ids)
+    )
+
+    titles: dict[str, str] = {}
+    if unique_ids:
+        for note in svc.storage.get_notes_by_ids(user_id, unique_ids):
+            titles[note.id] = note.title
+
+    payloads: list[dict] = []
+    for item in items:
+        payload = item.model_dump()
+        payload["cited_notes"] = [
+            {"id": note_id, "title": titles.get(note_id)} for note_id in cited_ids_by_item[item.id]
+        ]
+        payloads.append(payload)
+    return payloads
+
+
 @bp.get("/ask-history")
 @require_auth
 def list_ask_history():
@@ -239,8 +277,8 @@ def list_ask_history():
         items = svc.storage.list_ask_history(user_id, limit=limit, offset=offset)
         return jsonify(
             {
-                "items": [i.model_dump() for i in items],
-                "total": len(items),
+                "items": _serialize_ask_history(svc, user_id, items),
+                "total": svc.storage.count_ask_history(user_id),
                 "limit": limit,
                 "offset": offset,
             }
@@ -258,7 +296,7 @@ def get_ask_history(ask_id: str):
         item = svc.storage.get_ask_history(user_id, ask_id)
         if not item:
             return api_error("Ask history item not found", 404)
-        return jsonify(item.model_dump())
+        return jsonify(_serialize_ask_history(svc, user_id, [item])[0])
     except Exception as e:
         return api_error_from_exception(e)
 

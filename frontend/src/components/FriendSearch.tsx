@@ -10,11 +10,14 @@ import { DetailCard } from '@/components/ui/detail'
 export default function FriendSearch() {
   const [query, setQuery] = useState('')
   const [sentIds, setSentIds] = useState<Set<string>>(new Set())
-  const debouncedQuery = useDebouncedValue(query, 300)
-  const { data, isLoading } = useUserSearch(debouncedQuery)
+  const trimmedQuery = query.trim()
+  const debouncedQuery = useDebouncedValue(trimmedQuery, 300)
+  const hasQuery = trimmedQuery.length >= 2
+  const { data, isLoading, isError, error, refetch } = useUserSearch(debouncedQuery)
   const sendRequest = useSendFriendRequest()
 
-  const users = data?.users ?? []
+  const users = hasQuery ? (data?.users ?? []) : []
+  const isSearching = hasQuery && (isLoading || trimmedQuery !== debouncedQuery)
 
   const handleSendRequest = (userId: string) => {
     sendRequest.mutate(userId, {
@@ -34,18 +37,31 @@ export default function FriendSearch() {
           placeholder="Search by name, @username, or email..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          aria-describedby="friend-search-hint"
         />
+        <p id="friend-search-hint" className="text-ink-subtle mt-1.5 text-xs">
+          {hasQuery ? 'Searching by name, username, and email.' : 'Type at least 2 characters.'}
+        </p>
       </div>
 
-      {isLoading && debouncedQuery.length >= 2 && (
-        <div className="text-sm text-ink-subtle py-2">Searching...</div>
+      {isSearching && <div className="text-sm text-ink-subtle py-2">Searching...</div>}
+
+      {hasQuery && !isSearching && isError && (
+        <div className="flex flex-wrap items-center justify-between gap-2 py-2">
+          <p className="text-destructive text-sm">
+            Search failed{error?.message ? `: ${error.message}` : '.'}
+          </p>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
       )}
 
-      {!isLoading && debouncedQuery.length >= 2 && users.length === 0 && (
-        <div className="text-sm text-ink-subtle py-2">No users found</div>
+      {hasQuery && !isSearching && !isError && users.length === 0 && (
+        <div className="text-sm text-ink-subtle py-2">No users found for “{trimmedQuery}”</div>
       )}
 
-      {users.length > 0 && debouncedQuery.length >= 2 && (
+      {hasQuery && !isSearching && !isError && users.length > 0 && (
         <div className="space-y-2">
           {users.map((user) => (
             <UserSearchResult
@@ -57,6 +73,12 @@ export default function FriendSearch() {
             />
           ))}
         </div>
+      )}
+
+      {sendRequest.isError && (
+        <p className="text-destructive text-xs" role="status">
+          Couldn’t send the request: {sendRequest.error.message}
+        </p>
       )}
     </div>
   )

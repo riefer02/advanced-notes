@@ -130,6 +130,22 @@ Two- or three-column spec sheet for records, meals, and profile facts. Labels ar
 
 A quiet expandable row on a hairline. Supports uncontrolled use, controlled use (when the content is lazy-loaded, as with note revisions), and an optional hint. Use it for revision history, meal metadata, and admin diagnostics instead of another always-visible card.
 
+### `ConfirmDialog`
+
+```tsx
+<ConfirmDialog
+  open={confirmOpen}
+  onOpenChange={setConfirmOpen}
+  title="Move this note to Trash?"
+  description="You can restore it from Trash later."
+  confirmLabel="Move to Trash"
+  variant="destructive"
+  onConfirm={handleDelete}
+/>
+```
+
+Use for destructive or irreversible actions instead of `window.confirm`. It keeps the product's tokens, works on mobile, and gives the action a clear label. Do not use it for recoverable, low-stakes actions such as pinning or archiving.
+
 ### `Tooltip`
 
 A Radix tooltip with the app's ink-on-canvas inverted treatment. Required for icon-only buttons: pair it with `aria-label` so the control still works for keyboard and screen-reader users.

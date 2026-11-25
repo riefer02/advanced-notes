@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   useFriends,
   useFriendRequests,
@@ -10,21 +11,44 @@ import UserAvatar from './UserAvatar'
 import { Button } from '@/components/ui/button'
 import { DetailCard } from '@/components/ui/detail'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 export default function FriendsList({ currentUserId }: { currentUserId: string }) {
-  const { data: friendsData, isLoading: loadingFriends } = useFriends()
-  const { data: requestsData, isLoading: loadingRequests } = useFriendRequests()
+  const {
+    data: friendsData,
+    isLoading: loadingFriends,
+    isError: friendsError,
+    error: friendsErrorValue,
+    refetch: refetchFriends,
+  } = useFriends()
+  const {
+    data: requestsData,
+    isLoading: loadingRequests,
+    isError: requestsError,
+    refetch: refetchRequests,
+  } = useFriendRequests()
   const acceptRequest = useAcceptFriendRequest()
   const declineRequest = useDeclineFriendRequest()
   const removeFriend = useRemoveFriend()
+  const [friendToRemove, setFriendToRemove] = useState<{ id: string; name: string } | null>(null)
 
   const friends = friendsData?.friends ?? []
   const requests = requestsData?.requests ?? []
+  const requestError = acceptRequest.error ?? declineRequest.error
 
   return (
     <div className="space-y-6">
       {/* Pending Requests */}
-      {requests.length > 0 && (
+      {requestsError ? (
+        <Alert variant="destructive" className="flex items-center justify-between">
+          <AlertDescription className="text-[13px]">
+            Couldn’t load friend requests.
+          </AlertDescription>
+          <Button variant="ghost" size="sm" className="ml-3" onClick={() => void refetchRequests()}>
+            Retry
+          </Button>
+        </Alert>
+      ) : requests.length > 0 ? (
         <div>
           <h3 className="section-label mb-2.5">Pending requests · {requests.length}</h3>
           <div className="space-y-2">
@@ -39,16 +63,38 @@ export default function FriendsList({ currentUserId }: { currentUserId: string }
               />
             ))}
           </div>
+          {requestError && (
+            <p className="text-destructive mt-2 text-xs" role="status">
+              {requestError.message}
+            </p>
+          )}
         </div>
-      )}
+      ) : null}
 
       {/* Friends List */}
       <div>
-        <h3 className="section-label mb-2.5">Friends{!loadingFriends && ` · ${friends.length}`}</h3>
+        <h3 className="section-label mb-2.5">
+          Friends{!loadingFriends && !friendsError && ` · ${friends.length}`}
+        </h3>
 
         {loadingFriends || loadingRequests ? (
           <div className="text-ink-subtle rounded-xl border border-dashed border-line px-4 py-6 text-center text-[13px]">
             Loading friends…
+          </div>
+        ) : friendsError ? (
+          <div className="border-line rounded-xl border border-dashed px-4 py-6 text-center">
+            <p className="text-destructive text-[13px]">
+              Couldn’t load your friends
+              {friendsErrorValue?.message ? `: ${friendsErrorValue.message}` : '.'}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => void refetchFriends()}
+            >
+              Retry
+            </Button>
           </div>
         ) : friends.length === 0 ? (
           <div className="border-line bg-surface-muted/30 rounded-xl border border-dashed px-4 py-8 text-center">
@@ -63,14 +109,45 @@ export default function FriendsList({ currentUserId }: { currentUserId: string }
                 <FriendCard
                   key={friendship.id}
                   profile={friend}
-                  onRemove={() => removeFriend.mutate(friendship.id)}
-                  isRemoving={removeFriend.isPending}
+                  onRemove={() =>
+                    setFriendToRemove({
+                      id: friendship.id,
+                      name: friend?.display_name ?? 'this friend',
+                    })
+                  }
+                  isRemoving={removeFriend.isPending && removeFriend.variables === friendship.id}
                 />
               )
             })}
           </div>
         )}
+
+        {removeFriend.isError && (
+          <p className="text-destructive mt-2 text-xs" role="status">
+            {removeFriend.error.message}
+          </p>
+        )}
       </div>
+
+      <ConfirmDialog
+        open={!!friendToRemove}
+        onOpenChange={(open) => {
+          if (!open) setFriendToRemove(null)
+        }}
+        title={friendToRemove ? `Remove ${friendToRemove.name}?` : 'Remove friend?'}
+        description="They’ll be removed from your friends list, and any shares between you will be revoked."
+        confirmLabel="Remove"
+        variant="destructive"
+        pending={removeFriend.isPending}
+        onConfirm={async () => {
+          if (!friendToRemove) return
+          try {
+            await removeFriend.mutateAsync(friendToRemove.id)
+          } catch {
+            // The mutation error is surfaced above the list.
+          }
+        }}
+      />
     </div>
   )
 }
@@ -161,7 +238,7 @@ function FriendCard({
         disabled={isRemoving}
         className="ml-3 text-destructive hover:text-destructive hover:bg-danger-soft"
       >
-        Remove
+        {isRemoving ? 'Removing…' : 'Remove'}
       </Button>
     </DetailCard>
   )

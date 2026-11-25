@@ -3,12 +3,14 @@ import {
   fetchMeals,
   fetchMealsCalendar,
   fetchMeal,
+  createMeal,
   updateMeal,
   deleteMeal,
   addMealItem,
   updateMealItem,
   deleteMealItem,
   transcribeMeal,
+  type CreateMealInput,
   type MealType,
 } from '../lib/api'
 import { queryKeys } from '../lib/queryKeys'
@@ -74,7 +76,17 @@ export function useTranscribeMeal(calendarOwner?: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (audioBlob: Blob) => transcribeMeal(audioBlob, calendarOwner),
+    mutationFn: ({ audioBlob, mealDate }: { audioBlob: Blob; mealDate?: string }) =>
+      transcribeMeal(audioBlob, calendarOwner, mealDate),
+    onSuccess: () => invalidateMealQueries(queryClient),
+  })
+}
+
+export function useCreateMeal(calendarOwner?: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: CreateMealInput) => createMeal(data, calendarOwner),
     onSuccess: () => invalidateMealQueries(queryClient),
   })
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+import { Search, X } from 'lucide-react'
 
 interface SearchBarProps {
   value: string
@@ -27,35 +28,25 @@ const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
     }, [value, onClear])
 
     return (
-      <div className="relative" role="search">
+      <div className="relative min-w-0" role="search">
         <label htmlFor="note-search" className="sr-only">
           Search notes
         </label>
         <div className="relative">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-            <svg
-              className={`h-5 w-5 transition-colors ${value ? 'text-brand' : 'text-ink-subtle'}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          </div>
+          <Search
+            className={`pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 transition-colors ${
+              value ? 'text-brand' : 'text-ink-subtle'
+            }`}
+            aria-hidden
+          />
           <input
             ref={inputRef}
             id="note-search"
             type="search"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder="Search notes... (press / to focus)"
-            className={`block w-full rounded-lg border bg-surface py-2.5 pl-10 pr-10 text-sm placeholder:text-ink-subtle transition-colors focus:outline-hidden focus:ring-2 ${
+            placeholder="Search notes… (press / to focus)"
+            className={`block h-9 w-full rounded-lg border bg-surface pr-9 pl-8 text-sm placeholder:text-ink-subtle transition-colors focus:outline-hidden focus:ring-2 ${
               value
                 ? 'border-brand/30 focus:border-brand focus:ring-ring/40'
                 : 'border-line-strong focus:border-brand focus:ring-ring/40'
@@ -64,44 +55,16 @@ const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
           />
           {value && (
             <button
+              type="button"
               onClick={onClear}
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-ink-subtle hover:text-destructive transition-colors"
+              className="text-ink-subtle hover:text-destructive focus-visible:ring-ring absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
               aria-label="Clear search"
               title="Clear search (or press Esc)"
             >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="size-4" aria-hidden />
             </button>
           )}
         </div>
-        {value && (
-          <div className="mt-2 flex items-center gap-2">
-            <div className="flex items-center gap-1 text-xs text-brand">
-              <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <span>Searching across all notes</span>
-            </div>
-            <span className="text-line-strong">•</span>
-            <p className="text-xs text-ink-subtle">
-              Press{' '}
-              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-ink bg-surface-muted border border-line rounded-sm">
-                Esc
-              </kbd>{' '}
-              to clear
-            </p>
-          </div>
-        )}
       </div>
     )
   }

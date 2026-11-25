@@ -2,6 +2,8 @@
  * Core API utilities: auth, request helpers, and shared constants.
  */
 
+import { formatShortDate } from '../format'
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
 // Never let a request hang forever: a stuck fetch keeps the UI in a
@@ -21,6 +23,45 @@ export class AuthError extends Error {
     super('Your session expired. Please sign in again.')
     this.name = 'AuthError'
   }
+}
+
+/** Quota metadata attached to a 429 response by `require_quota`. */
+export interface QuotaInfo {
+  service: string
+  used: number
+  limit: number
+  unit: string
+  resets_at: string
+}
+
+export class QuotaError extends Error {
+  quota: QuotaInfo
+
+  constructor(quota: QuotaInfo, message: string) {
+    super(message)
+    this.name = 'QuotaError'
+    this.quota = quota
+  }
+}
+
+function formatQuotaAmount(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+}
+
+function quotaMessage(quota: QuotaInfo): string {
+  const resets = formatShortDate(quota.resets_at) || 'the start of next month'
+  return `Monthly quota exceeded: ${formatQuotaAmount(quota.used)}/${formatQuotaAmount(quota.limit)} ${quota.unit}. Resets ${resets}.`
+}
+
+function isQuotaInfo(value: unknown): value is QuotaInfo {
+  if (!value || typeof value !== 'object') return false
+  const quota = value as Partial<QuotaInfo>
+  return (
+    typeof quota.used === 'number' &&
+    typeof quota.limit === 'number' &&
+    typeof quota.unit === 'string' &&
+    typeof quota.resets_at === 'string'
+  )
 }
 
 function timeoutSignal(ms: number): AbortSignal {
@@ -93,9 +134,11 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
 async function throwResponseError(response: Response, fallbackPrefix: string): Promise<never> {
   const errorText = await response.text()
   let errorMessage: string
+  let errorPayload: unknown = null
   try {
-    const errorJson = JSON.parse(errorText)
-    errorMessage = errorJson.error || `${fallbackPrefix}: ${response.status}`
+    errorPayload = JSON.parse(errorText)
+    const parsed = errorPayload as { error?: string }
+    errorMessage = parsed.error || `${fallbackPrefix}: ${response.status}`
   } catch {
     errorMessage = errorText || `${fallbackPrefix}: ${response.status}`
   }
@@ -107,6 +150,13 @@ async function throwResponseError(response: Response, fallbackPrefix: string): P
       // Never let the handler hide the original failure.
     }
     throw new AuthError()
+  }
+
+  if (response.status === 429 && errorPayload && typeof errorPayload === 'object') {
+    const quota = (errorPayload as { quota?: unknown }).quota
+    if (isQuotaInfo(quota)) {
+      throw new QuotaError(quota, quotaMessage(quota))
+    }
   }
 
   throw new Error(errorMessage)

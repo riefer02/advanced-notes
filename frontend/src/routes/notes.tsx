@@ -8,13 +8,19 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 type CaptureMode = 'record' | 'write'
 
 export const Route = createFileRoute('/notes')({
-  validateSearch: (search: Record<string, unknown>): { compose?: boolean; note?: string } => {
-    const params: { compose?: boolean; note?: string } = {}
+  validateSearch: (
+    search: Record<string, unknown>
+  ): { compose?: boolean; note?: string; q?: string } => {
+    const params: { compose?: boolean; note?: string; q?: string } = {}
     if (search.compose === '1' || search.compose === true || search.compose === 'true') {
       params.compose = true
     }
     if (typeof search.note === 'string' && search.note) {
       params.note = search.note
+    }
+    // Handoff from global search: /notes?q=prayer
+    if (typeof search.q === 'string' && search.q.trim()) {
+      params.q = search.q.trim()
     }
     return params
   },
@@ -23,8 +29,8 @@ export const Route = createFileRoute('/notes')({
 
 function NotesPage() {
   const recordButtonRef = useRef<HTMLButtonElement>(null)
-  const { compose, note } = Route.useSearch()
-  const [activeTab, setActiveTab] = useState<'capture' | 'notes'>('capture')
+  const { compose, note, q } = Route.useSearch()
+  const [activeTab, setActiveTab] = useState<'capture' | 'notes'>(note || q ? 'notes' : 'capture')
   const [captureMode, setCaptureMode] = useState<CaptureMode>(compose ? 'write' : 'record')
   const [focusNoteId, setFocusNoteId] = useState<string | null>(note ?? null)
 
@@ -40,13 +46,27 @@ function NotesPage() {
     }
   }, [note])
 
+  // /notes?q=prayer lands on the notes pane with the query already applied.
+  useEffect(() => {
+    if (q) setActiveTab('notes')
+  }, [q])
+
   const handleCreated = useCallback((noteId: string) => {
     setFocusNoteId(noteId)
     setActiveTab('notes')
   }, [])
 
+  const handleStartCapture = useCallback((mode: CaptureMode) => {
+    setActiveTab('capture')
+    setCaptureMode(mode)
+    if (mode === 'record') {
+      window.requestAnimationFrame(() => recordButtonRef.current?.focus())
+    }
+  }, [])
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      <h1 className="sr-only">Notes</h1>
       {/* Mobile Tabs - Visible only on mobile */}
       <div className="border-line bg-surface shrink-0 border-b lg:hidden">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'capture' | 'notes')}>
@@ -99,7 +119,12 @@ function NotesPage() {
             activeTab === 'notes' ? 'block' : 'hidden lg:block'
           }`}
         >
-          <NotesPanel focusNoteId={focusNoteId} onFocusHandled={() => setFocusNoteId(null)} />
+          <NotesPanel
+            focusNoteId={focusNoteId}
+            onFocusHandled={() => setFocusNoteId(null)}
+            initialQuery={q}
+            onStartCapture={handleStartCapture}
+          />
         </div>
       </div>
     </div>

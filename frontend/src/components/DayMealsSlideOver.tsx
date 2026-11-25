@@ -1,7 +1,17 @@
 import { useMemo } from 'react'
 import { useMeals } from '../hooks/useMeals'
-import { ChevronRight } from 'lucide-react'
+import {
+  CalendarDays,
+  ChevronRight,
+  Cookie,
+  Moon,
+  Plus,
+  Sun,
+  Sunrise,
+  UtensilsCrossed,
+} from 'lucide-react'
 import SlideOver from './ui/SlideOver'
+import { Button } from '@/components/ui/button'
 import type { MealType } from '../lib/api'
 
 interface DayMealsSlideOverProps {
@@ -9,6 +19,8 @@ interface DayMealsSlideOverProps {
   onClose: () => void
   date: string | null
   onSelectMeal: (mealId: string) => void
+  /** Open the composer prefilled with this date. */
+  onAddMealForDate?: (date: string) => void
   calendarOwner?: string
 }
 
@@ -21,11 +33,11 @@ const MEAL_TYPE_LABELS: Record<MealType, string> = {
   snack: 'Snack',
 }
 
-const MEAL_TYPE_ICONS: Record<MealType, string> = {
-  breakfast: '🌅',
-  lunch: '☀️',
-  dinner: '🌙',
-  snack: '🍿',
+const MEAL_TYPE_ICONS: Record<MealType, typeof Sun> = {
+  breakfast: Sunrise,
+  lunch: Sun,
+  dinner: Moon,
+  snack: Cookie,
 }
 
 const MEAL_TYPE_COLORS: Record<MealType, { bg: string; border: string; text: string }> = {
@@ -40,6 +52,7 @@ export default function DayMealsSlideOver({
   onClose,
   date,
   onSelectMeal,
+  onAddMealForDate,
   calendarOwner,
 }: DayMealsSlideOverProps) {
   const { data, isLoading } = useMeals({
@@ -78,19 +91,7 @@ export default function DayMealsSlideOver({
       onClose={onClose}
       title={
         <div className="flex items-center gap-2">
-          <svg
-            className="w-5 h-5 text-ink-muted"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
+          <CalendarDays className="text-ink-muted size-5" aria-hidden />
           <span>{formatDate(date)}</span>
         </div>
       }
@@ -99,15 +100,27 @@ export default function DayMealsSlideOver({
       <div className="pb-8">
         {isLoading ? (
           <div className="flex justify-center py-8">
-            <div className="w-8 h-8 border-2 border-line border-t-ink-muted rounded-full animate-spin" />
+            <div className="border-line border-t-ink-muted size-8 animate-spin rounded-full border-2" />
           </div>
         ) : !data?.meals.length ? (
           <div className="py-12 text-center">
-            <div className="bg-surface-muted mx-auto mb-3 grid size-12 place-items-center rounded-full text-2xl">
-              🍽️
+            <div className="bg-surface-muted text-ink-muted mx-auto mb-3 grid size-12 place-items-center rounded-full">
+              <UtensilsCrossed className="size-5" aria-hidden />
             </div>
             <p className="text-ink text-[13px] font-medium">No meals logged</p>
-            <p className="text-ink-subtle mt-1 text-xs">Record a meal to see it here.</p>
+            <p className="text-ink-subtle mt-1 text-xs">Add one for this day without recording.</p>
+            {onAddMealForDate && date && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="mt-4"
+                onClick={() => onAddMealForDate(date)}
+              >
+                <Plus />
+                Add a meal for this day
+              </Button>
+            )}
           </div>
         ) : (
           <div className="space-y-5">
@@ -116,11 +129,13 @@ export default function DayMealsSlideOver({
               if (!meals?.length) return null
 
               const colors = MEAL_TYPE_COLORS[mealType]
+              const Icon = MEAL_TYPE_ICONS[mealType]
 
               return (
                 <div key={mealType}>
-                  <h3 className={`section-label mb-2 ${colors.text}`}>
-                    {MEAL_TYPE_ICONS[mealType]} {MEAL_TYPE_LABELS[mealType]}
+                  <h3 className={`section-label mb-2 flex items-center gap-1.5 ${colors.text}`}>
+                    <Icon className="size-3.5" aria-hidden />
+                    {MEAL_TYPE_LABELS[mealType]}
                   </h3>
                   <div className="space-y-2">
                     {meals.map((meal) => (
