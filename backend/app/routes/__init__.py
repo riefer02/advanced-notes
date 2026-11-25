@@ -13,6 +13,7 @@ from . import (
     export,
     feedback,
     health,
+    library,
     meals,
     notes,
     reports,
@@ -44,6 +45,7 @@ for _module in [
     feedback,
     dashboard,
     export,
+    library,
     reports,
     webhooks,
 ]:
