@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
+import { Cookie, Loader2, Mic, Moon, Sun, Sunrise, X } from 'lucide-react'
 import { useTranscribeMeal } from '../hooks/useMeals'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
 import type { MealTranscriptionResponse, MealType } from '../lib/api'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 
 const MEAL_TYPE_LABELS: Record<MealType, string> = {
@@ -12,11 +15,30 @@ const MEAL_TYPE_LABELS: Record<MealType, string> = {
   snack: 'Snack',
 }
 
-const MEAL_TYPE_ICONS: Record<MealType, string> = {
-  breakfast: '🌅',
-  lunch: '☀️',
-  dinner: '🌙',
-  snack: '🍿',
+const MEAL_TYPE_ICONS: Record<MealType, typeof Sun> = {
+  breakfast: Sunrise,
+  lunch: Sun,
+  dinner: Moon,
+  snack: Cookie,
+}
+
+function todayIso(): string {
+  const today = new Date()
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
+    today.getDate()
+  ).padStart(2, '0')}`
+}
+
+function formatDateLabel(value: string): string {
+  if (!value) return ''
+  if (value === todayIso()) return 'Today'
+  const parsed = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return value
+  return parsed.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
 interface MealRecorderProps {
@@ -26,6 +48,7 @@ interface MealRecorderProps {
 
 export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecorderProps) {
   const [lastResult, setLastResult] = useState<MealTranscriptionResponse | null>(null)
+  const [mealDate, setMealDate] = useState(todayIso)
 
   const transcribeMutation = useTranscribeMeal(calendarOwner)
 
@@ -36,7 +59,7 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
     startRecording,
     stopRecording,
     clearError,
-  } = useAudioRecorder((audioBlob) => transcribeMutation.mutate(audioBlob))
+  } = useAudioRecorder((audioBlob) => transcribeMutation.mutate({ audioBlob, mealDate }))
 
   useEffect(() => {
     if (transcribeMutation.isSuccess && transcribeMutation.data) {
@@ -58,49 +81,55 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
     transcribeMutation.reset()
   }
 
+  const ResultIcon = lastResult?.meal ? MEAL_TYPE_ICONS[lastResult.meal.meal_type] : Sun
+
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <svg className="w-6 h-6 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-          />
-        </svg>
-        <h2 className="text-lg font-semibold text-ink">Record Meal</h2>
+        <Mic className="text-brand size-6" aria-hidden />
+        <h2 className="text-ink text-lg font-semibold">Record meal</h2>
       </div>
 
       {/* Instructions */}
-      <p className="text-sm text-ink-muted">
+      <p className="text-ink-muted text-sm">
         Describe what you ate. Example: &quot;For breakfast I had two scrambled eggs with toast and
         orange juice&quot;
       </p>
+
+      {/* Date intent */}
+      <div className="space-y-1.5">
+        <Label htmlFor="meal-recorder-date">Logging for</Label>
+        <Input
+          id="meal-recorder-date"
+          type="date"
+          value={mealDate}
+          onChange={(event) => setMealDate(event.target.value)}
+          disabled={isRecording || transcribeMutation.isPending}
+          aria-required="true"
+        />
+        <p className="text-ink-subtle text-xs">
+          {formatDateLabel(mealDate)} — the transcript can mention another day without changing
+          this.
+        </p>
+      </div>
 
       {/* Recording Button */}
       <div className="flex flex-col gap-3">
         {!isRecording ? (
           <Button
             onClick={startRecording}
-            disabled={transcribeMutation.isPending}
+            disabled={transcribeMutation.isPending || !mealDate}
             size="lg"
             className="w-full"
           >
-            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Start Recording
+            <Mic />
+            Start recording
           </Button>
         ) : (
-          <Button onClick={stopRecording} size="lg" className="w-full bg-ink hover:bg-ink">
-            <div className="w-3 h-3 bg-destructive rounded-full animate-pulse mr-2" />
-            Stop Recording ({formatTime(recordingTime)})
+          <Button onClick={stopRecording} size="lg" className="bg-ink hover:bg-ink w-full">
+            <div className="bg-destructive mr-2 size-3 animate-pulse rounded-full" />
+            Stop recording ({formatTime(recordingTime)})
           </Button>
         )}
       </div>
@@ -108,7 +137,7 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
       {/* Recorder Error */}
       {recorderError && (
         <Alert variant="destructive">
-          <AlertTitle>Recording Error</AlertTitle>
+          <AlertTitle>Recording error</AlertTitle>
           <AlertDescription>
             <div className="flex items-center justify-between gap-3">
               <span>{recorderError}</span>
@@ -122,35 +151,16 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
 
       {/* Processing State */}
       {transcribeMutation.isPending && (
-        <div className="flex items-center space-x-2 text-positive bg-positive-soft rounded-lg p-4">
-          <svg
-            className="animate-spin h-5 w-5"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-          <p className="font-medium">Analyzing your meal...</p>
+        <div className="text-positive bg-positive-soft flex items-center gap-2 rounded-lg p-4">
+          <Loader2 className="size-5 animate-spin" aria-hidden />
+          <p className="font-medium">Analyzing your meal…</p>
         </div>
       )}
 
       {/* Error State */}
       {transcribeMutation.isError && (
         <Alert variant="destructive">
-          <AlertTitle>Error</AlertTitle>
+          <AlertTitle>Could not transcribe meal</AlertTitle>
           <AlertDescription>
             {transcribeMutation.error instanceof Error
               ? transcribeMutation.error.message
@@ -161,12 +171,12 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
 
       {/* Success Result */}
       {lastResult && lastResult.meal && (
-        <div className="rounded-xl bg-linear-to-br from-positive-soft to-positive-soft/50 p-4 border-2 border-positive/25 shadow-xs">
-          <div className="flex items-center justify-between mb-3">
+        <div className="from-positive-soft to-positive-soft/50 border-positive/25 rounded-xl border-2 bg-linear-to-br p-4 shadow-xs">
+          <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-xl">{MEAL_TYPE_ICONS[lastResult.meal.meal_type]}</span>
-              <h3 className="text-lg font-semibold text-positive">
-                {MEAL_TYPE_LABELS[lastResult.meal.meal_type]} Logged!
+              <ResultIcon className="text-positive size-5" aria-hidden />
+              <h3 className="text-positive text-lg font-semibold">
+                {MEAL_TYPE_LABELS[lastResult.meal.meal_type]} logged
               </h3>
             </div>
             <button
@@ -174,31 +184,29 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
               className="text-ink-subtle hover:text-ink-muted transition-colors"
               aria-label="Clear result"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="size-5" />
             </button>
           </div>
 
+          <p className="text-ink-subtle mb-2 text-xs">
+            Logged for {formatDateLabel(lastResult.meal.meal_date)}
+            {lastResult.meal.meal_time ? ` at ${lastResult.meal.meal_time}` : ''}
+          </p>
+
           {/* Transcription */}
-          <div className="bg-surface rounded-lg p-3 border border-positive/25 mb-3">
-            <p className="text-sm text-ink italic">&quot;{lastResult.text}&quot;</p>
+          <div className="bg-surface border-positive/25 mb-3 rounded-lg border p-3">
+            <p className="text-ink text-sm italic">&quot;{lastResult.text}&quot;</p>
           </div>
 
           {/* Food Items */}
           {lastResult.meal.items.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-positive">Extracted Items:</h4>
+              <h4 className="text-positive text-sm font-medium">Extracted items</h4>
               <div className="flex flex-wrap gap-2">
                 {lastResult.meal.items.map((item) => (
                   <span
                     key={item.id}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-surface rounded-full text-sm border border-positive/25"
+                    className="bg-surface border-positive/25 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-sm"
                   >
                     <span className="text-ink">{item.name}</span>
                     {item.portion && (
@@ -211,7 +219,7 @@ export default function MealRecorder({ onMealCreated, calendarOwner }: MealRecor
           )}
 
           {/* Confidence */}
-          <div className="mt-3 flex items-center gap-2 text-xs text-positive">
+          <div className="text-positive mt-3 flex items-center gap-2 text-xs">
             <span>Confidence:</span>
             <span className="font-medium">
               {Math.round((lastResult.extraction.confidence || 0) * 100)}%

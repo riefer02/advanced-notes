@@ -3,6 +3,7 @@ Tests for meal tracking API endpoints.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -585,6 +586,218 @@ class TestMealUserIsolation:
         assert response.status_code == 200
         data = response.get_json()
         assert len(data["meals"]) == 0
+
+
+class TestManualMealCreation:
+    """POST /api/meals: the typed path that does not require a microphone."""
+
+    def test_create_meal_with_items(self, client, auth_headers, user_id):
+        response = client.post(
+            "/api/meals",
+            headers=auth_headers,
+            json={
+                "meal_type": "dinner",
+                "meal_date": "2026-02-03",
+                "meal_time": "19:30",
+                "transcription": "Dinner with friends",
+                "items": [
+                    {"name": "Pasta", "portion": "1 bowl"},
+                    {"name": "Salad"},
+                ],
+            },
+        )
+        assert response.status_code == 201, response.get_json()
+
+        data = response.get_json()
+        assert data["id"]
+        assert data["user_id"] == user_id
+        assert data["meal_type"] == "dinner"
+        assert data["meal_date"] == "2026-02-03"
+        assert data["meal_time"] == "19:30"
+        assert data["transcription"] == "Dinner with friends"
+        assert data["confidence"] is None
+        assert data["model_version"] == "manual"
+        assert [item["name"] for item in data["items"]] == ["Pasta", "Salad"]
+        assert data["items"][0]["portion"] == "1 bowl"
+        assert data["items"][1]["portion"] is None
+        assert data["items"][0]["confidence"] is None
+
+        # The response matches GET /api/meals/<id>.
+        fetched = client.get(f"/api/meals/{data['id']}", headers=auth_headers)
+        assert fetched.status_code == 200
+        assert fetched.get_json()["id"] == data["id"]
+
+    def test_create_meal_items_only_gets_summary_transcription(self, client, auth_headers):
+        response = client.post(
+            "/api/meals",
+            headers=auth_headers,
+            json={
+                "meal_type": "snack",
+                "meal_date": "2026-02-03",
+                "items": [{"name": "Apple"}, {"name": "Almonds", "portion": "handful"}],
+            },
+        )
+        assert response.status_code == 201
+        data = response.get_json()
+        assert data["transcription"] == "Apple, Almonds"
+        assert data["confidence"] is None
+
+    def test_create_meal_note_only(self, client, auth_headers):
+        response = client.post(
+            "/api/meals",
+            headers=auth_headers,
+            json={
+                "meal_type": "lunch",
+                "meal_date": "2026-02-03",
+                "transcription": "Leftover soup, no solid items to list",
+                "items": [],
+            },
+        )
+        assert response.status_code == 201
+        data = response.get_json()
+        assert data["items"] == []
+        assert data["transcription"] == "Leftover soup, no solid items to list"
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"meal_date": "2026-02-03", "items": [{"name": "Toast"}]},
+            {"meal_type": "brunch", "meal_date": "2026-02-03", "items": [{"name": "Toast"}]},
+            {"meal_type": "lunch", "meal_date": "not-a-date", "items": [{"name": "Toast"}]},
+            {"meal_type": "lunch", "items": [{"name": "Toast"}]},
+            {"meal_type": "lunch", "meal_date": "2026-02-03", "items": []},
+            {"meal_type": "lunch", "meal_date": "2026-02-03", "transcription": "   "},
+            {"meal_type": "lunch", "meal_date": "2026-02-03", "items": [{"portion": "1"}]},
+            {"meal_type": "lunch", "meal_date": "2026-02-03", "items": "toast"},
+            {"meal_type": "lunch", "meal_date": "2026-02-03", "meal_time": "25:00",
+             "items": [{"name": "Toast"}]},
+            {"meal_type": "lunch", "meal_date": "2026-02-03", "transcription": 42},
+        ],
+    )
+    def test_create_meal_validation(self, client, auth_headers, payload):
+        response = client.post("/api/meals", headers=auth_headers, json=payload)
+        assert response.status_code == 400, response.get_json()
+        assert "error" in response.get_json()
+
+    def test_create_meal_requires_auth(self, client):
+        response = client.post(
+            "/api/meals",
+            json={"meal_type": "lunch", "meal_date": "2026-02-03", "items": [{"name": "Toast"}]},
+        )
+        assert response.status_code == 401
+
+    def test_create_meal_with_edit_share_saves_to_owner(self, client, auth_headers, storage, user_id):
+        editor = "typed-editor"
+        share = storage.create_resource_share(
+            user_id, editor, "meal_calendar", permission="edit"
+        )
+        storage.update_share_status(share.id, "accepted")
+
+        response = client.post(
+            f"/api/meals?calendar_owner={user_id}",
+            headers={"X-Test-User-Id": editor},
+            json={
+                "meal_type": "lunch",
+                "meal_date": "2026-02-03",
+                "items": [{"name": "Soup"}],
+            },
+        )
+        assert response.status_code == 201, response.get_json()
+        assert response.get_json()["user_id"] == user_id
+
+        # The owner sees it on their calendar.
+        listing = client.get(
+            "/api/meals?start_date=2026-02-03&end_date=2026-02-03",
+            headers=auth_headers,
+        )
+        assert listing.status_code == 200
+        assert [meal["id"] for meal in listing.get_json()["meals"]] == [
+            response.get_json()["id"]
+        ]
+
+    def test_create_meal_view_share_forbidden(self, client, storage, user_id):
+        viewer = "typed-viewer"
+        share = storage.create_resource_share(
+            user_id, viewer, "meal_calendar", permission="view"
+        )
+        storage.update_share_status(share.id, "accepted")
+
+        response = client.post(
+            f"/api/meals?calendar_owner={user_id}",
+            headers={"X-Test-User-Id": viewer},
+            json={
+                "meal_type": "lunch",
+                "meal_date": "2026-02-03",
+                "items": [{"name": "Soup"}],
+            },
+        )
+        assert response.status_code == 403
+
+    def test_create_meal_without_share_forbidden(self, client, user_id):
+        response = client.post(
+            f"/api/meals?calendar_owner={user_id}",
+            headers={"X-Test-User-Id": "stranger"},
+            json={
+                "meal_type": "lunch",
+                "meal_date": "2026-02-03",
+                "items": [{"name": "Soup"}],
+            },
+        )
+        assert response.status_code == 403
+
+
+class TestTranscribeDateIntent:
+    """The explicit capture date must win over the transcript's inferred date."""
+
+    def test_transcribe_uses_explicit_meal_date(
+        self, client, app, auth_headers, monkeypatch
+    ):
+        import app.routes.meals as meals_module
+
+        class _WrongDateExtractor:
+            def extract(self, text, current_date=None):
+                assert current_date == "2026-02-03"
+                return MealExtractionResult(
+                    meal_type=MealType.DINNER,
+                    meal_date="2020-01-01",
+                    food_items=[ExtractedFoodItem(name="soup", confidence=0.8)],
+                    confidence=0.8,
+                    reasoning="test",
+                )
+
+        app.extensions["services"] = replace(
+            app.extensions["services"], meal_extractor=_WrongDateExtractor()
+        )
+        monkeypatch.setattr(
+            meals_module,
+            "_transcribe_audio_clip",
+            lambda *args, **kwargs: (
+                "I had soup last Friday",
+                {"duration": 1.0, "model": "test"},
+                "clip-1",
+                "key-1",
+            ),
+        )
+
+        response = client.post(
+            "/api/meals/transcribe?meal_date=2026-02-03",
+            headers=auth_headers,
+            data=b"fake-audio",
+            content_type="audio/webm",
+        )
+        assert response.status_code == 200, response.get_json()
+        meal = response.get_json()["meal"]
+        assert meal["meal_date"] == "2026-02-03"
+        assert meal["meal_type"] == "dinner"
+
+    def test_transcribe_rejects_invalid_meal_date(self, client, auth_headers):
+        response = client.post(
+            "/api/meals/transcribe?meal_date=not-a-date",
+            headers=auth_headers,
+            data=b"fake-audio",
+            content_type="audio/webm",
+        )
+        assert response.status_code == 400
 
 
 class TestMealCounts:
