@@ -1,20 +1,27 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useUser } from '@clerk/clerk-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import FriendsList from '../components/FriendsList'
 import FriendSearch from '../components/FriendSearch'
 import ShareManager from '../components/ShareManager'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageHeader } from '@/components/ui/page-header'
 
+type ShareResource = 'vinyl_library' | 'meal_calendar'
+
 interface FriendsSearch {
   tab?: 'friends' | 'shares'
+  resource?: ShareResource
 }
 
 export const Route = createFileRoute('/friends')({
   component: FriendsPage,
   validateSearch: (search: Record<string, unknown>): FriendsSearch => ({
     tab: search.tab === 'shares' ? 'shares' : undefined,
+    resource:
+      search.resource === 'meal_calendar' || search.resource === 'vinyl_library'
+        ? search.resource
+        : undefined,
   }),
 })
 
@@ -27,8 +34,19 @@ const TABS = [
 
 function FriendsPage() {
   const { user } = useUser()
-  const { tab } = Route.useSearch()
-  const [activeTab, setActiveTab] = useState<Tab>(tab === 'shares' ? 'shares' : 'friends')
+  const { tab, resource } = Route.useSearch()
+  const [activeTab, setActiveTab] = useState<Tab>(
+    tab === 'shares' || resource ? 'shares' : 'friends'
+  )
+
+  // A share link can land here while the route is already mounted.
+  useEffect(() => {
+    if (tab === 'shares' || resource) {
+      setActiveTab('shares')
+    } else if (tab === 'friends') {
+      setActiveTab('friends')
+    }
+  }, [tab, resource])
 
   const currentUserId = user?.id ?? ''
 
@@ -62,7 +80,9 @@ function FriendsPage() {
             </div>
           )}
 
-          {activeTab === 'shares' && <ShareManager currentUserId={currentUserId} />}
+          {activeTab === 'shares' && (
+            <ShareManager currentUserId={currentUserId} resource={resource} />
+          )}
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, QueryClient } from '@tanstack/re
 import {
   fetchTodos,
   createTodo,
+  updateTodo,
   deleteTodo,
   acceptTodo,
   completeTodo,
@@ -67,6 +68,21 @@ export function useCreateTodo() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.todos.all })
     },
+  })
+}
+
+export function useUpdateTodo() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      todoId,
+      data,
+    }: {
+      todoId: string
+      data: { title?: string; description?: string }
+    }) => updateTodo(todoId, data),
+    onSuccess: (updatedTodo: Todo) => invalidateTodoQueries(queryClient, updatedTodo),
   })
 }
 
